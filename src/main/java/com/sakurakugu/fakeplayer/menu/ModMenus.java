@@ -18,6 +18,11 @@ public final class ModMenus {
         () -> IMenuTypeExtension.create(FakePlayerMenu::new)
     );
 
+    public static final DeferredHolder<MenuType<?>, MenuType<GlobalFakePlayerMenu>> GLOBAL_FAKE_PLAYER = MENUS.register(
+        "global",
+        () -> IMenuTypeExtension.create(GlobalFakePlayerMenu::new)
+    );
+
     private ModMenus() {
     }
 

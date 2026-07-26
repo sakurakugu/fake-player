@@ -3,6 +3,7 @@ package com.sakurakugu.fakeplayer.command;
 import com.sakurakugu.fakeplayer.FakePlayerMod;
 import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
+import com.sakurakugu.fakeplayer.menu.FakePlayerMenuOpener;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
@@ -35,6 +36,8 @@ public final class FakePlayerCommand {
                         ))
                         .executes(FakePlayerCommand::remove)))
                 .then(Commands.literal("list").executes(FakePlayerCommand::list))
+                .then(Commands.literal("gui").executes(FakePlayerCommand::openGui))
+                .then(Commands.literal("setting").executes(FakePlayerCommand::openGui))
                 .then(Commands.argument("name", StringArgumentType.word())
                     .executes(context -> spawn(context, StringArgumentType.getString(context, "name"))))
         );
@@ -48,17 +51,12 @@ public final class FakePlayerCommand {
         }
 
         CommandSourceStack source = context.getSource();
-        // 生成位置和朝向来自执行命令的玩家，因此控制台不能直接生成假玩家。
-        ServerPlayer owner = source.getPlayer();
-        if (owner == null) {
-            source.sendFailure(Component.translatable("commands.fakeplayer.player_only"));
-            return 0;
-        }
+        // 位置、维度和朝向来自命令来源，命令方块因此可以在自身位置生成假人。
 
         try {
             FakeServerPlayer fake = FakePlayerManager.spawn(
                 source.getServer(),
-                owner.level(),
+                source.getLevel(),
                 name,
                 source.getPosition(),
                 source.getRotation()
@@ -94,6 +92,16 @@ public final class FakePlayerCommand {
             .reduce((left, right) -> left + ", " + right)
             .orElse(Component.translatable("commands.fakeplayer.none").getString());
         context.getSource().sendSuccess(() -> Component.translatable("commands.fakeplayer.list", names), false);
+        return 1;
+    }
+
+    private static int openGui(CommandContext<CommandSourceStack> context) {
+        ServerPlayer viewer = context.getSource().getPlayer();
+        if (viewer == null) {
+            context.getSource().sendFailure(Component.translatable("commands.fakeplayer.player_only"));
+            return 0;
+        }
+        FakePlayerMenuOpener.openGlobal(viewer);
         return 1;
     }
 

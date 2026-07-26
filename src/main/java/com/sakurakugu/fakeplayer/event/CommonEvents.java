@@ -4,11 +4,9 @@ import com.sakurakugu.fakeplayer.FakePlayerMod;
 import com.sakurakugu.fakeplayer.command.FakePlayerCommand;
 import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
-import com.sakurakugu.fakeplayer.menu.FakePlayerMenu;
-import net.minecraft.network.chat.Component;
+import com.sakurakugu.fakeplayer.menu.FakePlayerMenuOpener;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.SimpleMenuProvider;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
@@ -32,17 +30,7 @@ public final class CommonEvents {
             return;
         }
 
-        viewer.openMenu(
-            new SimpleMenuProvider(
-                (containerId, inventory, player) -> new FakePlayerMenu(containerId, inventory, fake),
-                Component.translatable("gui.fakeplayer.title", fake.getGameProfile().name())
-            ),
-            data -> {
-                // 客户端没有 FakeServerPlayer 引用，只传递界面展示所需的稳定快照。
-                data.writeVarInt(fake.getId());
-                data.writeUtf(fake.getGameProfile().name());
-            }
-        );
+        FakePlayerMenuOpener.openControl(viewer, fake);
         // 阻止原版继续处理右键实体，避免同时触发物品交互。
         event.setCancellationResult(InteractionResult.SUCCESS);
         event.setCanceled(true);
