@@ -1,0 +1,21 @@
+{
+  "commands.fakeplayer.spawned": "已生成假人 %s",
+  "commands.fakeplayer.removed": "已移除假人 %s",
+  "commands.fakeplayer.duplicate": "名为 %s 的玩家已在线",
+  "commands.fakeplayer.not_found": "找不到假人 %s",
+  "commands.fakeplayer.invalid_name": "名称只能包含 1-16 个英文字母、数字或下划线",
+  "commands.fakeplayer.player_only": "该命令必须由玩家执行",
+  "commands.fakeplayer.spawn_failed": "生成假人 %s 失败，请查看服务端日志",
+  "commands.fakeplayer.list": "假人列表：%s",
+  "commands.fakeplayer.none": "无",
+  "gui.fakeplayer.title": "%s - 假人控制",
+  "gui.fakeplayer.status": "%s 的状态",
+  "gui.fakeplayer.attack": "切换持续攻击",
+  "gui.fakeplayer.use": "切换持续使用",
+  "gui.fakeplayer.jump": "跳跃一次",
+  "gui.fakeplayer.stop": "停止全部动作",
+  "gui.fakeplayer.turn_left": "向左转 45 度",
+  "gui.fakeplayer.turn_right": "向右转 45 度",
+  "gui.fakeplayer.sneak": "切换潜行",
+  "gui.fakeplayer.remove": "移除假人"
+}

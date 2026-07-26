@@ -1,0 +1,65 @@
+package com.sakurakugu.fakeplayer.entity;
+
+import com.mojang.authlib.GameProfile;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ClientInformation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.damagesource.DamageSource;
+
+/** 没有真实客户端连接、但参与原版服务端玩家逻辑的假玩家实体。 */
+public final class FakeServerPlayer extends ServerPlayer {
+    private final MinecraftServer server;
+    private final FakePlayerActions actions;
+
+    public FakeServerPlayer(MinecraftServer server, ServerLevel level, GameProfile profile) {
+        super(server, level, profile, ClientInformation.createDefault());
+        this.server = server;
+        this.actions = new FakePlayerActions(this);
+    }
+
+    public FakePlayerActions actions() {
+        return actions;
+    }
+
+    public MinecraftServer server() {
+        return server;
+    }
+
+    public void showAllSkinLayers() {
+        // 该位掩码对应披风、外套、袖子、裤腿和帽子等全部皮肤附加层。
+        getEntityData().set(DATA_PLAYER_MODE_CUSTOMISATION, (byte) 0x7f);
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        // ServerPlayer 通常由网络监听器驱动 doTick，假连接不会替我们调用它。
+        doTick();
+        actions.tick();
+
+        // 定期刷新网络位置和区块追踪，保证移动后的假玩家对观察者可见。
+        if (tickCount % 10 == 0) {
+            connection.resetPosition();
+            level().getChunkSource().move(this);
+        }
+    }
+
+    @Override
+    public String getIpAddress() {
+        return "127.0.0.1";
+    }
+
+    @Override
+    public boolean allowsListing() {
+        // 假玩家不出现在服务端状态查询返回的公开玩家样本中。
+        return false;
+    }
+
+    @Override
+    public void die(DamageSource source) {
+        super.die(source);
+        // 延迟到服务器任务队列移除，避免在死亡处理过程中直接修改玩家列表。
+        server.execute(() -> FakePlayerManager.remove(this));
+    }
+}
