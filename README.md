@@ -10,16 +10,9 @@
 
 ## 简介
 
-- `/fakeplayer`：以自动名称在当前位置生成假人。
-- `/fakeplayer <名称>` 或 `/fakeplayer spawn <名称>`：生成指定名称的假人。
-- `/fakeplayer list`：列出当前假人。
-- `/fakeplayer gui` 或 `/fakeplayer setting`：打开全局设置界面，查看并管理所有假人。
-- `/fakeplayer remove <名称>`：移除假人。
-- 右键假人：打开控制界面，可切换持续攻击/使用、跳跃、停止、转向、潜行或移除。
-
-命令默认需要游戏管理员权限（与原版 `/gamemode` 同级）。名称遵循玩家名称规则，只能使用 1-16 个英文字母、数字或下划线。
-
-生成命令使用执行来源的维度、位置和朝向。玩家执行时在玩家位置生成，命令方块执行时在命令方块位置生成。
+- `/fakeplayer`：在当前位置生成假人。
+- `/fakeplayer <操作> <名称>` 或 `/player <名称> <操作>`：操控假人 （`/player` 用法和 Carpet 一样）。
+- `/fakeplayer gui` 或 `/fakeplayer gui <名称>`：打开对应的图形页面。
 
 ## 图例
 
@@ -39,7 +32,18 @@ Gradle 会通过 Foojay 自动获取 Minecraft 26.1 所需的 Java 25 工具链�
 
 ## 功能
 
-> 详情
+- `/fakeplayer`：以自动名称在当前位置生成假人。
+- `/fakeplayer <名称>` 或 `/fakeplayer spawn <名称>`：生成指定名称的假人。
+- `/fakeplayer list`：列出当前假人。
+- `/fakeplayer gui` 或 `/fakeplayer setting`：打开全局设置界面，查看并管理所有假人；在后面添加假人名称可直接打开对应假人的控制界面。
+- `/fakeplayer remove <名称>`：移除假人。
+- `/player <名称> <操作>`：以名字在前的 Carpet 风格写法，支持 `spawn`、`remove`、`attack`、`use`、`jump`、`stop`、`turn_left`、`turn_right` 和 `sneak`。
+- 按 `G`：打开全局假人列表（可在按键设置中修改）。
+- 右键假人：打开控制界面，可切换持续攻击/使用、跳跃、停止、转向、潜行或移除。
+
+命令默认需要游戏管理员权限（与原版 `/gamemode` 同级）。名称只能使用 1-16 个字母、数字、下划线或连字符。
+
+生成命令使用执行来源的维度、位置和朝向。玩家执行时在玩家位置生成，命令方块执行时在命令方块位置生成。
 
 ## 配置文件
 

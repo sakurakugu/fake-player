@@ -6,6 +6,7 @@ import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
 import com.sakurakugu.fakeplayer.menu.FakePlayerMenuOpener;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -13,7 +14,7 @@ import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
-/** 注册并处理 {@code /fakeplayer} 命令的各个分支。 */
+/** 注册并处理 {@code /fakeplayer} 与 {@code /player} 命令的各个分支。 */
 public final class FakePlayerCommand {
     private FakePlayerCommand() {
     }
@@ -36,16 +37,78 @@ public final class FakePlayerCommand {
                         ))
                         .executes(FakePlayerCommand::remove)))
                 .then(Commands.literal("list").executes(FakePlayerCommand::list))
-                .then(Commands.literal("gui").executes(FakePlayerCommand::openGui))
-                .then(Commands.literal("setting").executes(FakePlayerCommand::openGui))
+                .then(guiCommand("gui"))
+                .then(guiCommand("setting"))
                 .then(Commands.argument("name", StringArgumentType.word())
                     .executes(context -> spawn(context, StringArgumentType.getString(context, "name"))))
         );
+
+        // 提供 Carpet 风格的“名字在前、操作在后”命令顺序。
+        dispatcher.register(
+            Commands.literal("player")
+                .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
+                .then(Commands.argument("name", StringArgumentType.word())
+                    .suggests((context, builder) -> SharedSuggestionProvider.suggest(
+                        FakePlayerManager.all(context.getSource().getServer()).stream()
+                            .map(player -> player.getGameProfile().name()),
+                        builder
+                    ))
+                    .then(Commands.literal("spawn")
+                        .executes(context -> spawn(context, StringArgumentType.getString(context, "name"))))
+                    .then(Commands.literal("remove")
+                        .executes(FakePlayerCommand::remove))
+                    .then(action("attack", "gui.fakeplayer.attack", fake -> fake.actions().toggleAttack()))
+                    .then(action("use", "gui.fakeplayer.use", fake -> fake.actions().toggleUse()))
+                    .then(action("jump", "gui.fakeplayer.jump", fake -> fake.actions().jump()))
+                    .then(action("stop", "gui.fakeplayer.stop", fake -> fake.actions().stop()))
+                    .then(action("turn_left", "gui.fakeplayer.turn_left", fake -> fake.actions().turn(-45.0F)))
+                    .then(action("turn_right", "gui.fakeplayer.turn_right", fake -> fake.actions().turn(45.0F)))
+                    .then(action("sneak", "gui.fakeplayer.sneak", fake -> fake.actions().toggleSneak())))
+        );
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> action(
+        String name,
+        String translationKey,
+        java.util.function.Consumer<FakeServerPlayer> action
+    ) {
+        return Commands.literal(name).executes(context -> runAction(context, translationKey, action));
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> guiCommand(String name) {
+        return Commands.literal(name)
+            .executes(FakePlayerCommand::openGui)
+            .then(Commands.argument("name", StringArgumentType.word())
+                .suggests((context, builder) -> SharedSuggestionProvider.suggest(
+                    FakePlayerManager.all(context.getSource().getServer()).stream()
+                        .map(player -> player.getGameProfile().name()),
+                    builder
+                ))
+                .executes(FakePlayerCommand::openPlayerGui));
+    }
+
+    private static int runAction(
+        CommandContext<CommandSourceStack> context,
+        String translationKey,
+        java.util.function.Consumer<FakeServerPlayer> action
+    ) {
+        String name = StringArgumentType.getString(context, "name");
+        FakeServerPlayer fake = FakePlayerManager.find(context.getSource().getServer(), name);
+        if (fake == null) {
+            context.getSource().sendFailure(Component.translatable("commands.fakeplayer.not_found", name));
+            return 0;
+        }
+        action.accept(fake);
+        context.getSource().sendSuccess(
+            () -> Component.translatable("commands.fakeplayer.action", name, Component.translatable(translationKey)),
+            false
+        );
+        return 1;
     }
 
     private static int spawn(CommandContext<CommandSourceStack> context, String name) {
         // 玩家名规则与原版一致，提前校验可以避免无效档案进入玩家列表。
-        if (!name.matches("[A-Za-z0-9_]{1,16}")) {
+        if (!name.matches("[A-Za-z0-9_-]{1,16}")) { // 官方不支持 “-” 但是游戏本身支持
             context.getSource().sendFailure(Component.translatable("commands.fakeplayer.invalid_name"));
             return 0;
         }
@@ -105,12 +168,30 @@ public final class FakePlayerCommand {
         return 1;
     }
 
+    private static int openPlayerGui(CommandContext<CommandSourceStack> context) {
+        ServerPlayer viewer = context.getSource().getPlayer();
+        if (viewer == null) {
+            context.getSource().sendFailure(Component.translatable("commands.fakeplayer.player_only"));
+            return 0;
+        }
+
+        String name = StringArgumentType.getString(context, "name");
+        FakeServerPlayer fake = FakePlayerManager.find(context.getSource().getServer(), name);
+        if (fake == null) {
+            context.getSource().sendFailure(Component.translatable("commands.fakeplayer.not_found", name));
+            return 0;
+        }
+
+        FakePlayerMenuOpener.openControl(viewer, fake);
+        return 1;
+    }
+
     private static String nextName(CommandContext<CommandSourceStack> context) {
         // 从最小可用序号开始查找，确保无参数命令不会与在线玩家重名。
         int index = 1;
-        while (context.getSource().getServer().getPlayerList().getPlayerByName("FakePlayer" + index) != null) {
+        while (context.getSource().getServer().getPlayerList().getPlayerByName("robot-" + index) != null) {
             index++;
         }
-        return "FakePlayer" + index;
+        return "robot-" + index;
     }
 }
