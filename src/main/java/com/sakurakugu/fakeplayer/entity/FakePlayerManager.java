@@ -3,8 +3,10 @@ package com.sakurakugu.fakeplayer.entity;
 import com.mojang.authlib.GameProfile;
 import java.util.List;
 import net.minecraft.core.UUIDUtil;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.Vec2;
@@ -33,6 +35,33 @@ public final class FakePlayerManager {
         fake.gameMode.changeGameModeForPlayer(GameType.SURVIVAL);
         fake.setHealth(fake.getMaxHealth());
         fake.showAllSkinLayers();
+        return fake;
+    }
+
+    public static FakeServerPlayer shadow(ServerPlayer player) {
+        MinecraftServer server = player.level().getServer();
+        ServerLevel level = player.level();
+        GameProfile profile = player.getGameProfile();
+        Vec3 position = player.position();
+        Vec2 rotation = player.getRotationVector();
+        GameType gameType = player.gameMode.getGameModeForPlayer();
+        float health = player.getHealth();
+        boolean flying = player.getAbilities().flying;
+
+        // 先按原版退出流程保存并移除真玩家，释放其名称和 UUID 后再创建替身。
+        server.getPlayerList().remove(player);
+        player.connection.disconnect(Component.translatable("commands.fakeplayer.shadow_kicked"));
+
+        FakeServerPlayer fake = new FakeServerPlayer(server, level, profile, player.clientInformation());
+        fake.snapTo(position.x, position.y, position.z, rotation.y, rotation.x);
+        FakeConnection connection = new FakeConnection();
+        server.getPlayerList().placeNewPlayer(connection, fake, CommonListenerCookie.createInitial(profile, false));
+        // 登录流程不会为手工创建的玩家恢复存档，这里同时继承背包、经验、饥饿值和药水效果。
+        fake.restoreFrom(player, true);
+        fake.connection.teleport(position.x, position.y, position.z, rotation.y, rotation.x);
+        fake.gameMode.changeGameModeForPlayer(gameType);
+        fake.setHealth(Math.min(health, fake.getMaxHealth()));
+        fake.getAbilities().flying = flying && fake.getAbilities().mayfly;
         return fake;
     }
 

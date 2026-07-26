@@ -36,8 +36,9 @@ Gradle 会通过 Foojay 自动获取 Minecraft 26.1 所需的 Java 25 工具链�
 - `/fakeplayer <名称>` 或 `/fakeplayer spawn <名称>`：生成指定名称的假人。
 - `/fakeplayer list`：列出当前假人。
 - `/fakeplayer gui` 或 `/fakeplayer setting`：打开全局设置界面，查看并管理所有假人；在后面添加假人名称可直接打开对应假人的控制界面。
-- `/fakeplayer remove <名称>`：移除假人。
-- `/player <名称> <操作>`：以名字在前的 Carpet 风格写法，支持 `spawn`、`remove`、`attack`、`use`、`jump`、`stop`、`turn_left`、`turn_right` 和 `sneak`。
+- `/fakeplayer kill <名称>`：移除假人。
+- `/player <名称> <操作>`：以名字在前的 Carpet 风格写法，支持 `spawn`、`kill`、`shadow`、`attack`、`use`、`jump`、`stop`、`turn_left`、`turn_right` 和 `sneak`。`shadow` 会踢出在线真玩家，并在其原位置生成同名假人。
+- 真玩家上线时，会自动移除同 UUID 或同名的假玩家并正常登录。
 - 按 `G`：打开全局假人列表（可在按键设置中修改）。
 - 右键假人：打开控制界面，可切换持续攻击/使用、跳跃、停止、转向、潜行或移除。
 

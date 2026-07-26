@@ -28,14 +28,14 @@ public final class FakePlayerCommand {
                 .then(Commands.literal("spawn")
                     .then(Commands.argument("name", StringArgumentType.word())
                         .executes(context -> spawn(context, StringArgumentType.getString(context, "name")))))
-                .then(Commands.literal("remove")
+                .then(Commands.literal("kill")
                     .then(Commands.argument("name", StringArgumentType.word())
                         .suggests((context, builder) -> SharedSuggestionProvider.suggest(
                             FakePlayerManager.all(context.getSource().getServer()).stream()
                                 .map(player -> player.getGameProfile().name()),
                             builder
                         ))
-                        .executes(FakePlayerCommand::remove)))
+                        .executes(FakePlayerCommand::kill)))
                 .then(Commands.literal("list").executes(FakePlayerCommand::list))
                 .then(guiCommand("gui"))
                 .then(guiCommand("setting"))
@@ -49,14 +49,16 @@ public final class FakePlayerCommand {
                 .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
                 .then(Commands.argument("name", StringArgumentType.word())
                     .suggests((context, builder) -> SharedSuggestionProvider.suggest(
-                        FakePlayerManager.all(context.getSource().getServer()).stream()
+                        context.getSource().getServer().getPlayerList().getPlayers().stream()
                             .map(player -> player.getGameProfile().name()),
                         builder
                     ))
                     .then(Commands.literal("spawn")
                         .executes(context -> spawn(context, StringArgumentType.getString(context, "name"))))
-                    .then(Commands.literal("remove")
-                        .executes(FakePlayerCommand::remove))
+                    .then(Commands.literal("kill")
+                        .executes(FakePlayerCommand::kill))
+                    .then(Commands.literal("shadow")
+                        .executes(FakePlayerCommand::shadow))
                     .then(action("attack", "gui.fakeplayer.attack", fake -> fake.actions().toggleAttack()))
                     .then(action("use", "gui.fakeplayer.use", fake -> fake.actions().toggleUse()))
                     .then(action("jump", "gui.fakeplayer.jump", fake -> fake.actions().jump()))
@@ -136,7 +138,7 @@ public final class FakePlayerCommand {
         }
     }
 
-    private static int remove(CommandContext<CommandSourceStack> context) {
+    private static int kill(CommandContext<CommandSourceStack> context) {
         String name = StringArgumentType.getString(context, "name");
         FakeServerPlayer fake = FakePlayerManager.find(context.getSource().getServer(), name);
         if (fake == null) {
@@ -144,7 +146,34 @@ public final class FakePlayerCommand {
             return 0;
         }
         FakePlayerManager.remove(fake);
-        context.getSource().sendSuccess(() -> Component.translatable("commands.fakeplayer.removed", name), true);
+        context.getSource().sendSuccess(() -> Component.translatable("commands.fakeplayer.killed", name), true);
+        return 1;
+    }
+
+    private static int shadow(CommandContext<CommandSourceStack> context) {
+        String name = StringArgumentType.getString(context, "name");
+        ServerPlayer player = context.getSource().getServer().getPlayerList().getPlayerByName(name);
+        if (player == null) {
+            context.getSource().sendFailure(Component.translatable("commands.fakeplayer.player_not_found", name));
+            return 0;
+        }
+        if (player instanceof FakeServerPlayer) {
+            context.getSource().sendFailure(Component.translatable("commands.fakeplayer.cannot_shadow_fake", name));
+            return 0;
+        }
+        if (context.getSource().getServer().isSingleplayerOwner(player.nameAndId())) {
+            context.getSource().sendFailure(Component.translatable("commands.fakeplayer.cannot_shadow_owner"));
+            return 0;
+        }
+
+        try {
+            FakePlayerManager.shadow(player);
+            context.getSource().sendSuccess(() -> Component.translatable("commands.fakeplayer.shadowed", name), true);
+        } catch (RuntimeException exception) {
+            FakePlayerMod.LOGGER.error("为真玩家 {} 创建替身时发生异常", name, exception);
+            context.getSource().sendFailure(Component.translatable("commands.fakeplayer.shadow_failed", name));
+            return 0;
+        }
         return 1;
     }
 

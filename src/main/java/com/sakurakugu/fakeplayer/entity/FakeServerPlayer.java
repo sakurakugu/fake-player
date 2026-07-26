@@ -1,6 +1,8 @@
 package com.sakurakugu.fakeplayer.entity;
 
 import com.mojang.authlib.GameProfile;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerLevel;
@@ -13,7 +15,11 @@ public final class FakeServerPlayer extends ServerPlayer {
     private final FakePlayerActions actions;
 
     public FakeServerPlayer(MinecraftServer server, ServerLevel level, GameProfile profile) {
-        super(server, level, profile, ClientInformation.createDefault());
+        this(server, level, profile, ClientInformation.createDefault());
+    }
+
+    public FakeServerPlayer(MinecraftServer server, ServerLevel level, GameProfile profile, ClientInformation clientInformation) {
+        super(server, level, profile, clientInformation);
         this.server = server;
         this.actions = new FakePlayerActions(this);
     }
@@ -24,6 +30,15 @@ public final class FakeServerPlayer extends ServerPlayer {
 
     public MinecraftServer server() {
         return server;
+    }
+
+    @Override
+    public Component getTabListDisplayName() {
+        Component displayName = super.getTabListDisplayName();
+        if (displayName == null) {
+            displayName = getDisplayName();
+        }
+        return displayName.copy().append(Component.translatable("gui.fakeplayer.tab_marker").withStyle(ChatFormatting.DARK_GRAY));
     }
 
     public void showAllSkinLayers() {
