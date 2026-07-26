@@ -6,7 +6,7 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 
-/** 客户端按键请求打开全局假人列表的无数据载荷。 */
+/** 客户端按键请求打开假人全局设置的无数据载荷。 */
 public record OpenGlobalMenuPayload() implements CustomPacketPayload {
     public static final Type<OpenGlobalMenuPayload> TYPE = new Type<>(
         Identifier.fromNamespaceAndPath(FakePlayerMod.MOD_ID, "open_global_menu")

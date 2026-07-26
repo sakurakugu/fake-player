@@ -10,16 +10,18 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
 
-/** 为全局假人列表提供客户端快照和服务端操作通道。 */
+/** 为全局设置和假人列表提供客户端快照与服务端操作通道。 */
 public final class GlobalFakePlayerMenu extends AbstractContainerMenu {
     private final List<String> playerNames;
+    private final boolean openListInitially;
 
     public GlobalFakePlayerMenu(int containerId, Inventory inventory, RegistryFriendlyByteBuf data) {
-        this(containerId, inventory, readPlayerNames(data));
+        this(containerId, inventory, data.readBoolean(), readPlayerNames(data));
     }
 
-    public GlobalFakePlayerMenu(int containerId, Inventory inventory, List<String> playerNames) {
+    public GlobalFakePlayerMenu(int containerId, Inventory inventory, boolean openListInitially, List<String> playerNames) {
         super(ModMenus.GLOBAL_FAKE_PLAYER.get(), containerId);
+        this.openListInitially = openListInitially;
         this.playerNames = List.copyOf(playerNames);
     }
 
@@ -36,7 +38,7 @@ public final class GlobalFakePlayerMenu extends AbstractContainerMenu {
             return false;
         }
         if (actionId == playerNames.size()) {
-            FakePlayerMenuOpener.openGlobal(viewer);
+            FakePlayerMenuOpener.openList(viewer);
             return true;
         }
         if (actionId < 0 || actionId >= playerNames.size()) {
@@ -46,7 +48,7 @@ public final class GlobalFakePlayerMenu extends AbstractContainerMenu {
         // 按名称重新查询实体，避免快照中已移除的假人被操作。
         FakeServerPlayer target = FakePlayerManager.find(viewer.level().getServer(), playerNames.get(actionId));
         if (target == null) {
-            FakePlayerMenuOpener.openGlobal(viewer);
+            FakePlayerMenuOpener.openList(viewer);
             return true;
         }
         FakePlayerMenuOpener.openControl(viewer, target);
@@ -65,5 +67,9 @@ public final class GlobalFakePlayerMenu extends AbstractContainerMenu {
 
     public List<String> playerNames() {
         return playerNames;
+    }
+
+    public boolean openListInitially() {
+        return openListInitially;
     }
 }

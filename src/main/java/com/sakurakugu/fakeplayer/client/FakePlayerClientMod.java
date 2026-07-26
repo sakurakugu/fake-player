@@ -15,7 +15,7 @@ import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import net.neoforged.neoforge.common.NeoForge;
 import org.lwjgl.glfw.GLFW;
 
-/** 客户端入口，负责注册并处理全局假人列表快捷键。 */
+/** 客户端入口，负责注册并处理假人全局设置快捷键。 */
 @Mod(value = FakePlayerMod.MOD_ID, dist = Dist.CLIENT)
 public final class FakePlayerClientMod {
     private static final KeyMapping.Category CATEGORY = new KeyMapping.Category(

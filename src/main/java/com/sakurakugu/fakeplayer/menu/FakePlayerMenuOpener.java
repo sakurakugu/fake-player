@@ -7,22 +7,36 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.SimpleMenuProvider;
 
-/** 统一创建假人列表和控制菜单。 */
+/** 统一创建假人全局菜单和控制菜单。 */
 public final class FakePlayerMenuOpener {
     private FakePlayerMenuOpener() {
     }
 
     public static void openGlobal(ServerPlayer viewer) {
+        openGlobal(viewer, false);
+    }
+
+    public static void openList(ServerPlayer viewer) {
+        openGlobal(viewer, true);
+    }
+
+    private static void openGlobal(ServerPlayer viewer, boolean openListInitially) {
         List<String> names = FakePlayerManager.all(viewer.level().getServer()).stream()
             .map(fake -> fake.getGameProfile().name())
             .sorted(String.CASE_INSENSITIVE_ORDER)
             .toList();
         viewer.openMenu(
             new SimpleMenuProvider(
-                (containerId, inventory, player) -> new GlobalFakePlayerMenu(containerId, inventory, names),
+                (containerId, inventory, player) -> new GlobalFakePlayerMenu(
+                    containerId,
+                    inventory,
+                    openListInitially,
+                    names
+                ),
                 Component.translatable("gui.fakeplayer.global.title")
             ),
             data -> {
+                data.writeBoolean(openListInitially);
                 data.writeVarInt(names.size());
                 names.forEach(name -> data.writeUtf(name, 64));
             }

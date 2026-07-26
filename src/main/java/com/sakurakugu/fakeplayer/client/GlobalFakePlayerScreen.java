@@ -7,7 +7,7 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 
-/** 显示所有假人并允许进入单个假人的控制页。 */
+/** 显示全局设置，并允许切换到假人列表。 */
 public final class GlobalFakePlayerScreen extends AbstractContainerScreen<GlobalFakePlayerMenu> {
     private static final int PANEL_WIDTH = 300;
     private static final int PANEL_HEIGHT = 240;
@@ -16,9 +16,11 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
     private static final int ROW_GAP = 5;
 
     private int page;
+    private boolean showingList;
 
     public GlobalFakePlayerScreen(GlobalFakePlayerMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, PANEL_WIDTH, PANEL_HEIGHT);
+        showingList = menu.openListInitially();
     }
 
     @Override
@@ -29,6 +31,15 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
 
     private void rebuildButtons() {
         clearWidgets();
+        if (!showingList) {
+            addRenderableWidget(
+                Button.builder(Component.translatable("gui.fakeplayer.global.open_list"), button -> showList())
+                    .bounds(leftPos + 50, topPos + 72, PANEL_WIDTH - 100, BUTTON_HEIGHT)
+                    .build()
+            );
+            return;
+        }
+
         int firstIndex = page * PAGE_SIZE;
         int endIndex = Math.min(firstIndex + PAGE_SIZE, menu.playerNames().size());
         for (int index = firstIndex; index < endIndex; index++) {
@@ -49,8 +60,14 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
         addRenderableWidget(previous);
 
         addRenderableWidget(
+            Button.builder(Component.translatable("gui.fakeplayer.global.settings"), button -> showSettings())
+                .bounds(leftPos + 58, footerY, 76, 20)
+                .build()
+        );
+
+        addRenderableWidget(
             Button.builder(Component.translatable("gui.fakeplayer.global.refresh"), button -> sendAction(menu.playerNames().size()))
-                .bounds(leftPos + 106, footerY, 88, 20)
+                .bounds(leftPos + 142, footerY, 76, 20)
                 .build()
         );
 
@@ -59,6 +76,17 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
             .build();
         next.active = page + 1 < pageCount();
         addRenderableWidget(next);
+    }
+
+    private void showList() {
+        showingList = true;
+        page = 0;
+        rebuildButtons();
+    }
+
+    private void showSettings() {
+        showingList = false;
+        rebuildButtons();
     }
 
     private void changePage(int offset) {
@@ -87,7 +115,13 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
 
     @Override
     protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
-        graphics.centeredText(font, title, PANEL_WIDTH / 2, 12, 0xFFFFFFFF);
+        Component pageTitle = showingList
+            ? Component.translatable("gui.fakeplayer.global.list_title")
+            : title;
+        graphics.centeredText(font, pageTitle, PANEL_WIDTH / 2, 12, 0xFFFFFFFF);
+        if (!showingList) {
+            return;
+        }
         if (menu.playerNames().isEmpty()) {
             graphics.centeredText(font, Component.translatable("gui.fakeplayer.global.empty"), PANEL_WIDTH / 2, 100, 0xFFAAAAAA);
         }

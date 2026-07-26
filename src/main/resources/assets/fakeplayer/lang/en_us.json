@@ -15,7 +15,7 @@
   "commands.fakeplayer.cannot_shadow_fake": "%s is already a fake player",
   "commands.fakeplayer.cannot_shadow_owner": "The single-player server owner cannot be shadowed",
   "commands.fakeplayer.shadow_failed": "Failed to shadow player %s; check the server log",
-  "key.fakeplayer.open_list": "Open fake player list",
+  "key.fakeplayer.open_list": "Open fake player settings",
   "gui.fakeplayer.tab_marker": " [Bot]",
   "gui.fakeplayer.title": "%s - Fake Player",
   "gui.fakeplayer.status": "%s status",
@@ -28,6 +28,9 @@
   "gui.fakeplayer.sneak": "Toggle sneaking",
   "gui.fakeplayer.remove": "Remove fake player",
   "gui.fakeplayer.global.title": "Global Fake Player Settings",
+  "gui.fakeplayer.global.list_title": "Fake Player List",
+  "gui.fakeplayer.global.open_list": "Open Fake Player List",
+  "gui.fakeplayer.global.settings": "Back to Settings",
   "gui.fakeplayer.global.empty": "There are no fake players",
   "gui.fakeplayer.global.refresh": "Refresh list",
   "gui.fakeplayer.global.page": "Page %s/%s - %s fake players"

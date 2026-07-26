@@ -73,8 +73,8 @@ public final class FakePlayerMenu extends AbstractContainerMenu {
 
     @Override
     public boolean stillValid(Player player) {
-        // 客户端无法校验目标；服务端则在目标离线或玩家距离超过 8 格时关闭菜单。
-        return target == null || (!target.hasDisconnected() && player.distanceToSqr(target) <= 64.0);
+        // 客户端无法校验目标；服务端仅在目标离线时关闭菜单，以支持远程控制。
+        return target == null || !target.hasDisconnected();
     }
 
     public int targetId() {
