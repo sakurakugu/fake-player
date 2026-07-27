@@ -1,5 +1,6 @@
 package com.sakurakugu.fakeplayer.menu;
 
+import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
 import java.util.List;
@@ -34,7 +35,8 @@ public final class GlobalFakePlayerMenu extends AbstractContainerMenu {
 
     @Override
     public boolean clickMenuButton(Player player, int actionId) {
-        if (!(player instanceof ServerPlayer viewer)) {
+        if (!(player instanceof ServerPlayer viewer)
+            || !FakePlayerConfig.canUseCommands(viewer.createCommandSourceStack())) {
             return false;
         }
         if (actionId == playerNames.size()) {

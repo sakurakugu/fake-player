@@ -1,8 +1,10 @@
 package com.sakurakugu.fakeplayer.menu;
 
+import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -44,7 +46,8 @@ public final class FakePlayerMenu extends AbstractContainerMenu {
     @Override
     public boolean clickMenuButton(Player player, int actionId) {
         // 客户端没有目标引用，实际动作只能由服务端菜单执行。
-        if (target == null) {
+        if (target == null || !(player instanceof ServerPlayer viewer)
+            || !FakePlayerConfig.canUseCommands(viewer.createCommandSourceStack())) {
             return false;
         }
         switch (actionId) {

@@ -1,27 +1,43 @@
 package com.sakurakugu.fakeplayer.command;
 
+import com.mojang.authlib.GameProfile;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.sakurakugu.fakeplayer.FakePlayerMod;
+import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.entity.FakePlayerActions.MoveDirection;
 import com.sakurakugu.fakeplayer.entity.FakePlayerActions.RepeatMode;
 import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
+import com.sakurakugu.fakeplayer.entity.ProfileResolver;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
 import com.sakurakugu.fakeplayer.menu.FakePlayerMenuOpener;
 import java.util.Comparator;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.commands.arguments.DimensionArgument;
+import net.minecraft.commands.arguments.GameModeArgument;
+import net.minecraft.commands.arguments.coordinates.RotationArgument;
 import net.minecraft.commands.arguments.coordinates.Vec3Argument;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.players.NameAndId;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec2;
+import net.minecraft.world.phys.Vec3;
 
 /** 注册并处理 {@code /fakeplayer} 与 {@code /player} 命令。 */
 public final class FakePlayerCommand {
@@ -31,7 +47,7 @@ public final class FakePlayerCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(
             Commands.literal("fakeplayer")
-                .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
+                .requires(FakePlayerConfig::canUseCommands)
                 .executes(context -> spawn(context, nextName(context)))
                 .then(Commands.literal("spawn")
                     .then(Commands.argument("name", StringArgumentType.word())
@@ -46,13 +62,13 @@ public final class FakePlayerCommand {
         );
 
         LiteralArgumentBuilder<CommandSourceStack> player = Commands.literal("player")
-            .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS));
+            .requires(FakePlayerConfig::canUseCommands);
         var target = Commands.argument("name", StringArgumentType.word())
             .suggests((context, builder) -> SharedSuggestionProvider.suggest(
                 context.getSource().getServer().getPlayerList().getPlayers().stream()
                     .map(value -> value.getGameProfile().name()), builder));
 
-        target.then(Commands.literal("spawn").executes(context -> spawn(context, name(context))));
+        target.then(spawnCommand());
         target.then(Commands.literal("kill").executes(FakePlayerCommand::kill));
         target.then(Commands.literal("shadow").executes(FakePlayerCommand::shadow));
         target.then(Commands.literal("gui").executes(FakePlayerCommand::openPlayerGui));
@@ -83,6 +99,32 @@ public final class FakePlayerCommand {
         target.then(simpleAction("stop", fake -> fake.actions().stop()));
         player.then(target);
         dispatcher.register(player);
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> spawnCommand() {
+        LiteralArgumentBuilder<CommandSourceStack> spawn = Commands.literal("spawn")
+            .executes(context -> spawn(context, name(context)));
+        spawn.then(Commands.literal("in")
+            .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
+            .then(Commands.argument("gamemode", GameModeArgument.gameMode())
+                .executes(context -> spawn(context, name(context)))));
+
+        var position = Commands.argument("position", Vec3Argument.vec3())
+            .executes(context -> spawn(context, name(context)));
+        var rotation = Commands.argument("direction", RotationArgument.rotation())
+            .executes(context -> spawn(context, name(context)));
+        var dimension = Commands.argument("dimension", DimensionArgument.dimension())
+            .executes(context -> spawn(context, name(context)));
+        dimension.then(Commands.literal("in")
+            .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
+            .then(Commands.argument("gamemode", GameModeArgument.gameMode())
+                .executes(context -> spawn(context, name(context)))));
+        rotation.then(Commands.literal("in")
+            .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
+            .then(dimension));
+        position.then(Commands.literal("facing").then(rotation));
+        spawn.then(Commands.literal("at").then(position));
+        return spawn;
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> repeatingCommand(String literal, RepeatingAction action) {
@@ -287,25 +329,136 @@ public final class FakePlayerCommand {
         return 1;
     }
 
-    private static int spawn(CommandContext<CommandSourceStack> context, String name) {
+    private static int spawn(CommandContext<CommandSourceStack> context, String name) throws CommandSyntaxException {
         if (!name.matches("[A-Za-z0-9_-]{1,16}")) {
             context.getSource().sendFailure(Component.translatable("commands.fakeplayer.invalid_name"));
             return 0;
         }
         CommandSourceStack source = context.getSource();
-        try {
-            FakeServerPlayer fake = FakePlayerManager.spawn(
-                source.getServer(), source.getLevel(), name, source.getPosition(), source.getRotation());
-            source.sendSuccess(() -> Component.translatable(
-                "commands.fakeplayer.spawned", fake.getGameProfile().name()), true);
-            return 1;
-        } catch (IllegalArgumentException exception) {
+        Vec3 position = argumentOrDefault(() -> Vec3Argument.getVec3(context, "position"), source.getPosition());
+        Vec2 rotation = argumentOrDefault(
+            () -> RotationArgument.getRotation(context, "direction").getRotation(source), source.getRotation());
+        ServerLevel level = argumentOrDefault(
+            () -> DimensionArgument.getDimension(context, "dimension"), source.getLevel());
+        ServerPlayer sender = source.getPlayer();
+        GameType defaultGameType = sender == null ? GameType.CREATIVE : sender.gameMode.getGameModeForPlayer();
+        GameType gameType = argumentOrDefault(
+            () -> GameModeArgument.getGameMode(context, "gamemode"), defaultGameType);
+        boolean flying = sender != null && sender.getAbilities().flying;
+        if (gameType == GameType.SPECTATOR) {
+            flying = true;
+        } else if (gameType.isSurvival()) {
+            flying = false;
+        }
+
+        if (!validateSpawnPosition(source, level, position)) {
+            return 0;
+        }
+        MinecraftServer server = source.getServer();
+        if (server.getPlayerList().getPlayerByName(name) != null) {
             source.sendFailure(Component.translatable("commands.fakeplayer.duplicate", name));
             return 0;
+        }
+
+        boolean requestedFlying = flying;
+        source.sendSuccess(() -> Component.translatable("commands.fakeplayer.resolving_profile", name), false);
+        ProfileResolver.resolve(server, name).whenCompleteAsync((result, throwable) -> {
+            if (throwable != null) {
+                FakePlayerMod.LOGGER.error("解析假玩家 {} 的档案时发生异常", name, throwable);
+                source.sendFailure(Component.translatable("commands.fakeplayer.profile_service_unavailable", name));
+                return;
+            }
+            if (!result.successful()) {
+                sendProfileFailure(source, name, result.status());
+                return;
+            }
+            spawnResolved(source, level, result.profile(), position, rotation, gameType, requestedFlying);
+        }, server);
+        return 1;
+    }
+
+    private static boolean validateSpawnPosition(CommandSourceStack source, ServerLevel level, Vec3 position) {
+        if (!Double.isFinite(position.x) || !Double.isFinite(position.y) || !Double.isFinite(position.z)
+            || !Level.isInSpawnableBounds(BlockPos.containing(position))) {
+            source.sendFailure(Component.translatable("commands.fakeplayer.position_outside_world"));
+            return false;
+        }
+
+        AABB bounds = EntityType.PLAYER.getDimensions().makeBoundingBox(position);
+        if (!level.getWorldBorder().isWithinBounds(bounds)) {
+            source.sendFailure(Component.translatable("commands.fakeplayer.position_outside_border"));
+            return false;
+        }
+        if (!level.noCollision(bounds)) {
+            source.sendFailure(Component.translatable("commands.fakeplayer.position_obstructed"));
+            return false;
+        }
+        return true;
+    }
+
+    private static void spawnResolved(
+        CommandSourceStack source,
+        ServerLevel level,
+        GameProfile profile,
+        Vec3 position,
+        Vec2 rotation,
+        GameType gameType,
+        boolean flying
+    ) {
+        MinecraftServer server = source.getServer();
+        NameAndId identity = new NameAndId(profile);
+        if (server.getPlayerList().getPlayers().stream().anyMatch(player ->
+            player.getUUID().equals(profile.id())
+                || player.getGameProfile().name().equalsIgnoreCase(profile.name()))) {
+            source.sendFailure(Component.translatable("commands.fakeplayer.duplicate", profile.name()));
+            return;
+        }
+        if (server.getPlayerList().getBans().isBanned(identity)) {
+            source.sendFailure(Component.translatable("commands.fakeplayer.profile_banned", profile.name()));
+            return;
+        }
+        if (server.getPlayerList().isUsingWhitelist()
+            && !server.getPlayerList().isWhiteListed(identity)
+            && !server.getPlayerList().isOp(identity)) {
+            source.sendFailure(Component.translatable("commands.fakeplayer.profile_not_whitelisted", profile.name()));
+            return;
+        }
+        // 档案查询期间方块和世界边界可能变化，因此创建前再检查一次位置。
+        if (!validateSpawnPosition(source, level, position)) {
+            return;
+        }
+
+        try {
+            FakeServerPlayer fake = FakePlayerManager.spawn(
+                server, level, profile, position, rotation, gameType, flying);
+            source.sendSuccess(() -> Component.translatable(
+                "commands.fakeplayer.spawned", fake.getGameProfile().name()), true);
+        } catch (IllegalArgumentException exception) {
+            source.sendFailure(Component.translatable("commands.fakeplayer.duplicate", profile.name()));
         } catch (RuntimeException exception) {
-            FakePlayerMod.LOGGER.error("生成假玩家 {} 时发生异常", name, exception);
-            source.sendFailure(Component.translatable("commands.fakeplayer.spawn_failed", name));
-            return 0;
+            FakePlayerMod.LOGGER.error("生成假玩家 {} 时发生异常", profile.name(), exception);
+            source.sendFailure(Component.translatable("commands.fakeplayer.spawn_failed", profile.name()));
+        }
+    }
+
+    private static void sendProfileFailure(
+        CommandSourceStack source,
+        String name,
+        ProfileResolver.Status status
+    ) {
+        String key = switch (status) {
+            case BUSY -> "commands.fakeplayer.profile_busy";
+            case SERVICE_UNAVAILABLE -> "commands.fakeplayer.profile_service_unavailable";
+            default -> "commands.fakeplayer.profile_not_found";
+        };
+        source.sendFailure(Component.translatable(key, name));
+    }
+
+    private static <T> T argumentOrDefault(ArgumentSupplier<T> supplier, T fallback) throws CommandSyntaxException {
+        try {
+            return supplier.get();
+        } catch (IllegalArgumentException exception) {
+            return fallback;
         }
     }
 
@@ -322,26 +475,32 @@ public final class FakePlayerCommand {
 
     private static int shadow(CommandContext<CommandSourceStack> context) {
         String name = name(context);
-        ServerPlayer player = context.getSource().getServer().getPlayerList().getPlayerByName(name);
+        CommandSourceStack source = context.getSource();
+        ServerPlayer player = source.getServer().getPlayerList().getPlayerByName(name);
         if (player == null) {
-            context.getSource().sendFailure(Component.translatable("commands.fakeplayer.player_not_found", name));
+            source.sendFailure(Component.translatable("commands.fakeplayer.player_not_found", name));
             return 0;
         }
         if (player instanceof FakeServerPlayer) {
-            context.getSource().sendFailure(Component.translatable("commands.fakeplayer.cannot_shadow_fake", name));
+            source.sendFailure(Component.translatable("commands.fakeplayer.cannot_shadow_fake", name));
             return 0;
         }
-        if (context.getSource().getServer().isSingleplayerOwner(player.nameAndId())) {
-            context.getSource().sendFailure(Component.translatable("commands.fakeplayer.cannot_shadow_owner"));
+        ServerPlayer sender = source.getPlayer();
+        if (!Commands.hasPermission(Commands.LEVEL_GAMEMASTERS).test(source) && sender != player) {
+            source.sendFailure(Component.translatable("commands.fakeplayer.cannot_shadow_other"));
+            return 0;
+        }
+        if (source.getServer().isSingleplayerOwner(player.nameAndId())) {
+            source.sendFailure(Component.translatable("commands.fakeplayer.cannot_shadow_owner"));
             return 0;
         }
         try {
             FakePlayerManager.shadow(player);
-            context.getSource().sendSuccess(() -> Component.translatable("commands.fakeplayer.shadowed", name), true);
+            source.sendSuccess(() -> Component.translatable("commands.fakeplayer.shadowed", name), true);
             return 1;
         } catch (RuntimeException exception) {
             FakePlayerMod.LOGGER.error("为真玩家 {} 创建替身时发生异常", name, exception);
-            context.getSource().sendFailure(Component.translatable("commands.fakeplayer.shadow_failed", name));
+            source.sendFailure(Component.translatable("commands.fakeplayer.shadow_failed", name));
             return 0;
         }
     }
@@ -430,5 +589,10 @@ public final class FakePlayerCommand {
     @FunctionalInterface
     private interface RepeatingAction {
         void run(FakeServerPlayer fake, RepeatMode mode, int interval);
+    }
+
+    @FunctionalInterface
+    private interface ArgumentSupplier<T> {
+        T get() throws CommandSyntaxException;
     }
 }

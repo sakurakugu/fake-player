@@ -18,8 +18,29 @@ public final class FakePlayerManager {
     private FakePlayerManager() {
     }
 
-    public static FakeServerPlayer spawn(MinecraftServer server, ServerLevel level, String name, Vec3 position, Vec2 rotation) {
-        GameProfile profile = new GameProfile(UUIDUtil.createOfflinePlayerUUID(name), name);
+    public static FakeServerPlayer spawn(
+        MinecraftServer server,
+        ServerLevel level,
+        String name,
+        Vec3 position,
+        Vec2 rotation,
+        GameType gameType,
+        boolean flying
+    ) {
+        return spawn(server, level, new GameProfile(UUIDUtil.createOfflinePlayerUUID(name), name), position, rotation,
+            gameType, flying);
+    }
+
+    public static FakeServerPlayer spawn(
+        MinecraftServer server,
+        ServerLevel level,
+        GameProfile profile,
+        Vec3 position,
+        Vec2 rotation,
+        GameType gameType,
+        boolean flying
+    ) {
+        String name = profile.name();
         // 假玩家与真实玩家共享玩家列表，名称或 UUID 任一冲突都不能加入。
         if (server.getPlayerList().getPlayers().stream().anyMatch(player ->
             player.getUUID().equals(profile.id())
@@ -35,7 +56,8 @@ public final class FakePlayerManager {
         FakeConnection connection = new FakeConnection();
         server.getPlayerList().placeNewPlayer(connection, fake, CommonListenerCookie.createInitial(profile, false));
         fake.connection.teleport(position.x, position.y, position.z, rotation.y, rotation.x);
-        fake.gameMode.changeGameModeForPlayer(GameType.SURVIVAL);
+        fake.gameMode.changeGameModeForPlayer(gameType);
+        fake.getAbilities().flying = flying && fake.getAbilities().mayfly;
         fake.setHealth(fake.getMaxHealth());
         fake.showAllSkinLayers();
         return fake;

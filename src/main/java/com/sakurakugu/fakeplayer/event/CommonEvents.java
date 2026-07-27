@@ -2,6 +2,7 @@ package com.sakurakugu.fakeplayer.event;
 
 import com.sakurakugu.fakeplayer.FakePlayerMod;
 import com.sakurakugu.fakeplayer.command.FakePlayerCommand;
+import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
 import com.sakurakugu.fakeplayer.menu.FakePlayerMenuOpener;
@@ -55,6 +56,9 @@ public final class CommonEvents {
     public static void interact(PlayerInteractEvent.EntityInteract event) {
         // 仅服务端真实玩家右键假玩家时打开控制菜单。
         if (!(event.getEntity() instanceof ServerPlayer viewer) || !(event.getTarget() instanceof FakeServerPlayer fake)) {
+            return;
+        }
+        if (!FakePlayerConfig.canUseCommands(viewer.createCommandSourceStack())) {
             return;
         }
 

@@ -1,7 +1,7 @@
 package com.sakurakugu.fakeplayer.network;
 
+import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.menu.FakePlayerMenuOpener;
-import net.minecraft.commands.Commands;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
@@ -18,7 +18,7 @@ public final class ModNetworking {
             OpenGlobalMenuPayload.STREAM_CODEC,
             (payload, context) -> {
                 if (context.player() instanceof ServerPlayer player
-                    && Commands.hasPermission(Commands.LEVEL_GAMEMASTERS).test(player.createCommandSourceStack())) {
+                    && FakePlayerConfig.canUseCommands(player.createCommandSourceStack())) {
                     FakePlayerMenuOpener.openGlobal(player);
                 }
             }
