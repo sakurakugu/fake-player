@@ -13,6 +13,10 @@ public final class FakePlayerConfig {
     private static final ModConfigSpec.EnumValue<ProfileStrategy> PROFILE_STRATEGY;
     private static final ModConfigSpec.BooleanValue RESTORE_FAKE_PLAYERS;
     private static final ModConfigSpec.BooleanValue RESTORE_ACTIONS;
+    private static final ModConfigSpec.BooleanValue AUTO_REPLENISHMENT;
+    private static final ModConfigSpec.BooleanValue AUTO_REPLENISHMENT_FROM_SHULKER_BOXES;
+    private static final ModConfigSpec.BooleanValue AUTO_REPLACE_TOOLS;
+    private static final ModConfigSpec.BooleanValue AUTO_FISHING;
 
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
@@ -38,6 +42,21 @@ public final class FakePlayerConfig {
         RESTORE_ACTIONS = builder
             .comment("恢复驻留假玩家时是否同时恢复持续动作。")
             .define("restoreActions", true);
+        builder.pop();
+
+        builder.push("automation");
+        AUTO_REPLENISHMENT = builder
+            .comment("手中可堆叠物品低于阈值时，是否从 36 格主背包自动补货。")
+            .define("autoReplenishment", false);
+        AUTO_REPLENISHMENT_FROM_SHULKER_BOXES = builder
+            .comment("自动补货时是否也可从主背包内的潜影盒取出物品。")
+            .define("autoReplenishmentFromShulkerBoxes", false);
+        AUTO_REPLACE_TOOLS = builder
+            .comment("主手或副手工具剩余耐久不超过 10 时，是否自动换上背包中的同种工具。")
+            .define("autoReplaceTools", false);
+        AUTO_FISHING = builder
+            .comment("原版浮漂检测到咬钩后，是否自动收杆并再次抛竿。")
+            .define("autoFishing", false);
         builder.pop();
         SPEC = builder.build();
     }
@@ -69,6 +88,22 @@ public final class FakePlayerConfig {
 
     public static boolean restoreActions() {
         return RESTORE_ACTIONS.get();
+    }
+
+    public static boolean autoReplenishment() {
+        return AUTO_REPLENISHMENT.get();
+    }
+
+    public static boolean autoReplenishmentFromShulkerBoxes() {
+        return AUTO_REPLENISHMENT_FROM_SHULKER_BOXES.get();
+    }
+
+    public static boolean autoReplaceTools() {
+        return AUTO_REPLACE_TOOLS.get();
+    }
+
+    public static boolean autoFishing() {
+        return AUTO_FISHING.get();
     }
 
     public enum ProfileStrategy {

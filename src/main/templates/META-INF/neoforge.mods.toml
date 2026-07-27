@@ -9,6 +9,9 @@ description='''
 Carpet-style fake players with an in-game control screen.
 '''
 
+[[mixins]]
+config="fakeplayer.mixins.json"
+
 [[dependencies.${mod_id}]]
 modId="neoforge"
 type="required"

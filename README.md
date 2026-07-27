@@ -12,6 +12,7 @@ Fake Player 提供可通过命令和图形界面控制的服务端假玩家，�
 - 按 `G`：打开全局设置界面，可在按键设置中修改快捷键。
 - 右键假玩家：打开对应的控制界面。
 - 真玩家上线时，自动移除同 UUID 或同名的假玩家，并由真玩家恢复该身份。
+- 可选自动补货、潜影盒补货、低耐久工具替换和原版自动钓鱼。
 
 命令和图形界面默认需要游戏管理员权限，与原版 `/gamemode` 权限等级相同，可在服务端配置中调整。假玩家名称只能包含
 1-16 个字母、数字、下划线或连字符。
@@ -78,6 +79,10 @@ NeoForge 会在世界目录的 `serverconfig/fakeplayer-server.toml` 中生成�
 | `profiles.strategy` | `ONLINE_PREFERRED` | 玩家档案解析策略，见下表。 |
 | `persistence.restoreFakePlayers` | `true` | 服务器启动后恢复上次仍在线的假玩家。 |
 | `persistence.restoreActions` | `true` | 恢复驻留假玩家时同时恢复持续动作。 |
+| `automation.autoReplenishment` | `false` | 手中可堆叠物品剩余不超过一组的 1/8 时，从 36 格主背包补到半组。 |
+| `automation.autoReplenishmentFromShulkerBoxes` | `false` | 补货时也搜索主背包内的潜影盒；需同时开启普通补货。 |
+| `automation.autoReplaceTools` | `false` | 主手或副手工具剩余耐久不超过 10 时，换上背包中剩余耐久最高的同种物品。 |
+| `automation.autoFishing` | `false` | 原版浮漂咬钩后自动收杆，10 刻后使用同一只手再次抛竿。 |
 
 档案策略：
 

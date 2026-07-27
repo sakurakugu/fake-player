@@ -1,6 +1,7 @@
 package com.sakurakugu.fakeplayer.entity;
 
 import com.mojang.authlib.GameProfile;
+import com.sakurakugu.fakeplayer.automation.FakePlayerAutomation;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerPersistence;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -14,6 +15,7 @@ import net.minecraft.world.damagesource.DamageSource;
 public final class FakeServerPlayer extends ServerPlayer {
     private final MinecraftServer server;
     private final FakePlayerActions actions;
+    private final FakePlayerAutomation automation;
 
     public FakeServerPlayer(MinecraftServer server, ServerLevel level, GameProfile profile) {
         this(server, level, profile, ClientInformation.createDefault());
@@ -23,10 +25,15 @@ public final class FakeServerPlayer extends ServerPlayer {
         super(server, level, profile, clientInformation);
         this.server = server;
         this.actions = new FakePlayerActions(this);
+        this.automation = new FakePlayerAutomation(this);
     }
 
     public FakePlayerActions actions() {
         return actions;
+    }
+
+    public FakePlayerAutomation automation() {
+        return automation;
     }
 
     public MinecraftServer server() {
@@ -50,6 +57,8 @@ public final class FakeServerPlayer extends ServerPlayer {
     @Override
     public void tick() {
         super.tick();
+        // 先处理补货和换工具，确保本刻动作使用的是更新后的手持物。
+        automation.tick();
         // 先设置移动和按键输入，再让实体刻处理物理、载具和持续使用。
         actions.tick();
         // ServerPlayer 通常由网络监听器驱动 doTick，假连接不会替我们调用它。
