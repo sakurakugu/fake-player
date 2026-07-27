@@ -11,6 +11,7 @@ Fake Player 提供可通过命令和图形界面控制的服务端假玩家，�
 - `/bot <操作>`：保存、加载和分组管理假玩家预设。
 - `/chunkloader <操作>`：管理持久化的固定半径区块加载点。
 - 按 `G`：打开全局设置界面，可在按键设置中修改快捷键。
+- 按 `M`：打开以所在区块为中心的加载范围地图；按 `B`：切换加载状态 HUD。
 - 全局设置界面可即时切换恢复假人、恢复动作和四项自动化功能，修改会写入当前世界的服务端配置。
 - 右键假玩家：打开对应的控制界面。
 - 真玩家上线时，自动移除同 UUID 或同名的假玩家，并由真玩家恢复该身份。
@@ -128,6 +129,8 @@ NeoForge 会在世界目录的 `serverconfig/fakeplayer-server.toml` 中生成�
 | 命令 | 说明 |
 | ---- | ---- |
 | `/chunkloader list` | 列出所有加载点。 |
+| `/chunkloader backup` | 立即创建一份加载点 JSON 备份。 |
+| `/chunkloader restore confirm` | 从最新可读备份恢复配置并重建本模组区块票。 |
 | `/chunkloader info <名称>` | 查看维度、坐标、半径、区块数、模式和启用状态。 |
 | `/chunkloader add <名称> <半径> [ticking]` | 在当前位置创建并启用加载点。 |
 | `/chunkloader disable <名称>` | 撤销该点的票据，但保留配置。 |
@@ -138,6 +141,11 @@ NeoForge 会在世界目录的 `serverconfig/fakeplayer-server.toml` 中生成�
 省略 `ticking` 时票据只保持区块加载；指定后则允许完整区块刻和自然生成。普通在线假人仍使用
 玩家的模拟距离语义。加载点配置与 NeoForge 所有者隔离票据一同持久化，不会影响原版 `/forceload`
 或其他模组的票据。
+
+每次成功修改都会在世界目录 `fakeplayer/backups` 写入独立 JSON 备份，原子替换临时文件并最多
+保留 5 份。主 SavedData 无法解析时会自动从最新可读备份恢复；手动恢复也会从新到旧跳过损坏文件。
+`restore confirm` 会先撤销当前配置拥有的票据，
+再载入备份并重新对齐票据。
 
 #### 界面与背包
 

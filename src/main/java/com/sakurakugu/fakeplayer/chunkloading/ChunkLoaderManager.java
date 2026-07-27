@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
+import java.nio.file.Files;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
@@ -35,7 +36,21 @@ public final class ChunkLoaderManager {
     }
 
     public static ChunkLoaderSavedData data(MinecraftServer server) {
-        return server.overworld().getDataStorage().computeIfAbsent(ChunkLoaderSavedData.TYPE);
+        var storage = server.overworld().getDataStorage();
+        ChunkLoaderSavedData loaded = storage.get(ChunkLoaderSavedData.TYPE);
+        if (loaded != null) {
+            return loaded;
+        }
+        // 主 SavedData 存在却无法解析时，从独立 JSON 备份自动恢复，避免空数据覆盖唯一副本。
+        if (Files.exists(ChunkLoaderBackupStore.primaryDataPath(server))) {
+            ChunkLoaderSavedData restored = ChunkLoaderBackupStore.loadLatest(server).orElse(null);
+            if (restored != null) {
+                storage.set(ChunkLoaderSavedData.TYPE, restored);
+                FakePlayerMod.LOGGER.warn("区块加载点主存档损坏，已从最新可读 JSON 备份自动恢复");
+                return restored;
+            }
+        }
+        return storage.computeIfAbsent(ChunkLoaderSavedData.TYPE);
     }
 
     /** 服务端启动后补齐可能因异常停服而没有写入的票据。 */
@@ -79,6 +94,7 @@ public final class ChunkLoaderManager {
         }
         try {
             setTickets(level, anchor, true);
+            ChunkLoaderBackupStore.save(server, data);
             return Result.success(anchor);
         } catch (RuntimeException exception) {
             rollbackTickets(level, anchor, false);
@@ -111,6 +127,7 @@ public final class ChunkLoaderManager {
         }
         Anchor changed = anchor.withEnabled(enabled);
         data.put(changed);
+        ChunkLoaderBackupStore.save(server, data);
         return Result.success(changed);
     }
 
@@ -142,6 +159,7 @@ public final class ChunkLoaderManager {
                 setTickets(level, changed, true);
             }
             data.put(changed);
+            ChunkLoaderBackupStore.save(server, data);
             return Result.success(changed);
         } catch (RuntimeException exception) {
             // 新配置失败时尽量恢复旧票，避免存档与实际状态分离。
@@ -174,7 +192,31 @@ public final class ChunkLoaderManager {
             }
         }
         data.remove(name);
+        ChunkLoaderBackupStore.save(server, data);
         return Result.success(anchor);
+    }
+
+    public static boolean backup(MinecraftServer server) {
+        return ChunkLoaderBackupStore.save(server, data(server));
+    }
+
+    /** 撤销当前票据后从最新可读备份恢复，再重新建立票据。 */
+    public static Result restoreLatestBackup(MinecraftServer server) {
+        ChunkLoaderSavedData current = data(server);
+        ChunkLoaderSavedData restored = ChunkLoaderBackupStore.loadLatest(server).orElse(null);
+        if (restored == null) {
+            return Result.failure("没有可用的备份");
+        }
+        for (Anchor anchor : current.anchors()) {
+            ServerLevel level = level(server, anchor);
+            if (anchor.enabled() && level != null) {
+                rollbackTickets(level, anchor, false);
+            }
+        }
+        current.replaceAll(restored.anchors());
+        reconcile(server);
+        ChunkLoaderBackupStore.save(server, current);
+        return Result.success();
     }
 
     private static ServerLevel level(MinecraftServer server, Anchor anchor) {
@@ -243,17 +285,17 @@ public final class ChunkLoaderManager {
         return name.matches("[A-Za-z0-9_-]{1,32}");
     }
 
-    public record Result(Optional<Anchor> anchor, String reason) {
+    public record Result(boolean successful, Optional<Anchor> anchor, String reason) {
         public static Result success(Anchor anchor) {
-            return new Result(Optional.of(anchor), "");
+            return new Result(true, Optional.of(anchor), "");
+        }
+
+        public static Result success() {
+            return new Result(true, Optional.empty(), "");
         }
 
         public static Result failure(String reason) {
-            return new Result(Optional.empty(), reason);
-        }
-
-        public boolean successful() {
-            return anchor.isPresent();
+            return new Result(false, Optional.empty(), reason);
         }
     }
 }

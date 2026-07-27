@@ -23,6 +23,9 @@ public final class ChunkLoaderCommand {
         dispatcher.register(Commands.literal("chunkloader")
             .requires(FakePlayerConfig::canUseCommands)
             .then(Commands.literal("list").executes(ChunkLoaderCommand::list))
+            .then(Commands.literal("backup").executes(ChunkLoaderCommand::backup))
+            .then(Commands.literal("restore").then(Commands.literal("confirm")
+                .executes(ChunkLoaderCommand::restore)))
             .then(Commands.literal("info").then(anchorArgument().executes(ChunkLoaderCommand::info)))
             .then(Commands.literal("add")
                 .then(Commands.argument("anchor", StringArgumentType.word())
@@ -40,6 +43,25 @@ public final class ChunkLoaderCommand {
                         ChunkLoaderManager.ABSOLUTE_MAX_RADIUS))
                     .executes(context -> configure(context, false))
                     .then(Commands.literal("ticking").executes(context -> configure(context, true)))))));
+    }
+
+    private static int backup(CommandContext<CommandSourceStack> context) {
+        if (!ChunkLoaderManager.backup(context.getSource().getServer())) {
+            return failure(context, Component.translatable("commands.fakeplayer.chunkloader.backup_failed"));
+        }
+        context.getSource().sendSuccess(
+            () -> Component.translatable("commands.fakeplayer.chunkloader.backup_created"), false);
+        return 1;
+    }
+
+    private static int restore(CommandContext<CommandSourceStack> context) {
+        var result = ChunkLoaderManager.restoreLatestBackup(context.getSource().getServer());
+        if (!result.successful()) {
+            return failure(context, Component.translatable("commands.fakeplayer.chunkloader.failed", result.reason()));
+        }
+        context.getSource().sendSuccess(
+            () -> Component.translatable("commands.fakeplayer.chunkloader.backup_restored"), true);
+        return 1;
     }
 
     private static int add(CommandContext<CommandSourceStack> context, boolean ticking) {

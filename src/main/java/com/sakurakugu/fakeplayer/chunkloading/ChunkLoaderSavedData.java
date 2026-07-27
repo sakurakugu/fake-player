@@ -78,6 +78,13 @@ public final class ChunkLoaderSavedData extends SavedData {
         return Optional.ofNullable(removed);
     }
 
+    /** 使用备份内容整体替换当前配置。 */
+    public void replaceAll(Collection<Anchor> replacement) {
+        anchors.clear();
+        replacement.forEach(anchor -> anchors.put(key(anchor.name()), anchor));
+        setDirty();
+    }
+
     private static String key(String value) {
         return value.toLowerCase(Locale.ROOT);
     }
