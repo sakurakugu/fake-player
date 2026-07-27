@@ -39,7 +39,7 @@ public final class CommonEvents {
         // 登录协商可能来自网络线程，玩家列表只能交给服务器线程修改。
         server.execute(() -> {
             try {
-                FakeServerPlayer fake = FakePlayerManager.find(server, event.getProfile().name());
+                FakeServerPlayer fake = FakePlayerManager.find(server, event.getProfile());
                 if (fake != null) {
                     FakePlayerManager.remove(fake);
                 }

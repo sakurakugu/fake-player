@@ -9,6 +9,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.gamerules.GameRules;
 import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
 
@@ -18,13 +19,15 @@ public final class FakePlayerManager {
     }
 
     public static FakeServerPlayer spawn(MinecraftServer server, ServerLevel level, String name, Vec3 position, Vec2 rotation) {
-        // 假玩家与真实玩家共享服务端玩家列表，因此名称不能与任何在线玩家重复。
-        if (server.getPlayerList().getPlayerByName(name) != null) {
+        GameProfile profile = new GameProfile(UUIDUtil.createOfflinePlayerUUID(name), name);
+        // 假玩家与真实玩家共享玩家列表，名称或 UUID 任一冲突都不能加入。
+        if (server.getPlayerList().getPlayers().stream().anyMatch(player ->
+            player.getUUID().equals(profile.id())
+                || player.getGameProfile().name().equalsIgnoreCase(name))) {
             throw new IllegalArgumentException("duplicate");
         }
 
         // 使用离线 UUID，使同名假玩家在不同启动周期中拥有稳定身份。
-        GameProfile profile = new GameProfile(UUIDUtil.createOfflinePlayerUUID(name), name);
         FakeServerPlayer fake = new FakeServerPlayer(server, level, profile);
         fake.snapTo(position.x, position.y, position.z, rotation.y, rotation.x);
 
@@ -75,8 +78,29 @@ public final class FakePlayerManager {
         fake.server().getPlayerList().remove(fake);
     }
 
+    public static void kill(FakeServerPlayer fake) {
+        boolean keepInventory = fake.level().getGameRules().get(GameRules.KEEP_INVENTORY);
+        if (!keepInventory && fake.gameMode.getGameModeForPlayer() == GameType.SURVIVAL) {
+            // 生存模式遵循 keepInventory；其他模式直接保存背包，便于下次同名玩家恢复。
+            for (int slot = 0; slot < fake.getInventory().getContainerSize(); slot++) {
+                if (!fake.getInventory().getItem(slot).isEmpty()) {
+                    fake.drop(fake.getInventory().removeItemNoUpdate(slot), true, false);
+                }
+            }
+        }
+        remove(fake);
+    }
+
     public static FakeServerPlayer find(MinecraftServer server, String name) {
         return server.getPlayerList().getPlayerByName(name) instanceof FakeServerPlayer fake ? fake : null;
+    }
+
+    public static FakeServerPlayer find(MinecraftServer server, GameProfile profile) {
+        return all(server).stream()
+            .filter(fake -> fake.getUUID().equals(profile.id())
+                || fake.getGameProfile().name().equalsIgnoreCase(profile.name()))
+            .findFirst()
+            .orElse(null);
     }
 
     public static List<FakeServerPlayer> all(MinecraftServer server) {
