@@ -1,6 +1,7 @@
 package com.sakurakugu.fakeplayer.entity;
 
 import com.mojang.authlib.GameProfile;
+import com.sakurakugu.fakeplayer.persistence.FakePlayerPersistence;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
@@ -58,6 +59,9 @@ public final class FakeServerPlayer extends ServerPlayer {
         if (tickCount % 10 == 0) {
             connection.resetPosition();
             level().getChunkSource().move(this);
+        }
+        if (tickCount % 20 == 0) {
+            FakePlayerPersistence.track(this);
         }
     }
 

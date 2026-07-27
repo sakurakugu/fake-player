@@ -2,10 +2,12 @@ package com.sakurakugu.fakeplayer.event;
 
 import com.sakurakugu.fakeplayer.FakePlayerMod;
 import com.sakurakugu.fakeplayer.command.FakePlayerCommand;
+import com.sakurakugu.fakeplayer.command.BotCommand;
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
 import com.sakurakugu.fakeplayer.menu.FakePlayerMenuOpener;
+import com.sakurakugu.fakeplayer.persistence.FakePlayerPersistence;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -16,6 +18,7 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerNegotiationEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
+import net.neoforged.neoforge.event.server.ServerStartedEvent;
 
 /** 处理服务端通用事件，包括命令注册和假玩家交互。 */
 @EventBusSubscriber(modid = FakePlayerMod.MOD_ID)
@@ -26,6 +29,12 @@ public final class CommonEvents {
     @SubscribeEvent
     public static void registerCommands(RegisterCommandsEvent event) {
         FakePlayerCommand.register(event.getDispatcher());
+        BotCommand.register(event.getDispatcher());
+    }
+
+    @SubscribeEvent
+    public static void serverStarted(ServerStartedEvent event) {
+        FakePlayerPersistence.restore(event.getServer());
     }
 
     @SubscribeEvent

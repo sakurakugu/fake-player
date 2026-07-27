@@ -1,7 +1,9 @@
 package com.sakurakugu.fakeplayer.entity;
 
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
@@ -37,7 +39,7 @@ public final class FakePlayerActions {
     }
 
     // USE 必须先于 ATTACK；同一刻使用成功时，原版客户端不会再执行攻击。
-    private enum ScheduledAction {
+    public enum ScheduledAction {
         USE,
         ATTACK,
         JUMP,
@@ -455,6 +457,40 @@ public final class FakePlayerActions {
         player.setSprinting(false);
     }
 
+    /** 生成不含实体引用的动作快照，供世界存档和预设复用。 */
+    public State snapshot() {
+        List<ScheduledState> scheduledStates = schedules.entrySet().stream()
+            .map(entry -> new ScheduledState(
+                entry.getKey(), entry.getValue().mode, entry.getValue().interval, entry.getValue().remaining))
+            .toList();
+        Optional<DropState> drop = Optional.ofNullable(dropRequest)
+            .map(request -> new DropState(request.slot(), request.wholeStack()));
+        return new State(
+            scheduledStates,
+            forwardInput,
+            strafeInput,
+            drop,
+            player.isShiftKeyDown(),
+            player.isSprinting()
+        );
+    }
+
+    /** 在假人完成登录后恢复动作；无效或过期的运行时挖掘状态不会被恢复。 */
+    public void restore(State state) {
+        stop();
+        forwardInput = state.forwardInput();
+        strafeInput = state.strafeInput();
+        dropRequest = state.drop().map(value -> new DropRequest(value.slot(), value.wholeStack())).orElse(null);
+        for (ScheduledState scheduled : state.schedules()) {
+            int interval = Math.max(1, scheduled.interval());
+            Schedule schedule = new Schedule(scheduled.mode(), interval);
+            schedule.remaining = Math.max(0, Math.min(scheduled.remaining(), interval - 1));
+            schedules.put(scheduled.action(), schedule);
+        }
+        setSneaking(state.sneaking());
+        setSprinting(state.sprinting());
+    }
+
     private void stopTransientActions() {
         abortBreakingBlock();
         player.releaseUsingItem();
@@ -555,5 +591,26 @@ public final class FakePlayerActions {
     }
 
     private record DropRequest(int slot, boolean wholeStack) {
+    }
+
+    public record ScheduledState(ScheduledAction action, RepeatMode mode, int interval, int remaining) {
+    }
+
+    public record DropState(int slot, boolean wholeStack) {
+    }
+
+    public record State(
+        List<ScheduledState> schedules,
+        float forwardInput,
+        float strafeInput,
+        Optional<DropState> drop,
+        boolean sneaking,
+        boolean sprinting
+    ) {
+        public static final State EMPTY = new State(List.of(), 0.0F, 0.0F, Optional.empty(), false, false);
+
+        public State {
+            schedules = List.copyOf(schedules);
+        }
     }
 }

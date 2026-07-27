@@ -11,6 +11,8 @@ public final class FakePlayerConfig {
     private static final ModConfigSpec.IntValue COMMAND_PERMISSION_LEVEL;
     private static final ModConfigSpec.BooleanValue ALLOW_OFFLINE_PROFILES;
     private static final ModConfigSpec.EnumValue<ProfileStrategy> PROFILE_STRATEGY;
+    private static final ModConfigSpec.BooleanValue RESTORE_FAKE_PLAYERS;
+    private static final ModConfigSpec.BooleanValue RESTORE_ACTIONS;
 
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
@@ -27,6 +29,15 @@ public final class FakePlayerConfig {
         PROFILE_STRATEGY = builder
             .comment("ONLINE_PREFERRED、CACHE_ONLY 或 OFFLINE_ONLY。")
             .defineEnum("strategy", ProfileStrategy.ONLINE_PREFERRED);
+        builder.pop();
+
+        builder.push("persistence");
+        RESTORE_FAKE_PLAYERS = builder
+            .comment("服务器启动后是否恢复上次仍在线的假玩家。")
+            .define("restoreFakePlayers", true);
+        RESTORE_ACTIONS = builder
+            .comment("恢复驻留假玩家时是否同时恢复持续动作。")
+            .define("restoreActions", true);
         builder.pop();
         SPEC = builder.build();
     }
@@ -50,6 +61,14 @@ public final class FakePlayerConfig {
 
     public static ProfileStrategy profileStrategy() {
         return PROFILE_STRATEGY.get();
+    }
+
+    public static boolean restoreFakePlayers() {
+        return RESTORE_FAKE_PLAYERS.get();
+    }
+
+    public static boolean restoreActions() {
+        return RESTORE_ACTIONS.get();
     }
 
     public enum ProfileStrategy {

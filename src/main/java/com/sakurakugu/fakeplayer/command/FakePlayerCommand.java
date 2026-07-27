@@ -16,6 +16,7 @@ import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
 import com.sakurakugu.fakeplayer.entity.ProfileResolver;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
 import com.sakurakugu.fakeplayer.menu.FakePlayerMenuOpener;
+import com.sakurakugu.fakeplayer.persistence.FakePlayerPersistence;
 import java.util.Comparator;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -312,6 +313,7 @@ public final class FakePlayerCommand {
             return 0;
         }
         action.accept(fake);
+        FakePlayerPersistence.track(fake);
         return success(context);
     }
 

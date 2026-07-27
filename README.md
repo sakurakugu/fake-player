@@ -8,6 +8,7 @@ Fake Player 提供可通过命令和图形界面控制的服务端假玩家，�
 
 - `/fakeplayer`：生成、移除、列出假玩家或打开设置界面。
 - `/player <名称> <操作>`：使用 Carpet 风格语法控制指定假玩家。
+- `/bot <操作>`：保存、加载和分组管理假玩家预设。
 - 按 `G`：打开全局设置界面，可在按键设置中修改快捷键。
 - 右键假玩家：打开对应的控制界面。
 - 真玩家上线时，自动移除同 UUID 或同名的假玩家，并由真玩家恢复该身份。
@@ -75,6 +76,8 @@ NeoForge 会在世界目录的 `serverconfig/fakeplayer-server.toml` 中生成�
 | `commands.permissionLevel` | `2` | 使用命令、快捷键和右键控制界面的最低原版权限等级，范围为 `0` 至 `4`。 |
 | `profiles.allowOfflineProfiles` | `true` | 在线查询或缓存没有档案时，是否允许生成稳定的离线 UUID。 |
 | `profiles.strategy` | `ONLINE_PREFERRED` | 玩家档案解析策略，见下表。 |
+| `persistence.restoreFakePlayers` | `true` | 服务器启动后恢复上次仍在线的假玩家。 |
+| `persistence.restoreActions` | `true` | 恢复驻留假玩家时同时恢复持续动作。 |
 
 档案策略：
 
@@ -85,6 +88,29 @@ NeoForge 会在世界目录的 `serverconfig/fakeplayer-server.toml` 中生成�
 | `OFFLINE_ONLY` | 始终按名称生成稳定的离线 UUID。 |
 
 档案解析完成后还会检查同名或同 UUID 在线玩家、封禁列表和白名单。在线查询在后台执行，不会阻塞服务器主线程。
+
+### `/bot`
+
+预设保存名称、UUID、维度、位置、朝向、游戏模式、飞行状态、持续动作和可选描述。预设本身不会上线，只有执行
+`load` 后才会生成假玩家。
+
+| 命令 | 说明 |
+| ---- | ---- |
+| `/bot list` | 列出全部预设。 |
+| `/bot add <预设> <在线假人> [描述]` | 新建或覆盖预设。 |
+| `/bot load <预设>` | 加载单个预设。 |
+| `/bot remove <预设>` | 删除预设，并从所有分组移除该成员。 |
+| `/bot group create <组>` | 创建空分组。 |
+| `/bot group list` | 列出全部分组及成员数。 |
+| `/bot group add <组> <预设>` | 将预设加入分组。 |
+| `/bot group load <组>` | 批量加载，分别统计成功和失败数。 |
+| `/bot group unload <组>` | 批量移除由组内预设对应的在线假人。 |
+| `/bot group info <组>` | 查看分组成员。 |
+| `/bot group remove <组>` | 删除分组，不删除其中的预设。 |
+
+驻留清单、预设和分组均保存在世界 `data/fakeplayer/fake_players.dat` 中。正常移除、死亡或真玩家登录接管身份时，
+假人会从驻留清单删除；服务器异常退出时则使用最近一次自动保存的状态恢复。每次启动读取前还会将现有存档复制为
+带时间戳的 `fake_players.*.dat.bak`，避免解析失败后的空存档覆盖唯一的排查副本。
 
 #### 界面与背包
 

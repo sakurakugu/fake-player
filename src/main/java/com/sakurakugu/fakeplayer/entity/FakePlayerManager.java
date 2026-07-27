@@ -2,6 +2,7 @@ package com.sakurakugu.fakeplayer.entity;
 
 import com.mojang.authlib.GameProfile;
 import java.util.List;
+import com.sakurakugu.fakeplayer.persistence.FakePlayerPersistence;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
@@ -60,6 +61,7 @@ public final class FakePlayerManager {
         fake.getAbilities().flying = flying && fake.getAbilities().mayfly;
         fake.setHealth(fake.getMaxHealth());
         fake.showAllSkinLayers();
+        FakePlayerPersistence.track(fake);
         return fake;
     }
 
@@ -87,6 +89,7 @@ public final class FakePlayerManager {
         fake.gameMode.changeGameModeForPlayer(gameType);
         fake.setHealth(Math.min(health, fake.getMaxHealth()));
         fake.getAbilities().flying = flying && fake.getAbilities().mayfly;
+        FakePlayerPersistence.track(fake);
         return fake;
     }
 
@@ -96,6 +99,7 @@ public final class FakePlayerManager {
             return;
         }
         fake.actions().stop();
+        FakePlayerPersistence.untrack(fake);
         fake.disconnect();
         fake.server().getPlayerList().remove(fake);
     }
