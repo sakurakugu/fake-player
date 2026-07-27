@@ -17,6 +17,7 @@ public final class FakePlayerConfig {
     private static final ModConfigSpec.BooleanValue AUTO_REPLENISHMENT_FROM_SHULKER_BOXES;
     private static final ModConfigSpec.BooleanValue AUTO_REPLACE_TOOLS;
     private static final ModConfigSpec.BooleanValue AUTO_FISHING;
+    private static final ModConfigSpec.IntValue MAX_CHUNK_LOADING_RADIUS;
 
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
@@ -57,6 +58,12 @@ public final class FakePlayerConfig {
         AUTO_FISHING = builder
             .comment("原版浮漂检测到咬钩后，是否自动收杆并再次抛竿。")
             .define("autoFishing", false);
+        builder.pop();
+
+        builder.push("chunkloading");
+        MAX_CHUNK_LOADING_RADIUS = builder
+            .comment("单个区块加载点允许的最大半径，0 表示仅中心区块，范围 0-32。")
+            .defineInRange("maxRadius", 8, 0, 32);
         builder.pop();
         SPEC = builder.build();
     }
@@ -104,6 +111,10 @@ public final class FakePlayerConfig {
 
     public static boolean autoFishing() {
         return AUTO_FISHING.get();
+    }
+
+    public static int maxChunkLoadingRadius() {
+        return MAX_CHUNK_LOADING_RADIUS.get();
     }
 
     public enum ProfileStrategy {

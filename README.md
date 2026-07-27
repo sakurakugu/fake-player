@@ -9,6 +9,7 @@ Fake Player 提供可通过命令和图形界面控制的服务端假玩家，�
 - `/fakeplayer`：生成、移除、列出假玩家或打开设置界面。
 - `/player <名称> <操作>`：使用 Carpet 风格语法控制指定假玩家。
 - `/bot <操作>`：保存、加载和分组管理假玩家预设。
+- `/chunkloader <操作>`：管理持久化的固定半径区块加载点。
 - 按 `G`：打开全局设置界面，可在按键设置中修改快捷键。
 - 右键假玩家：打开对应的控制界面。
 - 真玩家上线时，自动移除同 UUID 或同名的假玩家，并由真玩家恢复该身份。
@@ -83,6 +84,7 @@ NeoForge 会在世界目录的 `serverconfig/fakeplayer-server.toml` 中生成�
 | `automation.autoReplenishmentFromShulkerBoxes` | `false` | 补货时也搜索主背包内的潜影盒；需同时开启普通补货。 |
 | `automation.autoReplaceTools` | `false` | 主手或副手工具剩余耐久不超过 10 时，换上背包中剩余耐久最高的同种物品。 |
 | `automation.autoFishing` | `false` | 原版浮漂咬钩后自动收杆，10 刻后使用同一只手再次抛竿。 |
+| `chunkloading.maxRadius` | `8` | 单个加载点的最大区块半径，范围为 `0` 至 `32`。 |
 
 档案策略：
 
@@ -116,6 +118,25 @@ NeoForge 会在世界目录的 `serverconfig/fakeplayer-server.toml` 中生成�
 驻留清单、预设和分组均保存在世界 `data/fakeplayer/fake_players.dat` 中。正常移除、死亡或真玩家登录接管身份时，
 假人会从驻留清单删除；服务器异常退出时则使用最近一次自动保存的状态恢复。每次启动读取前还会将现有存档复制为
 带时间戳的 `fake_players.*.dat.bak`，避免解析失败后的空存档覆盖唯一的排查副本。
+
+### `/chunkloader`
+
+加载点以执行命令时的维度和坐标为中心；可配合原版 `/execute in ... positioned ... run ...`
+在任意维度和坐标创建。半径 `0` 只加载中心区块，半径 `r` 加载 `(2r+1)^2` 个区块。
+
+| 命令 | 说明 |
+| ---- | ---- |
+| `/chunkloader list` | 列出所有加载点。 |
+| `/chunkloader info <名称>` | 查看维度、坐标、半径、区块数、模式和启用状态。 |
+| `/chunkloader add <名称> <半径> [ticking]` | 在当前位置创建并启用加载点。 |
+| `/chunkloader disable <名称>` | 撤销该点的票据，但保留配置。 |
+| `/chunkloader enable <名称>` | 根据已保存配置重新添加票据。 |
+| `/chunkloader configure <名称> <半径> [ticking]` | 更改半径和票据模式。 |
+| `/chunkloader remove <名称>` | 撤销票据并删除配置。 |
+
+省略 `ticking` 时票据只保持区块加载；指定后则允许完整区块刻和自然生成。普通在线假人仍使用
+玩家的模拟距离语义。加载点配置与 NeoForge 所有者隔离票据一同持久化，不会影响原版 `/forceload`
+或其他模组的票据。
 
 #### 界面与背包
 

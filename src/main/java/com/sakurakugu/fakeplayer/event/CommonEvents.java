@@ -3,6 +3,8 @@ package com.sakurakugu.fakeplayer.event;
 import com.sakurakugu.fakeplayer.FakePlayerMod;
 import com.sakurakugu.fakeplayer.command.FakePlayerCommand;
 import com.sakurakugu.fakeplayer.command.BotCommand;
+import com.sakurakugu.fakeplayer.command.ChunkLoaderCommand;
+import com.sakurakugu.fakeplayer.chunkloading.ChunkLoaderManager;
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
@@ -30,11 +32,13 @@ public final class CommonEvents {
     public static void registerCommands(RegisterCommandsEvent event) {
         FakePlayerCommand.register(event.getDispatcher());
         BotCommand.register(event.getDispatcher());
+        ChunkLoaderCommand.register(event.getDispatcher());
     }
 
     @SubscribeEvent
     public static void serverStarted(ServerStartedEvent event) {
         FakePlayerPersistence.restore(event.getServer());
+        ChunkLoaderManager.reconcile(event.getServer());
     }
 
     @SubscribeEvent
