@@ -49,9 +49,10 @@ public final class FakeServerPlayer extends ServerPlayer {
     @Override
     public void tick() {
         super.tick();
+        // 先设置移动和按键输入，再让实体刻处理物理、载具和持续使用。
+        actions.tick();
         // ServerPlayer 通常由网络监听器驱动 doTick，假连接不会替我们调用它。
         doTick();
-        actions.tick();
 
         // 定期刷新网络位置和区块追踪，保证移动后的假玩家对观察者可见。
         if (tickCount % 10 == 0) {
