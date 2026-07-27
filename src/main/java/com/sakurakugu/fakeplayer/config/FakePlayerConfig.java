@@ -117,6 +117,57 @@ public final class FakePlayerConfig {
         return MAX_CHUNK_LOADING_RADIUS.get();
     }
 
+    /** 返回全局界面可即时调整的布尔配置快照。 */
+    public static int globalSettingsMask() {
+        int mask = 0;
+        for (GlobalSetting setting : GlobalSetting.values()) {
+            if (setting.enabled()) {
+                mask |= 1 << setting.ordinal();
+            }
+        }
+        return mask;
+    }
+
+    /** 切换一项全局配置并立即写回世界服务端配置文件。 */
+    public static boolean toggleGlobalSetting(int index) {
+        GlobalSetting[] settings = GlobalSetting.values();
+        if (index < 0 || index >= settings.length) {
+            return false;
+        }
+        settings[index].toggle();
+        SPEC.save();
+        return true;
+    }
+
+    public enum GlobalSetting {
+        RESTORE_FAKE_PLAYERS,
+        RESTORE_ACTIONS,
+        AUTO_REPLENISHMENT,
+        AUTO_REPLENISHMENT_FROM_SHULKER_BOXES,
+        AUTO_REPLACE_TOOLS,
+        AUTO_FISHING;
+
+        private ModConfigSpec.BooleanValue value() {
+            return switch (this) {
+                case RESTORE_FAKE_PLAYERS -> FakePlayerConfig.RESTORE_FAKE_PLAYERS;
+                case RESTORE_ACTIONS -> FakePlayerConfig.RESTORE_ACTIONS;
+                case AUTO_REPLENISHMENT -> FakePlayerConfig.AUTO_REPLENISHMENT;
+                case AUTO_REPLENISHMENT_FROM_SHULKER_BOXES -> FakePlayerConfig.AUTO_REPLENISHMENT_FROM_SHULKER_BOXES;
+                case AUTO_REPLACE_TOOLS -> FakePlayerConfig.AUTO_REPLACE_TOOLS;
+                case AUTO_FISHING -> FakePlayerConfig.AUTO_FISHING;
+            };
+        }
+
+        public boolean enabled() {
+            return value().get();
+        }
+
+        private void toggle() {
+            ModConfigSpec.BooleanValue configValue = value();
+            configValue.set(!configValue.get());
+        }
+    }
+
     public enum ProfileStrategy {
         ONLINE_PREFERRED,
         CACHE_ONLY,

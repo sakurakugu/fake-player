@@ -76,5 +76,14 @@
   "gui.fakeplayer.global.settings": "Back to Settings",
   "gui.fakeplayer.global.empty": "There are no fake players",
   "gui.fakeplayer.global.refresh": "Refresh list",
-  "gui.fakeplayer.global.page": "Page %s/%s - %s fake players"
+  "gui.fakeplayer.global.page": "Page %s/%s - %s fake players",
+  "gui.fakeplayer.global.setting.restore_players": "Restore players",
+  "gui.fakeplayer.global.setting.restore_actions": "Restore actions",
+  "gui.fakeplayer.global.setting.auto_replenishment": "Auto replenish",
+  "gui.fakeplayer.global.setting.shulker_replenishment": "Shulker replenish",
+  "gui.fakeplayer.global.setting.auto_replace_tools": "Replace tools",
+  "gui.fakeplayer.global.setting.auto_fishing": "Auto fishing",
+  "gui.fakeplayer.global.enabled": "On",
+  "gui.fakeplayer.global.disabled": "Off",
+  "gui.fakeplayer.global.setting_value": "%1$s: %2$s"
 }

@@ -1,5 +1,6 @@
 package com.sakurakugu.fakeplayer.client;
 
+import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.menu.GlobalFakePlayerMenu;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
@@ -14,6 +15,14 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
     private static final int PAGE_SIZE = 5;
     private static final int BUTTON_HEIGHT = 24;
     private static final int ROW_GAP = 5;
+    private static final String[] SETTING_KEYS = {
+        "restore_players",
+        "restore_actions",
+        "auto_replenishment",
+        "shulker_replenishment",
+        "auto_replace_tools",
+        "auto_fishing"
+    };
 
     private int page;
     private boolean showingList;
@@ -32,9 +41,20 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
     private void rebuildButtons() {
         clearWidgets();
         if (!showingList) {
+            int settingWidth = 130;
+            for (int index = 0; index < FakePlayerConfig.GlobalSetting.values().length; index++) {
+                int column = index % 2;
+                int row = index / 2;
+                int actionId = GlobalFakePlayerMenu.settingAction(index);
+                addRenderableWidget(
+                    Button.builder(settingLabel(index), button -> sendAction(actionId))
+                        .bounds(leftPos + 16 + column * 138, topPos + 52 + row * 32, settingWidth, BUTTON_HEIGHT)
+                        .build()
+                );
+            }
             addRenderableWidget(
                 Button.builder(Component.translatable("gui.fakeplayer.global.open_list"), button -> showList())
-                    .bounds(leftPos + 50, topPos + 72, PANEL_WIDTH - 100, BUTTON_HEIGHT)
+                    .bounds(leftPos + 50, topPos + 166, PANEL_WIDTH - 100, BUTTON_HEIGHT)
                     .build()
             );
             return;
@@ -66,7 +86,7 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
         );
 
         addRenderableWidget(
-            Button.builder(Component.translatable("gui.fakeplayer.global.refresh"), button -> sendAction(menu.playerNames().size()))
+            Button.builder(Component.translatable("gui.fakeplayer.global.refresh"), button -> sendAction(GlobalFakePlayerMenu.ACTION_REFRESH))
                 .bounds(leftPos + 142, footerY, 76, 20)
                 .build()
         );
@@ -102,6 +122,14 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
         if (minecraft.gameMode != null) {
             minecraft.gameMode.handleInventoryButtonClick(menu.containerId, actionId);
         }
+    }
+
+    private Component settingLabel(int index) {
+        Component name = Component.translatable("gui.fakeplayer.global.setting." + SETTING_KEYS[index]);
+        Component state = Component.translatable(menu.settingEnabled(index)
+            ? "gui.fakeplayer.global.enabled"
+            : "gui.fakeplayer.global.disabled");
+        return Component.translatable("gui.fakeplayer.global.setting_value", name, state);
     }
 
     @Override

@@ -13,16 +13,27 @@ import net.minecraft.world.item.ItemStack;
 
 /** 为全局设置和假人列表提供客户端快照与服务端操作通道。 */
 public final class GlobalFakePlayerMenu extends AbstractContainerMenu {
+    public static final int ACTION_REFRESH = -1;
+    private static final int ACTION_SETTING_BASE = -2;
+
     private final List<String> playerNames;
     private final boolean openListInitially;
+    private final int settingsMask;
 
     public GlobalFakePlayerMenu(int containerId, Inventory inventory, RegistryFriendlyByteBuf data) {
-        this(containerId, inventory, data.readBoolean(), readPlayerNames(data));
+        this(containerId, inventory, data.readBoolean(), data.readVarInt(), readPlayerNames(data));
     }
 
-    public GlobalFakePlayerMenu(int containerId, Inventory inventory, boolean openListInitially, List<String> playerNames) {
+    public GlobalFakePlayerMenu(
+        int containerId,
+        Inventory inventory,
+        boolean openListInitially,
+        int settingsMask,
+        List<String> playerNames
+    ) {
         super(ModMenus.GLOBAL_FAKE_PLAYER.get(), containerId);
         this.openListInitially = openListInitially;
+        this.settingsMask = settingsMask;
         this.playerNames = List.copyOf(playerNames);
     }
 
@@ -39,8 +50,14 @@ public final class GlobalFakePlayerMenu extends AbstractContainerMenu {
             || !FakePlayerConfig.canUseCommands(viewer.createCommandSourceStack())) {
             return false;
         }
-        if (actionId == playerNames.size()) {
+        if (actionId == ACTION_REFRESH) {
             FakePlayerMenuOpener.openList(viewer);
+            return true;
+        }
+        int settingIndex = ACTION_SETTING_BASE - actionId;
+        if (FakePlayerConfig.toggleGlobalSetting(settingIndex)) {
+            // 重新打开菜单，将服务端确认后的配置状态同步给客户端。
+            FakePlayerMenuOpener.openGlobal(viewer);
             return true;
         }
         if (actionId < 0 || actionId >= playerNames.size()) {
@@ -73,5 +90,13 @@ public final class GlobalFakePlayerMenu extends AbstractContainerMenu {
 
     public boolean openListInitially() {
         return openListInitially;
+    }
+
+    public boolean settingEnabled(int index) {
+        return (settingsMask & (1 << index)) != 0;
+    }
+
+    public static int settingAction(int index) {
+        return ACTION_SETTING_BASE - index;
     }
 }

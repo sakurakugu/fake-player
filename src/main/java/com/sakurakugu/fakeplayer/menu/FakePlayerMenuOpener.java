@@ -1,5 +1,6 @@
 package com.sakurakugu.fakeplayer.menu;
 
+import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
 import java.util.List;
@@ -31,12 +32,14 @@ public final class FakePlayerMenuOpener {
                     containerId,
                     inventory,
                     openListInitially,
+                    FakePlayerConfig.globalSettingsMask(),
                     names
                 ),
                 Component.translatable("gui.fakeplayer.global.title")
             ),
             data -> {
                 data.writeBoolean(openListInitially);
+                data.writeVarInt(FakePlayerConfig.globalSettingsMask());
                 data.writeVarInt(names.size());
                 names.forEach(name -> data.writeUtf(name, 64));
             }
