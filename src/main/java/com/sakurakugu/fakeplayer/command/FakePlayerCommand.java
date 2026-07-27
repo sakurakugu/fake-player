@@ -75,6 +75,7 @@ public final class FakePlayerCommand {
         target.then(Commands.literal("setting").executes(FakePlayerCommand::openPlayerGui));
         target.then(Commands.literal("bag").executes(FakePlayerCommand::openBag));
         target.then(Commands.literal("backpack").executes(FakePlayerCommand::openBag));
+        target.then(Commands.literal("enderchest").executes(FakePlayerCommand::openEnderChest));
         target.then(dropCommand("drop", false));
         target.then(dropCommand("dropStack", true));
         target.then(Commands.literal("hotbar")
@@ -389,10 +390,6 @@ public final class FakePlayerCommand {
             source.sendFailure(Component.translatable("commands.fakeplayer.position_outside_border"));
             return false;
         }
-        if (!level.noCollision(bounds)) {
-            source.sendFailure(Component.translatable("commands.fakeplayer.position_obstructed"));
-            return false;
-        }
         return true;
     }
 
@@ -423,7 +420,7 @@ public final class FakePlayerCommand {
             source.sendFailure(Component.translatable("commands.fakeplayer.profile_not_whitelisted", profile.name()));
             return;
         }
-        // 档案查询期间方块和世界边界可能变化，因此创建前再检查一次位置。
+        // 档案查询期间世界边界可能变化，因此创建前再检查一次位置。
         if (!validateSpawnPosition(source, level, position)) {
             return;
         }
@@ -561,6 +558,19 @@ public final class FakePlayerCommand {
             return 0;
         }
         FakePlayerMenuOpener.openInventory(viewer, fake);
+        return 1;
+    }
+
+    private static int openEnderChest(CommandContext<CommandSourceStack> context) {
+        ServerPlayer viewer = context.getSource().getPlayer();
+        FakeServerPlayer fake = getFake(context);
+        if (viewer == null || fake == null) {
+            if (viewer == null) {
+                context.getSource().sendFailure(Component.translatable("commands.fakeplayer.player_only"));
+            }
+            return 0;
+        }
+        FakePlayerMenuOpener.openEnderChest(viewer, fake);
         return 1;
     }
 

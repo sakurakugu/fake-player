@@ -21,6 +21,8 @@ public final class FakePlayerMenu extends AbstractContainerMenu {
     public static final int ACTION_RIGHT = 5;
     public static final int ACTION_SNEAK = 6;
     public static final int ACTION_REMOVE = 7;
+    public static final int ACTION_INVENTORY = 8;
+    public static final int ACTION_ENDER_CHEST = 9;
 
     private final FakeServerPlayer target;
     private final int targetId;
@@ -58,6 +60,8 @@ public final class FakePlayerMenu extends AbstractContainerMenu {
             case ACTION_LEFT -> target.actions().turn(-45.0F);
             case ACTION_RIGHT -> target.actions().turn(45.0F);
             case ACTION_SNEAK -> target.actions().toggleSneak();
+            case ACTION_INVENTORY -> FakePlayerMenuOpener.openInventory(viewer, target);
+            case ACTION_ENDER_CHEST -> FakePlayerMenuOpener.openEnderChest(viewer, target);
             case ACTION_REMOVE -> {
                 player.closeContainer();
                 FakePlayerManager.remove(target);

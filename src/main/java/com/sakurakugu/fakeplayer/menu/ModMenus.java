@@ -23,6 +23,11 @@ public final class ModMenus {
         () -> IMenuTypeExtension.create(GlobalFakePlayerMenu::new)
     );
 
+    public static final DeferredHolder<MenuType<?>, MenuType<FakePlayerInventoryMenu>> FAKE_PLAYER_INVENTORY = MENUS.register(
+        "inventory",
+        () -> IMenuTypeExtension.create(FakePlayerInventoryMenu::new)
+    );
+
     private ModMenus() {
     }
 

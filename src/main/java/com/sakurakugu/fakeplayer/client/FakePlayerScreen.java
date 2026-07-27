@@ -10,7 +10,7 @@ import net.minecraft.world.entity.player.Inventory;
 /** 假玩家控制菜单的客户端绘制界面。 */
 public final class FakePlayerScreen extends AbstractContainerScreen<FakePlayerMenu> {
     private static final int PANEL_WIDTH = 300;
-    private static final int PANEL_HEIGHT = 172;
+    private static final int PANEL_HEIGHT = 202;
     private static final int PADDING = 12;
     private static final int BUTTON_GAP = 8;
     private static final int BUTTON_HEIGHT = 22;
@@ -35,8 +35,10 @@ public final class FakePlayerScreen extends AbstractContainerScreen<FakePlayerMe
         addActionButton(right, firstRow + rowStep, buttonWidth, "gui.fakeplayer.sneak", FakePlayerMenu.ACTION_SNEAK);
         addActionButton(left, firstRow + rowStep * 2, buttonWidth, "gui.fakeplayer.turn_left", FakePlayerMenu.ACTION_LEFT);
         addActionButton(right, firstRow + rowStep * 2, buttonWidth, "gui.fakeplayer.turn_right", FakePlayerMenu.ACTION_RIGHT);
-        addActionButton(left, firstRow + rowStep * 3, buttonWidth, "gui.fakeplayer.stop", FakePlayerMenu.ACTION_STOP);
-        addActionButton(right, firstRow + rowStep * 3, buttonWidth, "gui.fakeplayer.remove", FakePlayerMenu.ACTION_REMOVE);
+        addActionButton(left, firstRow + rowStep * 3, buttonWidth, "gui.fakeplayer.open_inventory", FakePlayerMenu.ACTION_INVENTORY);
+        addActionButton(right, firstRow + rowStep * 3, buttonWidth, "gui.fakeplayer.open_ender_chest", FakePlayerMenu.ACTION_ENDER_CHEST);
+        addActionButton(left, firstRow + rowStep * 4, buttonWidth, "gui.fakeplayer.stop", FakePlayerMenu.ACTION_STOP);
+        addActionButton(right, firstRow + rowStep * 4, buttonWidth, "gui.fakeplayer.remove", FakePlayerMenu.ACTION_REMOVE);
     }
 
     private void addActionButton(int x, int y, int width, String translationKey, int actionId) {

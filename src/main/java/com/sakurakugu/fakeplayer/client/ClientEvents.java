@@ -18,5 +18,6 @@ public final class ClientEvents {
         // 将服务端打开的菜单类型映射到客户端实际绘制的界面。
         event.register(ModMenus.FAKE_PLAYER.get(), FakePlayerScreen::new);
         event.register(ModMenus.GLOBAL_FAKE_PLAYER.get(), GlobalFakePlayerScreen::new);
+        event.register(ModMenus.FAKE_PLAYER_INVENTORY.get(), FakePlayerInventoryScreen::new);
     }
 }
