@@ -13,9 +13,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.resources.Identifier;
-import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.saveddata.SavedDataType;
 
@@ -56,22 +56,23 @@ public final class FakePlayerSavedData extends SavedData {
         instance.group(
             UUIDUtil.CODEC.fieldOf("uuid").forGetter(Resident::uuid),
             Codec.STRING.fieldOf("name").forGetter(Resident::name),
-            Identifier.CODEC.fieldOf("dimension").forGetter(Resident::dimension),
-            Codec.DOUBLE.fieldOf("x").forGetter(Resident::x),
-            Codec.DOUBLE.fieldOf("y").forGetter(Resident::y),
-            Codec.DOUBLE.fieldOf("z").forGetter(Resident::z),
-            Codec.FLOAT.fieldOf("yaw").forGetter(Resident::yaw),
-            Codec.FLOAT.fieldOf("pitch").forGetter(Resident::pitch),
-            GameType.CODEC.fieldOf("game_mode").forGetter(Resident::gameType),
-            Codec.BOOL.optionalFieldOf("flying", false).forGetter(Resident::flying),
             ACTION_STATE_CODEC.optionalFieldOf("actions", FakePlayerActions.State.EMPTY).forGetter(Resident::actions)
         ).apply(instance, Resident::new)
+    );
+    public static final Codec<PlayerSnapshot> PLAYER_SNAPSHOT_CODEC = RecordCodecBuilder.create(instance ->
+        instance.group(
+            UUIDUtil.CODEC.fieldOf("uuid").forGetter(PlayerSnapshot::uuid),
+            Codec.STRING.fieldOf("name").forGetter(PlayerSnapshot::name),
+            CompoundTag.CODEC.fieldOf("player_data").forGetter(PlayerSnapshot::playerData),
+            ACTION_STATE_CODEC.optionalFieldOf("actions", FakePlayerActions.State.EMPTY)
+                .forGetter(PlayerSnapshot::actions)
+        ).apply(instance, PlayerSnapshot::new)
     );
     public static final Codec<Preset> PRESET_CODEC = RecordCodecBuilder.create(instance ->
         instance.group(
             Codec.STRING.fieldOf("id").forGetter(Preset::id),
             Codec.STRING.optionalFieldOf("description", "").forGetter(Preset::description),
-            RESIDENT_CODEC.fieldOf("player").forGetter(Preset::player)
+            PLAYER_SNAPSHOT_CODEC.fieldOf("player").forGetter(Preset::player)
         ).apply(instance, Preset::new)
     );
     public static final Codec<Group> GROUP_CODEC = RecordCodecBuilder.create(instance ->
@@ -213,34 +214,38 @@ public final class FakePlayerSavedData extends SavedData {
     public record Resident(
         UUID uuid,
         String name,
-        Identifier dimension,
-        double x,
-        double y,
-        double z,
-        float yaw,
-        float pitch,
-        GameType gameType,
-        boolean flying,
         FakePlayerActions.State actions
     ) {
         public static Resident from(FakeServerPlayer player, boolean saveActions) {
             return new Resident(
                 player.getUUID(),
                 player.getGameProfile().name(),
-                player.level().dimension().identifier(),
-                player.getX(),
-                player.getY(),
-                player.getZ(),
-                player.getYRot(),
-                player.getXRot(),
-                player.gameMode.getGameModeForPlayer(),
-                player.getAbilities().flying,
                 saveActions ? player.actions().snapshot() : FakePlayerActions.State.EMPTY
             );
         }
     }
 
-    public record Preset(String id, String description, Resident player) {
+    public record PlayerSnapshot(
+        UUID uuid,
+        String name,
+        CompoundTag playerData,
+        FakePlayerActions.State actions
+    ) {
+        public PlayerSnapshot {
+            playerData = playerData.copy();
+        }
+
+        public static PlayerSnapshot from(FakeServerPlayer player, boolean saveActions) {
+            return new PlayerSnapshot(
+                player.getUUID(),
+                player.getGameProfile().name(),
+                FakePlayerPersistence.snapshot(player),
+                saveActions ? player.actions().snapshot() : FakePlayerActions.State.EMPTY
+            );
+        }
+    }
+
+    public record Preset(String id, String description, PlayerSnapshot player) {
     }
 
     public record Group(String id, List<String> presetIds) {

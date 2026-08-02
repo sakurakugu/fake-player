@@ -10,8 +10,8 @@ import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerPersistence;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerSavedData;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerSavedData.Group;
+import com.sakurakugu.fakeplayer.persistence.FakePlayerSavedData.PlayerSnapshot;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerSavedData.Preset;
-import com.sakurakugu.fakeplayer.persistence.FakePlayerSavedData.Resident;
 import java.util.Comparator;
 import java.util.List;
 import net.minecraft.commands.CommandSourceStack;
@@ -68,7 +68,7 @@ public final class BotCommand {
             return failure(context, "commands.fakeplayer.not_found", playerName);
         }
         FakePlayerSavedData data = data(context);
-        data.putPreset(new Preset(id, description, Resident.from(fake, true)));
+        data.putPreset(new Preset(id, description, PlayerSnapshot.from(fake, true)));
         context.getSource().sendSuccess(
             () -> Component.translatable("commands.fakeplayer.bot.preset_saved", id, playerName), true);
         return 1;

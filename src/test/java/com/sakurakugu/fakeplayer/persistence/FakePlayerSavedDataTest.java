@@ -9,19 +9,16 @@ import com.mojang.serialization.JsonOps;
 import com.sakurakugu.fakeplayer.entity.FakePlayerActions;
 import java.util.List;
 import java.util.UUID;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.level.GameType;
+import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.Test;
 
 class FakePlayerSavedDataTest {
-    private static final Identifier OVERWORLD = Identifier.withDefaultNamespace("overworld");
-
     @Test
     void residentsAreReplacedByUuidAndReturnedAsSnapshot() {
         FakePlayerSavedData data = new FakePlayerSavedData();
         UUID uuid = UUID.randomUUID();
-        FakePlayerSavedData.Resident first = resident(uuid, "Bot", 1.0);
-        FakePlayerSavedData.Resident replacement = resident(uuid, "Renamed", 2.0);
+        FakePlayerSavedData.Resident first = resident(uuid, "Bot");
+        FakePlayerSavedData.Resident replacement = resident(uuid, "Renamed");
 
         data.putResident(first);
         List<FakePlayerSavedData.Resident> snapshot = data.residents();
@@ -36,8 +33,8 @@ class FakePlayerSavedDataTest {
     @Test
     void residentRemovalAndClearHandleMissingEntries() {
         FakePlayerSavedData data = new FakePlayerSavedData();
-        FakePlayerSavedData.Resident first = resident(UUID.randomUUID(), "One", 1.0);
-        FakePlayerSavedData.Resident second = resident(UUID.randomUUID(), "Two", 2.0);
+        FakePlayerSavedData.Resident first = resident(UUID.randomUUID(), "One");
+        FakePlayerSavedData.Resident second = resident(UUID.randomUUID(), "Two");
         data.putResident(first);
         data.putResident(second);
 
@@ -109,7 +106,7 @@ class FakePlayerSavedDataTest {
     void codecRoundTripsResidentsPresetsGroupsAndActions() {
         FakePlayerSavedData data = new FakePlayerSavedData();
         FakePlayerSavedData.Preset preset = preset("Miner");
-        data.putResident(preset.player());
+        data.putResident(resident(preset.player().uuid(), preset.player().name()));
         data.putPreset(preset);
         data.createGroup("Workers");
         data.addToGroup("Workers", "Miner");
@@ -139,35 +136,27 @@ class FakePlayerSavedDataTest {
         return new FakePlayerSavedData.Preset(
             id,
             "test preset",
-            new FakePlayerSavedData.Resident(
+            new FakePlayerSavedData.PlayerSnapshot(
                 UUID.nameUUIDFromBytes(id.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
                 "TestBot",
-                OVERWORLD,
-                1.25,
-                64.0,
-                -3.5,
-                90.0F,
-                -10.0F,
-                GameType.CREATIVE,
-                true,
+                playerData(id),
                 actions
             )
         );
     }
 
-    private static FakePlayerSavedData.Resident resident(UUID uuid, String name, double x) {
+    private static FakePlayerSavedData.Resident resident(UUID uuid, String name) {
         return new FakePlayerSavedData.Resident(
             uuid,
             name,
-            OVERWORLD,
-            x,
-            64.0,
-            0.0,
-            0.0F,
-            0.0F,
-            GameType.SURVIVAL,
-            false,
             FakePlayerActions.State.EMPTY
         );
+    }
+
+    private static CompoundTag playerData(String marker) {
+        CompoundTag data = new CompoundTag();
+        data.putString("Dimension", "minecraft:overworld");
+        data.putString("marker", marker);
+        return data;
     }
 }
