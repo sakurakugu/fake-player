@@ -2,6 +2,8 @@ package com.sakurakugu.fakeplayer.client;
 
 import com.sakurakugu.fakeplayer.menu.FakePlayerInventoryMenu;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -11,6 +13,8 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 /** 绘制假人完整物品栏；末影箱使用原版三行容器界面。 */
 public final class FakePlayerInventoryScreen extends AbstractContainerScreen<FakePlayerInventoryMenu> {
@@ -23,14 +27,89 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private static final int HOTBAR_SELECTOR_HEIGHT = 5;
     private static final int HOTBAR_SLOT_COUNT = 9;
     private static final int HOTBAR_SLOT_SPACING = 18;
-    // 选择区整体比快捷栏第一格左移 1 像素。
+    // 选择区整体比快捷栏第一格左移 1 像素，这样才对的齐。
     private static final int HOTBAR_SELECTOR_LEFT = 7;
     // 与快捷栏 18 像素格距一致，选择框覆盖整个格子。
     private static final int HOTBAR_SELECTOR_WIDTH = 18;
     private static final int VIEWER_SECTION_TOP = 167;
+    // 仅用于覆盖原版 2x2 合成区。
+    private static final int CRAFTING_AREA_LEFT = 97;
+    private static final int CRAFTING_AREA_TOP = 17;
+    private static final int CRAFTING_AREA_WIDTH = 74;
+    private static final int CRAFTING_AREA_HEIGHT = 36;
+
+    // 这两个按钮刚好在副手所在的上方，然后和副手位置之间空一格
+    private static final int ACTION_BUTTON_LEFT = 76;
+    private static final int ACTION_BUTTON_TOP = 7;
+    private static final int ACTION_BUTTON_WIDTH = 18;
+    private static final int ACTION_BUTTON_HEIGHT = 18;
+    private static final int ACTION_BUTTON_GAP = 0; // 两个按钮之间的间距
 
     public FakePlayerInventoryScreen(FakePlayerInventoryMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, menu.screenWidth(), menu.screenHeight());
+    }
+
+    @Override
+    protected void init() {
+        super.init();
+        if (menu.view() != FakePlayerInventoryMenu.View.INVENTORY) {
+            return;
+        }
+        addRenderableWidget(
+            new IconButton(
+                leftPos + ACTION_BUTTON_LEFT,
+                topPos + ACTION_BUTTON_TOP,
+                new ItemStack(Items.BARRIER),
+                Component.translatable("gui.fakeplayer.remove"),
+                button -> sendAction(FakePlayerInventoryMenu.ACTION_REMOVE)
+            )
+        );
+        addRenderableWidget(
+            new IconButton(
+                leftPos + ACTION_BUTTON_LEFT,
+                topPos + ACTION_BUTTON_TOP + ACTION_BUTTON_HEIGHT + ACTION_BUTTON_GAP,
+                new ItemStack(Items.ENDER_CHEST),
+                Component.translatable("gui.fakeplayer.open_ender_chest"),
+                button -> sendAction(FakePlayerInventoryMenu.ACTION_ENDER_CHEST)
+            )
+        );
+    }
+
+    private void sendAction(int actionId) {
+        if (minecraft.gameMode != null) {
+            minecraft.gameMode.handleInventoryButtonClick(menu.containerId, actionId);
+        }
+    }
+
+    /** 用原版物品渲染图标按钮，文字仅作为悬浮提示和无障碍说明。 */
+    private static final class IconButton extends Button {
+        private final ItemStack icon;
+
+        private IconButton(int x, int y, ItemStack icon, Component tooltip, OnPress onPress) {
+            super(x, y, ACTION_BUTTON_WIDTH, ACTION_BUTTON_HEIGHT, tooltip, onPress, DEFAULT_NARRATION);
+            this.icon = icon;
+            setTooltip(Tooltip.create(tooltip));
+        }
+
+        @Override
+        protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+            int x = getX();
+            int y = getY();
+            int right = x + getWidth();
+            int bottom = y + getHeight();
+            boolean hovered = mouseX >= x && mouseX < right && mouseY >= y && mouseY < bottom;
+            int color = hovered ? 0xFFC0C0C0 : 0xFF8B8B8B;
+
+            // 使用原版物品栏的凹槽边框：内部 16x16，整体 18x18。
+            graphics.fill(x, y, right, y + 1, 0xFF373737);
+            graphics.fill(x, y + 1, x + 1, bottom, 0xFF373737);
+            graphics.fill(x + 1, bottom - 1, right, bottom, 0xFFFFFFFF);
+            graphics.fill(right - 1, y + 1, right, bottom, 0xFFFFFFFF);
+            graphics.fill(x + 1, y + 1, right - 1, bottom - 1, color);
+            graphics.fill(x, bottom - 1, x + 1, bottom, 0xFF8B8B8B);
+            graphics.fill(right - 1, y, right, y + 1, 0xFF8B8B8B);
+            graphics.item(icon, getX() + 1, getY() + 1);
+        }
     }
 
     @Override
@@ -76,6 +155,14 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             TARGET_INVENTORY_HEIGHT,
             256,
             256
+        );
+        // 仅清除原版 2x2 合成区域。
+        graphics.fill(
+            leftPos + CRAFTING_AREA_LEFT,
+            topPos + CRAFTING_AREA_TOP,
+            leftPos + CRAFTING_AREA_LEFT + CRAFTING_AREA_WIDTH,
+            topPos + CRAFTING_AREA_TOP + CRAFTING_AREA_HEIGHT,
+            0xFFC6C6C6
         );
         // 裁掉假人背包底部边框，再像原版箱子一样拼接操作者背包区域。
         graphics.blit(

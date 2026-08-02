@@ -1,6 +1,7 @@
 package com.sakurakugu.fakeplayer.menu;
 
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
+import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.Identifier;
@@ -25,6 +26,8 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     private static final int INVENTORY_TARGET_SLOTS = 41;
     private static final int ENDER_CHEST_TARGET_SLOTS = 27;
     private static final int HOTBAR_SLOT_COUNT = 9;
+    public static final int ACTION_ENDER_CHEST = HOTBAR_SLOT_COUNT;
+    public static final int ACTION_REMOVE = HOTBAR_SLOT_COUNT + 1;
     private static final EquipmentSlot[] ARMOR_SLOTS = {
         EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET
     };
@@ -129,11 +132,27 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
 
     @Override
     public boolean clickMenuButton(Player player, int actionId) {
-        if (view != View.INVENTORY || actionId < 0 || actionId >= HOTBAR_SLOT_COUNT || !canAccess(player)) {
+        if (view != View.INVENTORY || !canAccess(player)) {
             return false;
         }
-        target.getInventory().setSelectedSlot(actionId);
-        broadcastChanges();
+        if (actionId >= 0 && actionId < HOTBAR_SLOT_COUNT) {
+            target.getInventory().setSelectedSlot(actionId);
+            broadcastChanges();
+            return true;
+        }
+        if (!(player instanceof ServerPlayer viewer) || target == null) {
+            return false;
+        }
+        switch (actionId) {
+            case ACTION_ENDER_CHEST -> FakePlayerMenuOpener.openEnderChest(viewer, target);
+            case ACTION_REMOVE -> {
+                player.closeContainer();
+                FakePlayerManager.remove(target);
+            }
+            default -> {
+                return false;
+            }
+        }
         return true;
     }
 
