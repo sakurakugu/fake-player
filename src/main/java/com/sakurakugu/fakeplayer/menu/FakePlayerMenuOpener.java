@@ -83,6 +83,7 @@ public final class FakePlayerMenuOpener {
             data -> {
                 data.writeUtf(fake.getGameProfile().name());
                 data.writeBoolean(view == FakePlayerInventoryMenu.View.ENDER_CHEST);
+                data.writeVarInt(fake.getId());
             }
         );
     }

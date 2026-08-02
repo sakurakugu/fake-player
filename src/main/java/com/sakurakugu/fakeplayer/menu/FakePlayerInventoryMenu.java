@@ -3,6 +3,7 @@ package com.sakurakugu.fakeplayer.menu;
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
@@ -12,6 +13,8 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.DataSlot;
+import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.EnchantmentEffectComponents;
@@ -21,14 +24,18 @@ import net.minecraft.world.item.enchantment.EnchantmentHelper;
 public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     private static final int INVENTORY_TARGET_SLOTS = 41;
     private static final int ENDER_CHEST_TARGET_SLOTS = 27;
+    private static final int HOTBAR_SLOT_COUNT = 9;
     private static final EquipmentSlot[] ARMOR_SLOTS = {
         EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET
     };
 
     private final FakeServerPlayer target;
     private final String targetName;
+    private final int targetEntityId;
     private final View view;
     private final int targetSlotCount;
+    private int selectedHotbarSlotSnapshot;
+    private final DataSlot selectedHotbarSlot;
 
     public FakePlayerInventoryMenu(int containerId, Inventory inventory, RegistryFriendlyByteBuf data) {
         this(
@@ -36,12 +43,13 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             inventory,
             null,
             data.readUtf(64),
-            data.readBoolean() ? View.ENDER_CHEST : View.INVENTORY
+            data.readBoolean() ? View.ENDER_CHEST : View.INVENTORY,
+            data.readVarInt()
         );
     }
 
     public FakePlayerInventoryMenu(int containerId, Inventory inventory, FakeServerPlayer target, View view) {
-        this(containerId, inventory, target, target.getGameProfile().name(), view);
+        this(containerId, inventory, target, target.getGameProfile().name(), view, target.getId());
     }
 
     private FakePlayerInventoryMenu(
@@ -49,36 +57,49 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
         Inventory viewerInventory,
         FakeServerPlayer target,
         String targetName,
-        View view
+        View view,
+        int targetEntityId
     ) {
         super(ModMenus.FAKE_PLAYER_INVENTORY.get(), containerId);
         this.target = target;
         this.targetName = targetName;
         this.view = view;
+        this.targetEntityId = targetEntityId;
         this.targetSlotCount = view == View.INVENTORY ? INVENTORY_TARGET_SLOTS : ENDER_CHEST_TARGET_SLOTS;
+        this.selectedHotbarSlot = addDataSlot(new DataSlot() {
+            @Override
+            public int get() {
+                return target == null ? selectedHotbarSlotSnapshot : target.getInventory().getSelectedSlot();
+            }
+
+            @Override
+            public void set(int value) {
+                selectedHotbarSlotSnapshot = value;
+            }
+        });
 
         Container targetContainer = target == null
             ? new SimpleContainer(targetSlotCount)
             : view == View.INVENTORY ? target.getInventory() : target.getEnderChestInventory();
         if (view == View.INVENTORY) {
             addTargetInventorySlots(targetContainer, target == null ? viewerInventory.player : target);
-            addViewerSlots(viewerInventory, 8, 132);
+            addViewerSlots(viewerInventory, 8, 181);
         } else {
             addGrid(targetContainer, 0, 3, 8, 18);
-            addViewerSlots(viewerInventory, 8, 88);
+            addViewerSlots(viewerInventory, 8, 85);
         }
     }
 
     private void addTargetInventorySlots(Container inventory, LivingEntity owner) {
         // 假人主背包使用原版 Inventory 索引：9-35 为主背包，0-8 为快捷栏。
-        addGrid(inventory, 9, 3, 8, 24);
-        addGrid(inventory, 0, 1, 8, 82);
+        addGrid(inventory, 9, 3, 8, 84);
+        addGrid(inventory, 0, 1, 8, 142);
 
         for (int index = 0; index < ARMOR_SLOTS.length; index++) {
             EquipmentSlot equipmentSlot = ARMOR_SLOTS[index];
-            addSlot(new EquipmentSlotSlot(inventory, owner, equipmentSlot, 39 - index, 188, 24 + index * 18));
+            addSlot(new EquipmentSlotSlot(inventory, owner, equipmentSlot, 39 - index, 8, 8 + index * 18));
         }
-        addSlot(new EquipmentSlotSlot(inventory, owner, EquipmentSlot.OFFHAND, 40, 188, 96));
+        addSlot(new EquipmentSlotSlot(inventory, owner, EquipmentSlot.OFFHAND, 40, 77, 62));
     }
 
     private void addViewerSlots(Inventory inventory, int left, int top) {
@@ -104,6 +125,16 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             return;
         }
         super.clicked(slotId, button, containerInput, player);
+    }
+
+    @Override
+    public boolean clickMenuButton(Player player, int actionId) {
+        if (view != View.INVENTORY || actionId < 0 || actionId >= HOTBAR_SLOT_COUNT || !canAccess(player)) {
+            return false;
+        }
+        target.getInventory().setSelectedSlot(actionId);
+        broadcastChanges();
+        return true;
     }
 
     @Override
@@ -184,12 +215,20 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
         return view;
     }
 
+    public int targetEntityId() {
+        return targetEntityId;
+    }
+
+    public int selectedHotbarSlot() {
+        return selectedHotbarSlot.get();
+    }
+
     public int screenWidth() {
-        return view == View.INVENTORY ? 214 : 176;
+        return 176;
     }
 
     public int screenHeight() {
-        return view == View.INVENTORY ? 214 : 168;
+        return view == View.INVENTORY ? 264 : 168;
     }
 
     public enum View {
@@ -239,6 +278,18 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             ItemStack stack = getItem();
             return stack.isEmpty() || player.isCreative()
                 || !EnchantmentHelper.has(stack, EnchantmentEffectComponents.PREVENT_ARMOR_CHANGE);
+        }
+
+        @Override
+        public Identifier getNoItemIcon() {
+            return switch (equipmentSlot) {
+                case HEAD -> InventoryMenu.EMPTY_ARMOR_SLOT_HELMET;
+                case CHEST -> InventoryMenu.EMPTY_ARMOR_SLOT_CHESTPLATE;
+                case LEGS -> InventoryMenu.EMPTY_ARMOR_SLOT_LEGGINGS;
+                case FEET -> InventoryMenu.EMPTY_ARMOR_SLOT_BOOTS;
+                case OFFHAND -> InventoryMenu.EMPTY_ARMOR_SLOT_SHIELD;
+                default -> null;
+            };
         }
     }
 }

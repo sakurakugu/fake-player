@@ -3,12 +3,32 @@ package com.sakurakugu.fakeplayer.client;
 import com.sakurakugu.fakeplayer.menu.FakePlayerInventoryMenu;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Inventory;
-import net.minecraft.world.inventory.Slot;
 
-/** 绘制假人完整物品栏和末影箱，物品交互由原版容器界面处理。 */
+/** 绘制假人完整物品栏；末影箱使用原版三行容器界面。 */
 public final class FakePlayerInventoryScreen extends AbstractContainerScreen<FakePlayerInventoryMenu> {
+    private static final Identifier CONTAINER_BACKGROUND =
+        Identifier.withDefaultNamespace("textures/gui/container/generic_54.png");
+    private static final Identifier INVENTORY_BACKGROUND =
+        Identifier.withDefaultNamespace("textures/gui/container/inventory.png");
+    private static final int TARGET_INVENTORY_HEIGHT = 159;
+    private static final int HOTBAR_SELECTOR_TOP = 159;
+    private static final int HOTBAR_SELECTOR_HEIGHT = 5;
+    private static final int HOTBAR_SLOT_COUNT = 9;
+    private static final int HOTBAR_SLOT_SPACING = 18;
+    // 选择区整体比快捷栏第一格左移 1 像素。
+    private static final int HOTBAR_SELECTOR_LEFT = 7;
+    // 与快捷栏 18 像素格距一致，选择框覆盖整个格子。
+    private static final int HOTBAR_SELECTOR_WIDTH = 18;
+    private static final int VIEWER_SECTION_TOP = 167;
+
     public FakePlayerInventoryScreen(FakePlayerInventoryMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, menu.screenWidth(), menu.screenHeight());
     }
@@ -16,26 +36,144 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     @Override
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractBackground(graphics, mouseX, mouseY, partialTick);
-        graphics.fill(leftPos, topPos, leftPos + imageWidth, topPos + imageHeight, 0xF0222528);
-        graphics.fill(leftPos, topPos, leftPos + imageWidth, topPos + 16, 0xFF2F4A3D);
-        graphics.outline(leftPos, topPos, imageWidth, imageHeight, 0xFF8B8B8B);
-
-        // 为每个真实槽位绘制稳定边框，不使用会写入容器的伪按钮物品。
-        for (Slot slot : menu.slots) {
-            int x = leftPos + slot.x - 1;
-            int y = topPos + slot.y - 1;
-            graphics.fill(x, y, x + 18, y + 18, 0xFF101214);
-            graphics.outline(x, y, 18, 18, 0xFF666A6D);
+        if (menu.view() == FakePlayerInventoryMenu.View.ENDER_CHEST) {
+            // 与原版 ContainerScreen 的三行容器背景保持一致。
+            graphics.blit(
+                RenderPipelines.GUI_TEXTURED,
+                CONTAINER_BACKGROUND,
+                leftPos,
+                topPos,
+                0.0F,
+                0.0F,
+                imageWidth,
+                71,
+                256,
+                256
+            );
+            graphics.blit(
+                RenderPipelines.GUI_TEXTURED,
+                CONTAINER_BACKGROUND,
+                leftPos,
+                topPos + 71,
+                0.0F,
+                126.0F,
+                imageWidth,
+                96,
+                256,
+                256
+            );
+            return;
         }
+
+        graphics.blit(
+            RenderPipelines.GUI_TEXTURED,
+            INVENTORY_BACKGROUND,
+            leftPos,
+            topPos,
+            0.0F,
+            0.0F,
+            176,
+            TARGET_INVENTORY_HEIGHT,
+            256,
+            256
+        );
+        // 裁掉假人背包底部边框，再像原版箱子一样拼接操作者背包区域。
+        graphics.blit(
+            RenderPipelines.GUI_TEXTURED,
+            CONTAINER_BACKGROUND,
+            leftPos,
+            topPos + VIEWER_SECTION_TOP,
+            0.0F,
+            126.0F,
+            176,
+            96,
+            256,
+            256
+        );
+        graphics.fill(
+            leftPos + 1,
+            topPos + TARGET_INVENTORY_HEIGHT,
+            leftPos + imageWidth - 1,
+            topPos + VIEWER_SECTION_TOP,
+            0xFFC6C6C6
+        );
+
+        for (int slot = 0; slot < HOTBAR_SLOT_COUNT; slot++) {
+            int x = leftPos + HOTBAR_SELECTOR_LEFT + slot * HOTBAR_SLOT_SPACING;
+            int y = topPos + HOTBAR_SELECTOR_TOP;
+            boolean hovered = mouseX >= x && mouseX < x + HOTBAR_SELECTOR_WIDTH
+                && mouseY >= y && mouseY < y + HOTBAR_SELECTOR_HEIGHT;
+            int color = slot == menu.selectedHotbarSlot()
+                ? hovered ? 0xFF5DDB6C : 0xFF36B54A
+                : hovered ? 0xFF8A8A8A : 0xFF5A5A5A;
+            // 使用原版选择框的明暗边框；每个选择框独立绘制，不与相邻选择框共线。
+            int right = x + HOTBAR_SELECTOR_WIDTH;
+            int bottom = y + HOTBAR_SELECTOR_HEIGHT;
+            graphics.fill(x, y, right, y + 1, 0xFF373737);
+            graphics.fill(x, y + 1, x + 1, bottom, 0xFF373737);
+            graphics.fill(x + 1, bottom - 1, right, bottom, 0xFFFFFFFF);
+            graphics.fill(right - 1, y + 1, right, bottom, 0xFFFFFFFF);
+            graphics.fill(x + 1, y + 1, right - 1, bottom - 1, color);
+            graphics.fill(x, bottom - 1, x + 1, bottom, 0xFF8B8B8B);
+            graphics.fill(right - 1, y, right, y + 1, 0xFF8B8B8B);
+        }
+
+        if (minecraft.level != null) {
+            Entity entity = minecraft.level.getEntity(menu.targetEntityId());
+            if (entity instanceof LivingEntity livingEntity) {
+                InventoryScreen.extractEntityInInventoryFollowsMouse(
+                    graphics,
+                    leftPos + 26,
+                    topPos + 8,
+                    leftPos + 75,
+                    topPos + 78,
+                    30,
+                    0.0625F,
+                    mouseX,
+                    mouseY,
+                    livingEntity
+                );
+            }
+        }
+        drawSelectorAreaSideBorders(graphics);
+    }
+
+    /** 给快捷栏选择区左右两侧绘制外边框，左侧黑边内为高光，右侧黑边内为阴影。 */
+    private void drawSelectorAreaSideBorders(GuiGraphicsExtractor graphics) {
+        int top = topPos + TARGET_INVENTORY_HEIGHT;
+        int bottom = topPos + VIEWER_SECTION_TOP;
+        graphics.fill(leftPos, top, leftPos + 1, bottom, 0xFF000000);
+        graphics.fill(leftPos + 1, top, leftPos + 3, bottom, 0xFFFFFFFF);
+        graphics.fill(leftPos + imageWidth - 3, top, leftPos + imageWidth - 1, bottom, 0xFF555555);
+        graphics.fill(leftPos + imageWidth - 1, top, leftPos + imageWidth, bottom, 0xFF000000);
+    }
+
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (menu.view() == FakePlayerInventoryMenu.View.INVENTORY && event.button() == 0) {
+            int relativeX = (int) event.x() - leftPos;
+            int relativeY = (int) event.y() - topPos;
+            if (relativeY >= HOTBAR_SELECTOR_TOP && relativeY < HOTBAR_SELECTOR_TOP + HOTBAR_SELECTOR_HEIGHT) {
+                for (int slot = 0; slot < HOTBAR_SLOT_COUNT; slot++) {
+                    int x = HOTBAR_SELECTOR_LEFT + slot * HOTBAR_SLOT_SPACING;
+                    if (relativeX >= x && relativeX < x + HOTBAR_SELECTOR_WIDTH) {
+                        minecraft.gameMode.handleInventoryButtonClick(menu.containerId, slot);
+                        return true;
+                    }
+                }
+            }
+        }
+        return super.mouseClicked(event, doubleClick);
     }
 
     @Override
     protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
-        graphics.text(font, title, 8, 5, 0xFFFFFFFF, false);
-        int inventoryLabelY = menu.view() == FakePlayerInventoryMenu.View.INVENTORY ? 118 : 76;
-        graphics.text(font, playerInventoryTitle, 8, inventoryLabelY, 0xFFC8C8C8, false);
-        if (menu.view() == FakePlayerInventoryMenu.View.INVENTORY) {
-            graphics.text(font, Component.translatable("gui.fakeplayer.equipment"), 176, 8, 0xFFC8C8C8, false);
+        if (menu.view() == FakePlayerInventoryMenu.View.ENDER_CHEST) {
+            super.extractLabels(graphics, mouseX, mouseY);
+            return;
         }
+
+        graphics.text(font, title, 97, 6, -12566464, false);
+        graphics.text(font, playerInventoryTitle, 8, 170, -12566464, false);
     }
 }
