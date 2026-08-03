@@ -1,6 +1,7 @@
 package com.sakurakugu.fakeplayer.menu;
 
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
+import com.sakurakugu.fakeplayer.entity.FakePlayerActions;
 import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -28,6 +29,14 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     private static final int HOTBAR_SLOT_COUNT = 9;
     public static final int ACTION_ENDER_CHEST = HOTBAR_SLOT_COUNT;
     public static final int ACTION_REMOVE = HOTBAR_SLOT_COUNT + 1;
+    public static final int MAX_DROP_AMOUNT = 64;
+    public static final int MAX_DROP_PERCENTAGE = 100;
+    private static final int ACTION_DROP_AMOUNT_BASE = ACTION_REMOVE + 1;
+    private static final int ACTION_DROP_AMOUNT_CONTINUOUS_BASE = ACTION_DROP_AMOUNT_BASE + MAX_DROP_AMOUNT;
+    private static final int ACTION_DROP_PERCENTAGE_BASE = ACTION_DROP_AMOUNT_CONTINUOUS_BASE + MAX_DROP_AMOUNT;
+    private static final int ACTION_DROP_PERCENTAGE_CONTINUOUS_BASE =
+        ACTION_DROP_PERCENTAGE_BASE + MAX_DROP_PERCENTAGE;
+    private static final int ACTION_DROP_END = ACTION_DROP_PERCENTAGE_CONTINUOUS_BASE + MAX_DROP_PERCENTAGE;
     private static final EquipmentSlot[] ARMOR_SLOTS = {
         EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET
     };
@@ -143,6 +152,26 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
         if (!(player instanceof ServerPlayer viewer) || target == null) {
             return false;
         }
+        if (actionId >= ACTION_DROP_AMOUNT_BASE && actionId < ACTION_DROP_END) {
+            boolean percentage = actionId >= ACTION_DROP_PERCENTAGE_BASE;
+            int continuousBase = percentage
+                ? ACTION_DROP_PERCENTAGE_CONTINUOUS_BASE
+                : ACTION_DROP_AMOUNT_CONTINUOUS_BASE;
+            boolean continuous = actionId >= continuousBase;
+            int base = percentage
+                ? continuous ? ACTION_DROP_PERCENTAGE_CONTINUOUS_BASE : ACTION_DROP_PERCENTAGE_BASE
+                : continuous ? ACTION_DROP_AMOUNT_CONTINUOUS_BASE : ACTION_DROP_AMOUNT_BASE;
+            int value = actionId - base + 1;
+            FakePlayerActions.RepeatMode mode = continuous
+                ? FakePlayerActions.RepeatMode.CONTINUOUS
+                : FakePlayerActions.RepeatMode.ONCE;
+            if (percentage) {
+                target.actions().dropPercentage(target.getInventory().getSelectedSlot(), value, mode, 1);
+            } else {
+                target.actions().dropAmount(target.getInventory().getSelectedSlot(), value, mode, 1);
+            }
+            return true;
+        }
         switch (actionId) {
             case ACTION_ENDER_CHEST -> FakePlayerMenuOpener.openEnderChest(viewer, target);
             case ACTION_REMOVE -> {
@@ -154,6 +183,18 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             }
         }
         return true;
+    }
+
+    /** 将丢弃数值、计量模式和连续模式编码为原版菜单按钮协议可传输的动作编号。 */
+    public static int dropActionId(int value, boolean percentage, boolean continuous) {
+        int maximum = percentage ? MAX_DROP_PERCENTAGE : MAX_DROP_AMOUNT;
+        if (value < 1 || value > maximum) {
+            throw new IllegalArgumentException("Drop value must be between 1 and " + maximum);
+        }
+        int base = percentage
+            ? continuous ? ACTION_DROP_PERCENTAGE_CONTINUOUS_BASE : ACTION_DROP_PERCENTAGE_BASE
+            : continuous ? ACTION_DROP_AMOUNT_CONTINUOUS_BASE : ACTION_DROP_AMOUNT_BASE;
+        return base + value - 1;
     }
 
     @Override

@@ -37,7 +37,9 @@ public final class FakePlayerSavedData extends SavedData {
     private static final Codec<FakePlayerActions.DropState> DROP_CODEC = RecordCodecBuilder.create(instance ->
         instance.group(
             Codec.INT.fieldOf("slot").forGetter(FakePlayerActions.DropState::slot),
-            Codec.BOOL.fieldOf("whole_stack").forGetter(FakePlayerActions.DropState::wholeStack)
+            Codec.BOOL.fieldOf("whole_stack").forGetter(FakePlayerActions.DropState::wholeStack),
+            Codec.BOOL.fieldOf("percentage").forGetter(FakePlayerActions.DropState::percentage),
+            Codec.INT.fieldOf("amount").forGetter(FakePlayerActions.DropState::amount)
         ).apply(instance, FakePlayerActions.DropState::new)
     );
     private static final Codec<FakePlayerActions.State> ACTION_STATE_CODEC = RecordCodecBuilder.create(instance ->

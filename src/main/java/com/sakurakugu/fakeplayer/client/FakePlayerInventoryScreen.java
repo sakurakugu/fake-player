@@ -2,6 +2,7 @@ package com.sakurakugu.fakeplayer.client;
 
 import com.sakurakugu.fakeplayer.menu.FakePlayerInventoryMenu;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
@@ -44,6 +45,21 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private static final int ACTION_BUTTON_WIDTH = 18;
     private static final int ACTION_BUTTON_HEIGHT = 18;
     private static final int ACTION_BUTTON_GAP = 0; // 两个按钮之间的间距
+    private static final int DROP_PANEL_TOP = 8;
+    private static final int DROP_PANEL_WIDTH = 68;
+    private static final int DROP_PANEL_HEIGHT = 99;
+    private static final int DROP_TAB_WIDTH = 22;
+    private static final int DROP_TAB_HEIGHT = 24;
+
+    private boolean dropPanelOpen;
+    private boolean continuousDrop;
+    private boolean percentageDrop;
+    private int dropAmount = 1;
+    private int dropPercentage = 100;
+    private DropAmountSlider dropAmountSlider;
+    private PanelButton dropModeButton;
+    private PanelButton continuousDropButton;
+    private PanelButton executeDropButton;
 
     public FakePlayerInventoryScreen(FakePlayerInventoryMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, menu.screenWidth(), menu.screenHeight());
@@ -73,6 +89,90 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
                 button -> sendAction(FakePlayerInventoryMenu.ACTION_ENDER_CHEST)
             )
         );
+
+        int panelLeft = leftPos + imageWidth;
+        int panelTop = topPos + DROP_PANEL_TOP;
+        PanelButton tabButton = addRenderableWidget(new PanelButton(
+            panelLeft,
+            panelTop,
+            DROP_TAB_WIDTH,
+            DROP_TAB_HEIGHT,
+            Component.literal("Q"),
+            button -> setDropPanelOpen(!dropPanelOpen)
+        ));
+        tabButton.setTooltip(Tooltip.create(Component.translatable("gui.fakeplayer.drop_tab")));
+
+        dropModeButton = addRenderableWidget(new PanelButton(
+            panelLeft + 45,
+            panelTop + 24,
+            18,
+            11,
+            dropModeMessage(),
+            button -> toggleDropMode()
+        ));
+        updateDropModeTooltip();
+        dropAmountSlider = addRenderableWidget(new DropAmountSlider(
+            panelLeft + 5,
+            panelTop + 37,
+            58,
+            16
+        ));
+        continuousDropButton = addRenderableWidget(new PanelButton(
+            panelLeft + 5,
+            panelTop + 58,
+            58,
+            16,
+            continuousDropMessage(),
+            button -> {
+                continuousDrop = !continuousDrop;
+                continuousDropButton.setMessage(continuousDropMessage());
+            }
+        ));
+        executeDropButton = addRenderableWidget(new PanelButton(
+            panelLeft + 5,
+            panelTop + 78,
+            58,
+            16,
+            Component.translatable("gui.fakeplayer.drop_execute"),
+            button -> sendAction(FakePlayerInventoryMenu.dropActionId(
+                currentDropValue(), percentageDrop, continuousDrop))
+        ));
+        setDropPanelOpen(dropPanelOpen);
+    }
+
+    private Component continuousDropMessage() {
+        return Component.translatable(continuousDrop
+            ? "gui.fakeplayer.drop_continuous_on"
+            : "gui.fakeplayer.drop_continuous_off");
+    }
+
+    private Component dropModeMessage() {
+        return Component.literal(percentageDrop ? "%" : "#");
+    }
+
+    private void toggleDropMode() {
+        percentageDrop = !percentageDrop;
+        dropModeButton.setMessage(dropModeMessage());
+        updateDropModeTooltip();
+        dropAmountSlider.refreshValue();
+    }
+
+    private void updateDropModeTooltip() {
+        dropModeButton.setTooltip(Tooltip.create(Component.translatable(percentageDrop
+            ? "gui.fakeplayer.drop_mode_percentage"
+            : "gui.fakeplayer.drop_mode_amount")));
+    }
+
+    private int currentDropValue() {
+        return percentageDrop ? dropPercentage : dropAmount;
+    }
+
+    private void setDropPanelOpen(boolean open) {
+        dropPanelOpen = open;
+        dropModeButton.visible = open;
+        dropAmountSlider.visible = open;
+        continuousDropButton.visible = open;
+        executeDropButton.visible = open;
     }
 
     private void sendAction(int actionId) {
@@ -109,6 +209,72 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             graphics.fill(x, bottom - 1, x + 1, bottom, 0xFF8B8B8B);
             graphics.fill(right - 1, y, right, y + 1, 0xFF8B8B8B);
             graphics.item(icon, getX() + 1, getY() + 1);
+        }
+    }
+
+    /** 使用容器界面的像素边框绘制侧边标签和面板按钮。 */
+    private final class PanelButton extends Button {
+        private PanelButton(int x, int y, int width, int height, Component message, OnPress onPress) {
+            super(x, y, width, height, message, onPress, DEFAULT_NARRATION);
+        }
+
+        @Override
+        protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+            int x = getX();
+            int y = getY();
+            int right = x + getWidth();
+            int bottom = y + getHeight();
+            boolean hovered = active && mouseX >= x && mouseX < right && mouseY >= y && mouseY < bottom;
+            int inside = !active ? 0xFF777777 : hovered ? 0xFFD6D6D6 : 0xFFA8A8A8;
+            graphics.fill(x, y, right, y + 1, 0xFFFFFFFF);
+            graphics.fill(x, y + 1, x + 1, bottom, 0xFFFFFFFF);
+            graphics.fill(x + 1, bottom - 1, right, bottom, 0xFF373737);
+            graphics.fill(right - 1, y + 1, right, bottom, 0xFF373737);
+            graphics.fill(x + 1, y + 1, right - 1, bottom - 1, inside);
+
+            Component message = getMessage();
+            int textX = x + (getWidth() - font.width(message)) / 2;
+            int textY = y + (getHeight() - 8) / 2;
+            graphics.text(font, message, textX, textY, active ? 0xFFFFFFFF : 0xFFB0B0B0, true);
+        }
+    }
+
+    /** 根据当前计量模式，将滑块位置映射到整数数量或百分比。 */
+    private final class DropAmountSlider extends AbstractSliderButton {
+        private DropAmountSlider(int x, int y, int width, int height) {
+            super(
+                x,
+                y,
+                width,
+                height,
+                Component.literal(Integer.toString(dropAmount)),
+                (double) (dropAmount - 1) / (FakePlayerInventoryMenu.MAX_DROP_AMOUNT - 1)
+            );
+        }
+
+        @Override
+        protected void updateMessage() {
+            setMessage(Component.literal(currentDropValue() + (percentageDrop ? "%" : "")));
+        }
+
+        @Override
+        protected void applyValue() {
+            int maximum = percentageDrop
+                ? FakePlayerInventoryMenu.MAX_DROP_PERCENTAGE
+                : FakePlayerInventoryMenu.MAX_DROP_AMOUNT;
+            int selectedValue = 1 + (int) Math.round(value * (maximum - 1));
+            if (percentageDrop) {
+                dropPercentage = selectedValue;
+            } else {
+                dropAmount = selectedValue;
+            }
+        }
+
+        private void refreshValue() {
+            int maximum = percentageDrop
+                ? FakePlayerInventoryMenu.MAX_DROP_PERCENTAGE
+                : FakePlayerInventoryMenu.MAX_DROP_AMOUNT;
+            setValue((double) (currentDropValue() - 1) / (maximum - 1));
         }
     }
 
@@ -185,6 +351,8 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             0xFFC6C6C6
         );
 
+        drawDropPanel(graphics);
+
         for (int slot = 0; slot < HOTBAR_SLOT_COUNT; slot++) {
             int x = leftPos + HOTBAR_SELECTOR_LEFT + slot * HOTBAR_SLOT_SPACING;
             int y = topPos + HOTBAR_SELECTOR_TOP;
@@ -223,6 +391,28 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             }
         }
         drawSelectorAreaSideBorders(graphics);
+    }
+
+    private void drawDropPanel(GuiGraphicsExtractor graphics) {
+        if (!dropPanelOpen) {
+            return;
+        }
+        int left = leftPos + imageWidth;
+        int top = topPos + DROP_PANEL_TOP;
+        int right = left + DROP_PANEL_WIDTH;
+        int bottom = top + DROP_PANEL_HEIGHT;
+
+        graphics.fill(left, top, right, top + 1, 0xFF101010);
+        graphics.fill(left, top + 1, left + 1, bottom, 0xFF101010);
+        graphics.fill(left + 1, top + 1, right - 1, bottom - 1, 0xFFC6C6C6);
+        graphics.fill(left + 1, top + 1, right - 1, top + 2, 0xFFFFFFFF);
+        graphics.fill(left + 1, bottom - 2, right - 1, bottom - 1, 0xFF555555);
+        graphics.fill(right - 1, top + 1, right, bottom, 0xFF101010);
+        graphics.fill(left + 23, top + 1, left + 24, top + 24, 0xFF555555);
+
+        Component amountLabel = Component.translatable("gui.fakeplayer.drop_amount");
+        graphics.text(font, amountLabel, left + (45 - font.width(amountLabel)) / 2, top + 26,
+            0xFF404040, false);
     }
 
     /** 给快捷栏选择区左右两侧绘制外边框，左侧黑边内为高光，右侧黑边内为阴影。 */

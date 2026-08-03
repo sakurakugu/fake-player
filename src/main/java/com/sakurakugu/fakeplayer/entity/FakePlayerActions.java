@@ -124,7 +124,19 @@ public final class FakePlayerActions {
     }
 
     public void drop(int slot, boolean wholeStack, RepeatMode mode, int interval) {
-        dropRequest = new DropRequest(slot, wholeStack);
+        dropRequest = new DropRequest(slot, wholeStack, false, 1);
+        configure(ScheduledAction.DROP, mode, interval);
+    }
+
+    /** 从指定槽位丢出固定数量；数量超过当前堆叠时会丢出剩余全部物品。 */
+    public void dropAmount(int slot, int amount, RepeatMode mode, int interval) {
+        dropRequest = new DropRequest(slot, false, false, Math.max(1, amount));
+        configure(ScheduledAction.DROP, mode, interval);
+    }
+
+    /** 按执行时物品堆的当前数量计算丢弃比例。 */
+    public void dropPercentage(int slot, int percentage, RepeatMode mode, int interval) {
+        dropRequest = new DropRequest(slot, false, true, Math.clamp(percentage, 1, 100));
         configure(ScheduledAction.DROP, mode, interval);
     }
 
@@ -440,7 +452,11 @@ public final class FakePlayerActions {
         if (stack.isEmpty()) {
             return;
         }
-        int count = wholeStack ? stack.getCount() : 1;
+        int count = wholeStack
+            ? stack.getCount()
+            : dropRequest.percentage()
+                ? Math.max(1, (stack.getCount() * dropRequest.amount() + 99) / 100)
+                : Math.min(dropRequest.amount(), stack.getCount());
         player.drop(stack.split(count), false, true);
     }
 
@@ -464,7 +480,8 @@ public final class FakePlayerActions {
                 entry.getKey(), entry.getValue().mode, entry.getValue().interval, entry.getValue().remaining))
             .toList();
         Optional<DropState> drop = Optional.ofNullable(dropRequest)
-            .map(request -> new DropState(request.slot(), request.wholeStack()));
+            .map(request -> new DropState(
+                request.slot(), request.wholeStack(), request.percentage(), request.amount()));
         return new State(
             scheduledStates,
             forwardInput,
@@ -480,7 +497,10 @@ public final class FakePlayerActions {
         stop();
         forwardInput = state.forwardInput();
         strafeInput = state.strafeInput();
-        dropRequest = state.drop().map(value -> new DropRequest(value.slot(), value.wholeStack())).orElse(null);
+        dropRequest = state.drop()
+            .map(value -> new DropRequest(
+                value.slot(), value.wholeStack(), value.percentage(), Math.max(1, value.amount())))
+            .orElse(null);
         for (ScheduledState scheduled : state.schedules()) {
             int interval = Math.max(1, scheduled.interval());
             Schedule schedule = new Schedule(scheduled.mode(), interval);
@@ -590,13 +610,13 @@ public final class FakePlayerActions {
         }
     }
 
-    private record DropRequest(int slot, boolean wholeStack) {
+    private record DropRequest(int slot, boolean wholeStack, boolean percentage, int amount) {
     }
 
     public record ScheduledState(ScheduledAction action, RepeatMode mode, int interval, int remaining) {
     }
 
-    public record DropState(int slot, boolean wholeStack) {
+    public record DropState(int slot, boolean wholeStack, boolean percentage, int amount) {
     }
 
     public record State(
