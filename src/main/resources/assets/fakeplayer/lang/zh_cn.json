@@ -82,6 +82,7 @@
   "gui.fakeplayer.sneak": "切换潜行",
   "gui.fakeplayer.remove": "移除假人",
   "gui.fakeplayer.drop_tab": "丢出主手物品",
+  "gui.fakeplayer.drop_panel_title": "丢弃",
   "gui.fakeplayer.drop_amount": "数量",
   "gui.fakeplayer.drop_mode_amount": "按数量丢出",
   "gui.fakeplayer.drop_mode_percentage": "按百分比丢出",

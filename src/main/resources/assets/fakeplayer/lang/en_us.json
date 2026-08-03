@@ -82,6 +82,7 @@
   "gui.fakeplayer.sneak": "Toggle sneaking",
   "gui.fakeplayer.remove": "Remove fake player",
   "gui.fakeplayer.drop_tab": "Drop main-hand items",
+  "gui.fakeplayer.drop_panel_title": "Drop",
   "gui.fakeplayer.drop_amount": "Amount",
   "gui.fakeplayer.drop_mode_amount": "Drop by amount",
   "gui.fakeplayer.drop_mode_percentage": "Drop by percentage",

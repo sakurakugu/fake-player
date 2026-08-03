@@ -95,7 +95,7 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             : view == View.INVENTORY ? target.getInventory() : target.getEnderChestInventory();
         if (view == View.INVENTORY) {
             addTargetInventorySlots(targetContainer, target == null ? viewerInventory.player : target);
-            addViewerSlots(viewerInventory, 8, 181);
+            addViewerSlots(viewerInventory, 8, 178);
         } else {
             addGrid(targetContainer, 0, 3, 8, 18);
             addViewerSlots(viewerInventory, 8, 85);
@@ -288,7 +288,7 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     }
 
     public int screenHeight() {
-        return view == View.INVENTORY ? 264 : 168;
+        return view == View.INVENTORY ? 261 : 168;
     }
 
     public enum View {
