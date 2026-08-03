@@ -60,7 +60,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private int dropPercentage = 100;
     private DropAmountSlider dropAmountSlider;
     private Button dropModeButton;
-    private Button continuousDropButton;
+    private ContinuousDropSwitch continuousDropButton;
     private Button executeDropButton;
 
     public FakePlayerInventoryScreen(FakePlayerInventoryMenu menu, Inventory inventory, Component title) {
@@ -102,7 +102,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         tabButton.setTooltip(Tooltip.create(Component.translatable("gui.fakeplayer.drop_tab")));
 
         dropModeButton = addRenderableWidget(
-            new PanelButton(panelLeft + 70, panelTop + 26, 18, 18, dropModeMessage(), button -> toggleDropMode())
+            new PanelButton(panelLeft + 74, panelTop + 28, 14, 14, dropModeMessage(), button -> toggleDropMode())
         );
         updateDropModeTooltip();
         dropAmountSlider = addRenderableWidget(new DropAmountSlider(
@@ -112,9 +112,8 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             16
         ));
         continuousDropButton = addRenderableWidget(
-            new PanelButton(panelLeft + 6, panelTop + 67, 82, 16, continuousDropMessage(), button -> {
+            new ContinuousDropSwitch(panelLeft + 6, panelTop + 67, 82, 16, button -> {
                 continuousDrop = !continuousDrop;
-                continuousDropButton.setMessage(continuousDropMessage());
             })
         );
         executeDropButton = addRenderableWidget(
@@ -129,12 +128,6 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             )
         );
         setDropPanelOpen(dropPanelOpen);
-    }
-
-    private Component continuousDropMessage() {
-        return Component.translatable(continuousDrop
-            ? "gui.fakeplayer.drop_continuous_on"
-            : "gui.fakeplayer.drop_continuous_off");
     }
 
     private Component dropModeMessage() {
@@ -243,6 +236,41 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         }
     }
 
+    /** 左侧显示固定标签，右侧使用旅行者背包风格的紧凑开关。 */
+    private final class ContinuousDropSwitch extends Button {
+        private static final int SWITCH_WIDTH = 24;
+        private static final int SWITCH_HEIGHT = 12;
+        private static final int HANDLE_WIDTH = 8;
+
+        private ContinuousDropSwitch(int x, int y, int width, int height, OnPress onPress) {
+            super(x, y, width, height, Component.translatable("gui.fakeplayer.drop_continuous"),
+                onPress, DEFAULT_NARRATION);
+        }
+
+        @Override
+        protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+            Component label = Component.translatable("gui.fakeplayer.drop_continuous");
+            graphics.text(font, label, getX(), getY() + (getHeight() - 8) / 2, 0xFF404040, false);
+
+            int switchX = getX() + getWidth() - SWITCH_WIDTH;
+            int switchY = getY() + (getHeight() - SWITCH_HEIGHT) / 2;
+            drawSwitch(graphics, switchX, switchY, isMouseOver(mouseX, mouseY));
+        }
+
+        private void drawSwitch(GuiGraphicsExtractor graphics, int x, int y, boolean hovered) {
+            int right = x + SWITCH_WIDTH;
+            int bottom = y + SWITCH_HEIGHT;
+            graphics.fill(x, y, right, bottom, hovered ? 0xFFFFFFFF : 0xFF373737);
+            graphics.fill(x + 1, y + 1, right - 1, bottom - 1,
+                continuousDrop ? 0xFF36B54A : 0xFF565656);
+
+            int handleLeft = continuousDrop ? right - HANDLE_WIDTH - 2 : x + 2;
+            int handleRight = handleLeft + HANDLE_WIDTH;
+            graphics.fill(handleLeft, y + 2, handleRight, bottom - 2, 0xFFFFFFFF);
+            graphics.fill(handleLeft + 1, y + 3, handleRight - 1, bottom - 3, 0xFFC6C6C6);
+        }
+    }
+
     /** 根据当前计量模式，将滑块位置映射到整数数量或百分比。 */
     private final class DropAmountSlider extends AbstractSliderButton {
         private DropAmountSlider(int x, int y, int width, int height) {
@@ -342,7 +370,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     /** 滑动条轨道使用无高光的深色内底，手柄仍保留原来的明暗边框。 */
     private void drawSliderTrack(GuiGraphicsExtractor graphics, int x, int y, int width, int height) {
         graphics.fill(x, y, x + width, y + height, 0xFF373737);
-        graphics.fill(x + 1, y + 1, x + width - 1, y + height - 1, 0xFF404040);
+        graphics.fill(x + 1, y + 1, x + width - 1, y + height - 1, 0xFF565656);
     }
 
     @Override
