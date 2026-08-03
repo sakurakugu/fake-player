@@ -24,6 +24,8 @@ import net.neoforged.neoforge.common.CommonHooks;
 public final class FakePlayerActions {
     private static final int USE_COOLDOWN_TICKS = 3;
     private static final int BLOCK_BREAK_COOLDOWN_TICKS = 5;
+    private static final int ALL_SLOTS = -1;
+    private static final int ARMOR_SLOTS = -2;
 
     public enum RepeatMode {
         ONCE,
@@ -141,7 +143,11 @@ public final class FakePlayerActions {
     }
 
     public void dropAll(boolean wholeStack, RepeatMode mode, int interval) {
-        drop(-1, wholeStack, mode, interval);
+        drop(ALL_SLOTS, wholeStack, mode, interval);
+    }
+
+    public void dropArmor(boolean wholeStack, RepeatMode mode, int interval) {
+        drop(ARMOR_SLOTS, wholeStack, mode, interval);
     }
 
     private void configure(ScheduledAction action, RepeatMode mode, int interval) {
@@ -437,8 +443,13 @@ public final class FakePlayerActions {
         if (dropRequest == null) {
             return;
         }
-        if (dropRequest.slot() < 0) {
-            for (int slot = 0; slot < 36; slot++) {
+        if (dropRequest.slot() == ALL_SLOTS) {
+            // 0-35 为主背包，36-39 为护甲栏，40 为副手。
+            for (int slot = 0; slot <= 40; slot++) {
+                dropFromSlot(slot, dropRequest.wholeStack());
+            }
+        } else if (dropRequest.slot() == ARMOR_SLOTS) {
+            for (int slot = 36; slot <= 39; slot++) {
                 dropFromSlot(slot, dropRequest.wholeStack());
             }
         } else {

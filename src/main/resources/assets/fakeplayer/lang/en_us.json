@@ -18,6 +18,7 @@
   "commands.fakeplayer.none": "none",
   "commands.fakeplayer.action": "Ran %2$s for fake player %1$s",
   "commands.fakeplayer.action_done": "Updated actions for fake player %s",
+  "commands.fakeplayer.settings_reset": "Reset settings for fake player %s to defaults",
   "commands.fakeplayer.no_mount": "No rideable entity was found nearby",
   "commands.fakeplayer.shadowed": "Kicked player %s and spawned a fake player with the same name at their position",
   "commands.fakeplayer.shadow_kicked": "You have been replaced by a fake player with your name",

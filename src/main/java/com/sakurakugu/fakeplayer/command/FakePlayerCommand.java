@@ -10,6 +10,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.sakurakugu.fakeplayer.FakePlayerMod;
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
+import com.sakurakugu.fakeplayer.entity.FakePlayerActions;
 import com.sakurakugu.fakeplayer.entity.FakePlayerActions.MoveDirection;
 import com.sakurakugu.fakeplayer.entity.FakePlayerActions.RepeatMode;
 import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
@@ -73,7 +74,10 @@ public final class FakePlayerCommand {
         target.then(Commands.literal("kill").executes(FakePlayerCommand::kill));
         target.then(Commands.literal("shadow").executes(FakePlayerCommand::shadow));
         target.then(Commands.literal("gui").executes(FakePlayerCommand::openPlayerGui));
-        target.then(Commands.literal("setting").executes(FakePlayerCommand::openPlayerGui));
+        target.then(Commands.literal("setting")
+            .executes(FakePlayerCommand::openPlayerGui)
+            .then(Commands.literal("default").executes(FakePlayerCommand::resetSettings))
+            .then(Commands.literal("reset").executes(FakePlayerCommand::resetSettings)));
         target.then(Commands.literal("bag").executes(FakePlayerCommand::openBag));
         target.then(Commands.literal("backpack").executes(FakePlayerCommand::openBag));
         target.then(Commands.literal("enderchest").executes(FakePlayerCommand::openEnderChest));
@@ -150,9 +154,11 @@ public final class FakePlayerCommand {
     private static LiteralArgumentBuilder<CommandSourceStack> dropCommand(String literal, boolean wholeStack) {
         LiteralArgumentBuilder<CommandSourceStack> command = Commands.literal(literal);
         addDropOptions(command, wholeStack, DropTarget.MAIN_HAND);
-        for (String hand : new String[] {"mainhand", "offhand", "all"}) {
-            DropTarget target = DropTarget.valueOf(hand.toUpperCase());
-            LiteralArgumentBuilder<CommandSourceStack> branch = Commands.literal(hand);
+        for (String targetName : new String[] {
+            "mainhand", "offhand", "head", "chest", "legs", "feet", "armor", "all"
+        }) {
+            DropTarget target = DropTarget.valueOf(targetName.toUpperCase());
+            LiteralArgumentBuilder<CommandSourceStack> branch = Commands.literal(targetName);
             addDropOptions(branch, wholeStack, target);
             command.then(branch);
         }
@@ -270,11 +276,19 @@ public final class FakePlayerCommand {
                 fake.actions().dropAll(wholeStack, mode, interval);
                 return;
             }
+            if (target == DropTarget.ARMOR) {
+                fake.actions().dropArmor(wholeStack, mode, interval);
+                return;
+            }
             int slot = switch (target) {
                 case MAINHAND -> fake.getInventory().getSelectedSlot();
                 case OFFHAND -> 40;
+                case HEAD -> 39;
+                case CHEST -> 38;
+                case LEGS -> 37;
+                case FEET -> 36;
                 case SLOT -> IntegerArgumentType.getInteger(context, "inventorySlot");
-                case ALL -> throw new IllegalStateException();
+                case ARMOR, ALL -> throw new IllegalStateException();
             };
             fake.actions().drop(slot, wholeStack, mode, interval);
         });
@@ -329,6 +343,18 @@ public final class FakePlayerCommand {
     private static int success(CommandContext<CommandSourceStack> context) {
         context.getSource().sendSuccess(
             () -> Component.translatable("commands.fakeplayer.action_done", name(context)), false);
+        return 1;
+    }
+
+    private static int resetSettings(CommandContext<CommandSourceStack> context) {
+        FakeServerPlayer fake = getFake(context);
+        if (fake == null) {
+            return 0;
+        }
+        fake.actions().restore(FakePlayerActions.State.EMPTY);
+        FakePlayerPersistence.track(fake);
+        context.getSource().sendSuccess(
+            () -> Component.translatable("commands.fakeplayer.settings_reset", name(context)), false);
         return 1;
     }
 
@@ -591,6 +617,11 @@ public final class FakePlayerCommand {
     private enum DropTarget {
         MAINHAND,
         OFFHAND,
+        HEAD,
+        CHEST,
+        LEGS,
+        FEET,
+        ARMOR,
         ALL,
         SLOT;
 

@@ -18,6 +18,7 @@
   "commands.fakeplayer.none": "无",
   "commands.fakeplayer.action": "已让假人 %s 执行 %s",
   "commands.fakeplayer.action_done": "已更新假人 %s 的动作",
+  "commands.fakeplayer.settings_reset": "已将假人 %s 的设置恢复为默认值",
   "commands.fakeplayer.no_mount": "附近没有可骑乘的实体",
   "commands.fakeplayer.shadowed": "已踢出玩家 %s 并在原位置生成同名假人",
   "commands.fakeplayer.shadow_kicked": "你已被同名假人替换",
