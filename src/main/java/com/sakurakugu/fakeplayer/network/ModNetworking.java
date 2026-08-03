@@ -1,8 +1,8 @@
 package com.sakurakugu.fakeplayer.network;
 
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
-import com.sakurakugu.fakeplayer.entity.FakePlayerPossession;
 import com.sakurakugu.fakeplayer.menu.FakePlayerMenuOpener;
+import com.sakurakugu.fakeplayer.entity.FakePlayerPossession;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
@@ -40,20 +40,11 @@ public final class ModNetworking {
             }
         );
         registrar.playToServer(
-            PossessionInputPayload.TYPE,
-            PossessionInputPayload.STREAM_CODEC,
+            StopPossessionPayload.TYPE,
+            StopPossessionPayload.STREAM_CODEC,
             (payload, context) -> {
                 if (context.player() instanceof ServerPlayer player) {
-                    FakePlayerPossession.acceptInput(player, payload);
-                }
-            }
-        );
-        registrar.playToServer(
-            OpenPossessedInventoryPayload.TYPE,
-            OpenPossessedInventoryPayload.STREAM_CODEC,
-            (payload, context) -> {
-                if (context.player() instanceof ServerPlayer player) {
-                    FakePlayerPossession.openInventory(player);
+                    FakePlayerPossession.stop(player);
                 }
             }
         );

@@ -6,6 +6,7 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
+import com.sakurakugu.fakeplayer.entity.FakePlayerPossession;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerPersistence;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerSavedData;
@@ -66,6 +67,9 @@ public final class BotCommand {
         FakeServerPlayer fake = FakePlayerManager.find(context.getSource().getServer(), playerName);
         if (fake == null) {
             return failure(context, "commands.fakeplayer.not_found", playerName);
+        }
+        if (FakePlayerPossession.isPossessed(fake)) {
+            return failure(context, "gui.fakeplayer.possess_locked");
         }
         FakePlayerSavedData data = data(context);
         data.putPreset(new Preset(id, description, PlayerSnapshot.from(fake, true)));

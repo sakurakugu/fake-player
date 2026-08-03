@@ -150,7 +150,9 @@ public final class FakePlayerManager {
         if (fake.hasDisconnected()) {
             return;
         }
-        FakePlayerPossession.stopTarget(fake);
+        if (!FakePlayerPossession.stopTarget(fake)) {
+            return;
+        }
         fake.actions().stop();
         if (removeResident) {
             FakePlayerPersistence.untrack(fake);
@@ -160,6 +162,9 @@ public final class FakePlayerManager {
     }
 
     public static void kill(FakeServerPlayer fake) {
+        if (!FakePlayerPossession.stopTarget(fake)) {
+            return;
+        }
         boolean keepInventory = fake.level().getGameRules().get(GameRules.KEEP_INVENTORY);
         if (!keepInventory && fake.gameMode.getGameModeForPlayer() == GameType.SURVIVAL) {
             // 生存模式遵循 keepInventory；其他模式直接保存背包，便于下次同名玩家恢复。

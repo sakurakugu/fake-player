@@ -310,6 +310,10 @@ public final class FakePlayerCommand {
         if (fake == null) {
             return 0;
         }
+        if (FakePlayerPossession.isPossessed(fake)) {
+            context.getSource().sendFailure(Component.translatable("gui.fakeplayer.possess_locked"));
+            return 0;
+        }
         AABB area = fake.getBoundingBox().inflate(3.0);
         var targets = fake.level().getEntities(fake, area, entity -> !entity.isPassenger())
             .stream()
@@ -330,6 +334,10 @@ public final class FakePlayerCommand {
     ) {
         FakeServerPlayer fake = getFake(context);
         if (fake == null) {
+            return 0;
+        }
+        if (FakePlayerPossession.isPossessed(fake)) {
+            context.getSource().sendFailure(Component.translatable("gui.fakeplayer.possess_locked"));
             return 0;
         }
         action.accept(fake);
@@ -355,6 +363,10 @@ public final class FakePlayerCommand {
     private static int resetSettings(CommandContext<CommandSourceStack> context) {
         FakeServerPlayer fake = getFake(context);
         if (fake == null) {
+            return 0;
+        }
+        if (FakePlayerPossession.isPossessed(fake)) {
+            context.getSource().sendFailure(Component.translatable("gui.fakeplayer.possess_locked"));
             return 0;
         }
         fake.actions().restore(FakePlayerActions.State.EMPTY);

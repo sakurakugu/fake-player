@@ -48,6 +48,9 @@ public final class FakePlayerMenuOpener {
     }
 
     public static void openControl(ServerPlayer viewer, FakeServerPlayer fake) {
+        if (!canManage(viewer, fake)) {
+            return;
+        }
         viewer.openMenu(
             new SimpleMenuProvider(
                 (containerId, inventory, player) -> new FakePlayerMenu(containerId, inventory, fake),
@@ -74,6 +77,9 @@ public final class FakePlayerMenuOpener {
     }
 
     private static void openStorage(ServerPlayer viewer, FakeServerPlayer fake, FakePlayerInventoryMenu.View view) {
+        if (!canManage(viewer, fake)) {
+            return;
+        }
         boolean possessedByViewer = FakePlayerPossession.isControlling(viewer, fake);
         boolean targetOccupied = FakePlayerPossession.isPossessed(fake);
         Component title = Component.translatable(
@@ -96,5 +102,13 @@ public final class FakePlayerMenuOpener {
                 data.writeBoolean(targetOccupied);
             }
         );
+    }
+
+    private static boolean canManage(ServerPlayer viewer, FakeServerPlayer fake) {
+        if (!FakePlayerPossession.isPossessed(fake)) {
+            return true;
+        }
+        viewer.sendSystemMessage(Component.translatable("gui.fakeplayer.possess_locked"));
+        return false;
     }
 }

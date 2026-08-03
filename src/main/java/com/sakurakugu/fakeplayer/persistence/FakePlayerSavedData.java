@@ -83,6 +83,16 @@ public final class FakePlayerSavedData extends SavedData {
             Codec.STRING.listOf().optionalFieldOf("presets", List.of()).forGetter(Group::presetIds)
         ).apply(instance, Group::new)
     );
+    public static final Codec<PossessionRecovery> POSSESSION_RECOVERY_CODEC = RecordCodecBuilder.create(instance ->
+        instance.group(
+            UUIDUtil.CODEC.fieldOf("operator_uuid").forGetter(PossessionRecovery::operatorUuid),
+            Codec.STRING.fieldOf("operator_name").forGetter(PossessionRecovery::operatorName),
+            UUIDUtil.CODEC.fieldOf("target_uuid").forGetter(PossessionRecovery::targetUuid),
+            Codec.STRING.fieldOf("target_name").forGetter(PossessionRecovery::targetName),
+            CompoundTag.CODEC.fieldOf("operator_data").forGetter(PossessionRecovery::operatorData),
+            CompoundTag.CODEC.fieldOf("target_data").forGetter(PossessionRecovery::targetData)
+        ).apply(instance, PossessionRecovery::new)
+    );
     public static final Codec<FakePlayerSavedData> CODEC = RecordCodecBuilder.create(instance ->
         instance.group(
             RESIDENT_CODEC.listOf().optionalFieldOf("residents", List.of())
@@ -90,7 +100,9 @@ public final class FakePlayerSavedData extends SavedData {
             PRESET_CODEC.listOf().optionalFieldOf("presets", List.of())
                 .forGetter(data -> List.copyOf(data.presets.values())),
             GROUP_CODEC.listOf().optionalFieldOf("groups", List.of())
-                .forGetter(data -> List.copyOf(data.groups.values()))
+                .forGetter(data -> List.copyOf(data.groups.values())),
+            POSSESSION_RECOVERY_CODEC.listOf().optionalFieldOf("possession_recoveries", List.of())
+                .forGetter(data -> List.copyOf(data.possessionRecoveries.values()))
         ).apply(instance, FakePlayerSavedData::new)
     );
     public static final SavedDataType<FakePlayerSavedData> TYPE = new SavedDataType<>(
@@ -103,14 +115,21 @@ public final class FakePlayerSavedData extends SavedData {
     private final Map<UUID, Resident> residents = new LinkedHashMap<>();
     private final Map<String, Preset> presets = new LinkedHashMap<>();
     private final Map<String, Group> groups = new LinkedHashMap<>();
+    private final Map<UUID, PossessionRecovery> possessionRecoveries = new LinkedHashMap<>();
 
     public FakePlayerSavedData() {
     }
 
-    private FakePlayerSavedData(List<Resident> residents, List<Preset> presets, List<Group> groups) {
+    private FakePlayerSavedData(
+        List<Resident> residents,
+        List<Preset> presets,
+        List<Group> groups,
+        List<PossessionRecovery> possessionRecoveries
+    ) {
         residents.forEach(value -> this.residents.put(value.uuid(), value));
         presets.forEach(value -> this.presets.put(key(value.id()), value));
         groups.forEach(value -> this.groups.put(key(value.id()), value));
+        possessionRecoveries.forEach(value -> this.possessionRecoveries.put(value.operatorUuid(), value));
     }
 
     public List<Resident> residents() {
@@ -199,6 +218,21 @@ public final class FakePlayerSavedData extends SavedData {
         return true;
     }
 
+    public Collection<PossessionRecovery> possessionRecoveries() {
+        return List.copyOf(possessionRecoveries.values());
+    }
+
+    public void putPossessionRecovery(PossessionRecovery recovery) {
+        possessionRecoveries.put(recovery.operatorUuid(), recovery);
+        setDirty();
+    }
+
+    public void removePossessionRecovery(UUID operatorUuid) {
+        if (possessionRecoveries.remove(operatorUuid) != null) {
+            setDirty();
+        }
+    }
+
     private static String key(String value) {
         return value.toLowerCase(java.util.Locale.ROOT);
     }
@@ -253,6 +287,21 @@ public final class FakePlayerSavedData extends SavedData {
     public record Group(String id, List<String> presetIds) {
         public Group {
             presetIds = List.copyOf(presetIds);
+        }
+    }
+
+    /** 崩溃恢复使用完整快照；它始终应用回原 UUID，不参与正常身体交换。 */
+    public record PossessionRecovery(
+        UUID operatorUuid,
+        String operatorName,
+        UUID targetUuid,
+        String targetName,
+        CompoundTag operatorData,
+        CompoundTag targetData
+    ) {
+        public PossessionRecovery {
+            operatorData = operatorData.copy();
+            targetData = targetData.copy();
         }
     }
 }

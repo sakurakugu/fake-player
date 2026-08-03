@@ -106,10 +106,12 @@ class FakePlayerSavedDataTest {
     void codecRoundTripsResidentsPresetsGroupsAndActions() {
         FakePlayerSavedData data = new FakePlayerSavedData();
         FakePlayerSavedData.Preset preset = preset("Miner");
+        FakePlayerSavedData.PossessionRecovery recovery = recovery();
         data.putResident(resident(preset.player().uuid(), preset.player().name()));
         data.putPreset(preset);
         data.createGroup("Workers");
         data.addToGroup("Workers", "Miner");
+        data.putPossessionRecovery(recovery);
 
         var json = FakePlayerSavedData.CODEC.encodeStart(JsonOps.INSTANCE, data).getOrThrow();
         FakePlayerSavedData decoded = FakePlayerSavedData.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
@@ -117,6 +119,27 @@ class FakePlayerSavedDataTest {
         assertEquals(data.residents(), decoded.residents());
         assertEquals(data.presets(), decoded.presets());
         assertEquals(data.groups(), decoded.groups());
+        assertEquals(List.of(recovery), decoded.possessionRecoveries());
+    }
+
+    @Test
+    void possessionRecoveriesCopyTagsAndAreRemovedByOperator() {
+        CompoundTag operatorData = playerData("operator");
+        CompoundTag targetData = playerData("target");
+        FakePlayerSavedData.PossessionRecovery recovery = new FakePlayerSavedData.PossessionRecovery(
+            UUID.randomUUID(), "Operator", UUID.randomUUID(), "Target", operatorData, targetData
+        );
+        FakePlayerSavedData data = new FakePlayerSavedData();
+
+        data.putPossessionRecovery(recovery);
+        operatorData.putString("marker", "changed");
+        targetData.putString("marker", "changed");
+
+        FakePlayerSavedData.PossessionRecovery stored = data.possessionRecoveries().iterator().next();
+        assertEquals("operator", stored.operatorData().getString("marker").orElseThrow());
+        assertEquals("target", stored.targetData().getString("marker").orElseThrow());
+        data.removePossessionRecovery(recovery.operatorUuid());
+        assertTrue(data.possessionRecoveries().isEmpty());
     }
 
     private static FakePlayerSavedData.Preset preset(String id) {
@@ -158,5 +181,16 @@ class FakePlayerSavedDataTest {
         data.putString("Dimension", "minecraft:overworld");
         data.putString("marker", marker);
         return data;
+    }
+
+    private static FakePlayerSavedData.PossessionRecovery recovery() {
+        return new FakePlayerSavedData.PossessionRecovery(
+            UUID.randomUUID(),
+            "Operator",
+            UUID.randomUUID(),
+            "Target",
+            playerData("operator"),
+            playerData("target")
+        );
     }
 }

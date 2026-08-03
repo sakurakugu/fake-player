@@ -57,10 +57,12 @@ public final class FakeServerPlayer extends ServerPlayer {
     @Override
     public void tick() {
         super.tick();
-        // 先处理补货和换工具，确保本刻动作使用的是更新后的手持物。
-        automation.tick();
-        // 先设置移动和按键输入，再让实体刻处理物理、载具和持续使用。
-        actions.tick();
+        if (!FakePlayerPossession.isPossessed(this)) {
+            // 附身期间该实体承载原地躯壳，必须暂停所有自动行为。
+            automation.tick();
+            // 先设置移动和按键输入，再让实体刻处理物理、载具和持续使用。
+            actions.tick();
+        }
         // ServerPlayer 通常由网络监听器驱动 doTick，假连接不会替我们调用它。
         doTick();
         FakePlayerPossession.tickTarget(this);
@@ -70,7 +72,7 @@ public final class FakeServerPlayer extends ServerPlayer {
             connection.resetPosition();
             level().getChunkSource().move(this);
         }
-        if (tickCount % 20 == 0) {
+        if (tickCount % 20 == 0 && !FakePlayerPossession.isPossessed(this)) {
             FakePlayerPersistence.track(this);
         }
     }

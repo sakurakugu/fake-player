@@ -8,6 +8,7 @@ import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerSavedData.PlayerSnapshot;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerSavedData.Preset;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerSavedData.Resident;
+import com.sakurakugu.fakeplayer.persistence.FakePlayerSavedData.PossessionRecovery;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -15,6 +16,7 @@ import java.util.Collections;
 import java.util.Optional;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
@@ -22,6 +24,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.NameAndId;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.entity.EntityType;
@@ -82,7 +85,7 @@ public final class FakePlayerPersistence {
     }
 
     /** 使用原版实体存档格式保存玩家状态，避免重复维护背包、位置和能力字段。 */
-    public static CompoundTag snapshot(FakeServerPlayer player) {
+    public static CompoundTag snapshot(ServerPlayer player) {
         try (ProblemReporter.ScopedCollector collector =
                  new ProblemReporter.ScopedCollector(player.problemPath(), FakePlayerMod.LOGGER)) {
             TagValueOutput output = TagValueOutput.createWithContext(collector, player.registryAccess());
@@ -97,12 +100,27 @@ public final class FakePlayerPersistence {
     }
 
     /** 在原版登录流程之前应用玩家主体数据，使首次同步和登录事件看到正确状态。 */
-    public static void applyPlayerData(FakeServerPlayer player, CompoundTag playerData) {
+    public static void applyPlayerData(ServerPlayer player, CompoundTag playerData) {
         try (ProblemReporter.ScopedCollector collector =
                  new ProblemReporter.ScopedCollector(player.problemPath(), FakePlayerMod.LOGGER)) {
             ValueInput input = TagValueInput.create(collector, player.registryAccess(), playerData);
             player.load(input);
         }
+    }
+
+    public static void beginPossessionRecovery(ServerPlayer operator, FakeServerPlayer target) {
+        data(operator.level().getServer()).putPossessionRecovery(new PossessionRecovery(
+            operator.getUUID(),
+            operator.getGameProfile().name(),
+            target.getUUID(),
+            target.getGameProfile().name(),
+            snapshot(operator),
+            snapshot(target)
+        ));
+    }
+
+    public static void completePossessionRecovery(MinecraftServer server, UUID operatorUuid) {
+        data(server).removePossessionRecovery(operatorUuid);
     }
 
     /** 玩家加入世界后恢复依赖世界实体列表的末影珍珠和载具。 */

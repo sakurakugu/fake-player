@@ -465,7 +465,7 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
         return !target.hasDisconnected()
             && player instanceof ServerPlayer viewer
             && FakePlayerConfig.canUseCommands(viewer.createCommandSourceStack())
-            && (view != View.POSSESSED_INVENTORY || FakePlayerPossession.isControlling(viewer, target));
+            && !FakePlayerPossession.isPossessed(target);
     }
 
     @Override

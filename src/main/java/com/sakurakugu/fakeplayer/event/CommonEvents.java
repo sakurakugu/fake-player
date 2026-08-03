@@ -12,17 +12,21 @@ import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
 import com.sakurakugu.fakeplayer.menu.FakePlayerMenuOpener;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerPersistence;
 import java.util.concurrent.CompletableFuture;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.neoforged.neoforge.event.entity.EntityTravelToDimensionEvent;
+import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerNegotiationEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.neoforge.event.server.ServerStoppingEvent;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 /** 处理服务端通用事件，包括命令注册和假玩家交互。 */
 @EventBusSubscriber(modid = FakePlayerMod.MOD_ID)
@@ -40,7 +44,14 @@ public final class CommonEvents {
     @SubscribeEvent
     public static void serverStarted(ServerStartedEvent event) {
         FakePlayerPersistence.restore(event.getServer());
+        FakePlayerPossession.recoverSavedSessions(event.getServer());
         ChunkLoaderManager.reconcile(event.getServer());
+    }
+
+    @SubscribeEvent
+    public static void serverStopping(ServerStoppingEvent event) {
+        // 正常关服前完成恢复，让随后保存的 playerdata 和驻留假人状态保持一致。
+        FakePlayerPossession.stopAll();
     }
 
     @SubscribeEvent
@@ -76,6 +87,12 @@ public final class CommonEvents {
         if (!FakePlayerConfig.canUseCommands(viewer.createCommandSourceStack())) {
             return;
         }
+        if (FakePlayerPossession.isPossessed(fake)) {
+            viewer.sendSystemMessage(Component.translatable("gui.fakeplayer.possess_locked"));
+            event.setCancellationResult(InteractionResult.FAIL);
+            event.setCanceled(true);
+            return;
+        }
 
         FakePlayerMenuOpener.openControl(viewer, fake);
         // 阻止原版继续处理右键实体，避免同时触发物品交互。
@@ -87,6 +104,36 @@ public final class CommonEvents {
     public static void playerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer player && !(player instanceof FakeServerPlayer)) {
             FakePlayerPossession.stop(player);
+        }
+    }
+
+    @SubscribeEvent
+    public static void playerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            FakePlayerPossession.recoverPlayer(player);
+            FakePlayerPossession.syncTo(player);
+        }
+    }
+
+    @SubscribeEvent
+    public static void preventDimensionTravel(EntityTravelToDimensionEvent event) {
+        if (event.getEntity() instanceof FakeServerPlayer fake && FakePlayerPossession.isPossessed(fake)) {
+            event.setCanceled(true);
+        } else if (event.getEntity() instanceof ServerPlayer player
+            && FakePlayerPossession.isPossessing(player)) {
+            player.sendSystemMessage(Component.translatable("gui.fakeplayer.possess_no_dimension"));
+            event.setCanceled(true);
+        }
+    }
+
+    @SubscribeEvent
+    public static void possessionDeath(LivingDeathEvent event) {
+        if (event.getEntity() instanceof FakeServerPlayer fake
+            && FakePlayerPossession.handleShellDeath(fake, event.getSource())) {
+            event.setCanceled(true);
+        } else if (event.getEntity() instanceof ServerPlayer player
+            && FakePlayerPossession.handleActiveBodyDeath(player, event.getSource())) {
+            event.setCanceled(true);
         }
     }
 }

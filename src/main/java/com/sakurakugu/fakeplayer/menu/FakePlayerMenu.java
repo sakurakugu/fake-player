@@ -2,6 +2,7 @@ package com.sakurakugu.fakeplayer.menu;
 
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
+import com.sakurakugu.fakeplayer.entity.FakePlayerPossession;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -49,7 +50,8 @@ public final class FakePlayerMenu extends AbstractContainerMenu {
     public boolean clickMenuButton(Player player, int actionId) {
         // 客户端没有目标引用，实际动作只能由服务端菜单执行。
         if (target == null || !(player instanceof ServerPlayer viewer)
-            || !FakePlayerConfig.canUseCommands(viewer.createCommandSourceStack())) {
+            || !FakePlayerConfig.canUseCommands(viewer.createCommandSourceStack())
+            || FakePlayerPossession.isPossessed(target)) {
             return false;
         }
         switch (actionId) {
@@ -81,7 +83,7 @@ public final class FakePlayerMenu extends AbstractContainerMenu {
     @Override
     public boolean stillValid(Player player) {
         // 客户端无法校验目标；服务端仅在目标离线时关闭菜单，以支持远程控制。
-        return target == null || !target.hasDisconnected();
+        return target == null || !target.hasDisconnected() && !FakePlayerPossession.isPossessed(target);
     }
 
     public int targetId() {
