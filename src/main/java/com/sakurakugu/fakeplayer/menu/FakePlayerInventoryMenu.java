@@ -22,6 +22,9 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.EnchantmentEffectComponents;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /** 编辑假人的完整物品栏或末影箱，并同时显示操作者背包。 */
 public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     private static final int INVENTORY_TARGET_SLOTS = 41;
@@ -37,6 +40,14 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     private static final int ACTION_DROP_PERCENTAGE_CONTINUOUS_BASE =
         ACTION_DROP_PERCENTAGE_BASE + MAX_DROP_PERCENTAGE;
     private static final int ACTION_DROP_END = ACTION_DROP_PERCENTAGE_CONTINUOUS_BASE + MAX_DROP_PERCENTAGE;
+    public static final int ACTION_TRANSFER_TO_TARGET_MATCHING = ACTION_DROP_END;
+    public static final int ACTION_TRANSFER_TO_TARGET_ALL = ACTION_TRANSFER_TO_TARGET_MATCHING + 1;
+    public static final int ACTION_TRANSFER_TO_VIEWER_MATCHING = ACTION_TRANSFER_TO_TARGET_ALL + 1;
+    public static final int ACTION_TRANSFER_TO_VIEWER_ALL = ACTION_TRANSFER_TO_VIEWER_MATCHING + 1;
+    public static final int ACTION_TRANSFER_TO_TARGET_MATCHING_WITH_HOTBAR = ACTION_TRANSFER_TO_VIEWER_ALL + 1;
+    public static final int ACTION_TRANSFER_TO_TARGET_ALL_WITH_HOTBAR = ACTION_TRANSFER_TO_TARGET_MATCHING_WITH_HOTBAR + 1;
+    public static final int ACTION_TRANSFER_TO_VIEWER_MATCHING_WITH_HOTBAR = ACTION_TRANSFER_TO_TARGET_ALL_WITH_HOTBAR + 1;
+    public static final int ACTION_TRANSFER_TO_VIEWER_ALL_WITH_HOTBAR = ACTION_TRANSFER_TO_VIEWER_MATCHING_WITH_HOTBAR + 1;
     private static final EquipmentSlot[] ARMOR_SLOTS = {
         EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET
     };
@@ -178,11 +189,68 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
                 player.closeContainer();
                 FakePlayerManager.remove(target);
             }
+            case ACTION_TRANSFER_TO_TARGET_MATCHING -> transferItems(player, true, true, false);
+            case ACTION_TRANSFER_TO_TARGET_ALL -> transferItems(player, true, false, false);
+            case ACTION_TRANSFER_TO_VIEWER_MATCHING -> transferItems(player, false, true, false);
+            case ACTION_TRANSFER_TO_VIEWER_ALL -> transferItems(player, false, false, false);
+            case ACTION_TRANSFER_TO_TARGET_MATCHING_WITH_HOTBAR -> transferItems(player, true, true, true);
+            case ACTION_TRANSFER_TO_TARGET_ALL_WITH_HOTBAR -> transferItems(player, true, false, true);
+            case ACTION_TRANSFER_TO_VIEWER_MATCHING_WITH_HOTBAR -> transferItems(player, false, true, true);
+            case ACTION_TRANSFER_TO_VIEWER_ALL_WITH_HOTBAR -> transferItems(player, false, false, true);
             default -> {
                 return false;
             }
         }
         return true;
+    }
+
+    /** 默认只处理双方的 27 格主背包；按住 Ctrl 才包含快捷栏，装备槽始终保持原样。 */
+    private void transferItems(Player player, boolean toTarget, boolean filterByContents, boolean includeHotbar) {
+        int viewerStart = targetSlotCount;
+        int sourceStart = toTarget ? viewerStart : 0;
+        int sourceEnd = sourceStart + (includeHotbar ? 36 : 27);
+        int destinationStart = toTarget ? 0 : viewerStart;
+        int destinationEnd = destinationStart + (includeHotbar ? 36 : 27);
+        List<ItemStack> destinationContents = filterByContents
+            ? snapshotContents(destinationStart, destinationEnd)
+            : List.of();
+
+        for (int slotIndex = sourceStart; slotIndex < sourceEnd; slotIndex++) {
+            Slot source = slots.get(slotIndex);
+            if (!source.hasItem()) {
+                continue;
+            }
+            ItemStack sourceStack = source.getItem();
+            if (filterByContents && destinationContents.stream()
+                .noneMatch(existing -> ItemStack.isSameItemSameComponents(existing, sourceStack))) {
+                continue;
+            }
+
+            ItemStack original = sourceStack.copy();
+            if (!moveItemStackTo(sourceStack, destinationStart, destinationEnd, false)
+                || sourceStack.getCount() == original.getCount()) {
+                continue;
+            }
+            if (sourceStack.isEmpty()) {
+                source.setByPlayer(ItemStack.EMPTY, original);
+            } else {
+                source.setChanged();
+            }
+            source.onTake(player, sourceStack);
+        }
+        broadcastChanges();
+    }
+
+    private List<ItemStack> snapshotContents(int start, int end) {
+        List<ItemStack> contents = new ArrayList<>();
+        for (int slotIndex = start; slotIndex < end; slotIndex++) {
+            ItemStack stack = slots.get(slotIndex).getItem();
+            if (!stack.isEmpty() && contents.stream()
+                .noneMatch(existing -> ItemStack.isSameItemSameComponents(existing, stack))) {
+                contents.add(stack.copyWithCount(1));
+            }
+        }
+        return contents;
     }
 
     /** 将丢弃数值、计量模式和连续模式编码为原版菜单按钮协议可传输的动作编号。 */
@@ -215,7 +283,7 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             if (!moveItemStackTo(sourceStack, viewerStart, slots.size(), true)) {
                 return ItemStack.EMPTY;
             }
-        } else if (!moveToTarget(sourceStack)) {
+        } else if (!moveToTarget(sourceStack, player)) {
             return ItemStack.EMPTY;
         }
 
@@ -231,12 +299,13 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
         return original;
     }
 
-    private boolean moveToTarget(ItemStack stack) {
+    private boolean moveToTarget(ItemStack stack, Player player) {
         if (view == View.ENDER_CHEST) {
             return moveItemStackTo(stack, 0, targetSlotCount, false);
         }
 
-        EquipmentSlot equipmentSlot = target.getEquipmentSlotForItem(stack);
+        // 客户端菜单没有假人实体，使用同为玩家的操作者完成装备槽判定、以及类似箱子的手势操作判定。
+        EquipmentSlot equipmentSlot = player.getEquipmentSlotForItem(stack);
         int equipmentIndex = switch (equipmentSlot) {
             case HEAD -> 36;
             case CHEST -> 37;

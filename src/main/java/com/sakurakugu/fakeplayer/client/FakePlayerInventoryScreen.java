@@ -52,6 +52,9 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private static final int DROP_PANEL_HEIGHT = 109;
     private static final int DROP_TAB_WIDTH = 21;
     private static final int DROP_TAB_HEIGHT = 24;
+    private static final int TRANSFER_BUTTON_LEFT = 144;
+    private static final int TRANSFER_BUTTON_TOP = 165;
+    private static final int TRANSFER_BUTTON_SIZE = 12;
 
     private boolean dropPanelOpen;
     private boolean continuousDrop;
@@ -91,6 +94,16 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
                 button -> sendAction(FakePlayerInventoryMenu.ACTION_ENDER_CHEST)
             )
         );
+        addRenderableWidget(new TransferButton(
+            leftPos + TRANSFER_BUTTON_LEFT,
+            topPos + TRANSFER_BUTTON_TOP,
+            true
+        ));
+        addRenderableWidget(new TransferButton(
+            leftPos + TRANSFER_BUTTON_LEFT + TRANSFER_BUTTON_SIZE,
+            topPos + TRANSFER_BUTTON_TOP,
+            false
+        ));
 
         int panelLeft = leftPos + imageWidth;
         int panelTop = topPos + DROP_PANEL_TOP;
@@ -130,6 +143,110 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         setDropPanelOpen(dropPanelOpen);
     }
 
+    /** 复刻参考界面的 12 像素转移按钮，按下 Shift 时由虚线箭头切换为完整箭头。（隐藏箭杆中间的一行像素） */
+    private final class TransferButton extends Button {
+        private final boolean toTarget;
+        private boolean showingAll;
+        private boolean showingHotbar;
+
+        private TransferButton(int x, int y, boolean toTarget) {
+            super(x, y, TRANSFER_BUTTON_SIZE, TRANSFER_BUTTON_SIZE, Component.empty(), button -> {
+                boolean transferAll = minecraft.hasShiftDown();
+                boolean includeHotbar = minecraft.hasControlDown();
+                sendAction(transferActionId(toTarget, transferAll, includeHotbar));
+            }, DEFAULT_NARRATION);
+            this.toTarget = toTarget;
+            updateTooltip(false, false);
+        }
+
+        @Override
+        protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+            boolean transferAll = minecraft.hasShiftDown();
+            boolean includeHotbar = minecraft.hasControlDown();
+            if (showingAll != transferAll || showingHotbar != includeHotbar) {
+                updateTooltip(transferAll, includeHotbar);
+            }
+            drawSmallButtonBackground(graphics, isMouseOver(mouseX, mouseY));
+            drawTransferArrow(graphics, transferAll);
+        }
+
+        private void updateTooltip(boolean transferAll, boolean includeHotbar) {
+            showingAll = transferAll;
+            showingHotbar = includeHotbar;
+            String direction = toTarget ? "to_container" : "to_inventory";
+            Component message = Component.translatable("gui.fakeplayer.transfer_" + direction
+                + (transferAll ? "_all" : "_matching"));
+            if (includeHotbar) {
+                message = message.copy().append(Component.translatable("gui.fakeplayer.transfer_hotbar_suffix"));
+            }
+            setMessage(message);
+            Component tooltip = getMessage().copy();
+            if (!includeHotbar) {
+                tooltip = tooltip.copy().append(Component.literal("\n"))
+                    .append(Component.translatable("gui.fakeplayer.transfer_hotbar_hint")
+                        .withColor(0x555555));
+            }
+            if (!transferAll) {
+                tooltip = tooltip.copy().append(Component.literal("\n"))
+                    .append(Component.translatable("gui.fakeplayer.transfer_all_hint")
+                        .withColor(0x555555));
+            }
+            setTooltip(Tooltip.create(tooltip));
+        }
+
+        private void drawSmallButtonBackground(GuiGraphicsExtractor graphics, boolean hovered) {
+            int x = getX();
+            int y = getY();
+            int right = x + getWidth();
+            int bottom = y + getHeight();
+            if (hovered) {
+                graphics.fill(x, y, right, bottom, 0xFFFFFFFF);
+            }
+            graphics.fill(x + 1, y + 1, right - 1, bottom - 1, 0xFFAAAAAA);
+            graphics.fill(x + 2, y + 2, right - 1, bottom - 1, 0xFF8B8B8B);
+            graphics.fill(x + 1, bottom - 2, right - 1, bottom - 1, 0xFF555555);
+            graphics.fill(right - 2, y + 1, right - 1, bottom - 1, 0xFF555555);
+        }
+
+        private void drawTransferArrow(GuiGraphicsExtractor graphics, boolean transferAll) {
+            int centerX = getX() + 6;
+            int top = getY() + (toTarget ? 1 : 3);
+            int color = toTarget ? 0xFF78A849 : 0xFFC53212;
+            int shadow = toTarget ? 0xFF59843C : 0xFF8D0B05;
+            if (toTarget) {
+                drawUpArrow(graphics, centerX, top, color, shadow, transferAll);
+            } else {
+                drawDownArrow(graphics, centerX - 1, top - 2, color, shadow, transferAll);
+            }
+        }
+
+        private void drawUpArrow(
+            GuiGraphicsExtractor graphics, int x, int y, int color, int shadow, boolean showGap
+        ) {
+            graphics.fill(x - 1, y + 4, x, y + 9, color);
+            graphics.fill(x - 1, y + 1, x + 1, y + 2, color);
+            graphics.fill(x - 2, y + 2, x + 2, y + 3, color);
+            graphics.fill(x - 3, y + 3, x + 3, y + 4, color);
+            graphics.fill(x, y + 4, x + 1, y + 9, shadow);
+            if (showGap) {
+                graphics.fill(x - 1, y + 6, x + 1, y + 7, 0xFF8B8B8B);
+            }
+        }
+
+        private void drawDownArrow(
+            GuiGraphicsExtractor graphics, int x, int y, int color, int shadow, boolean showGap
+        ) {
+            graphics.fill(x, y + 1, x + 1, y + 6, color);
+            graphics.fill(x - 2, y + 6, x + 4, y + 7, color);
+            graphics.fill(x - 1, y + 7, x + 3, y + 8, color);
+            graphics.fill(x, y + 8, x + 2, y + 9, color);
+            graphics.fill(x + 1, y + 1, x + 2, y + 6, shadow);
+            if (showGap) {
+                graphics.fill(x, y + 3, x + 2, y + 4, 0xFF8B8B8B);
+            }
+        }
+    }
+
     private Component dropModeMessage() {
         return Component.literal(percentageDrop ? "%" : "#");
     }
@@ -163,6 +280,25 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         if (minecraft.gameMode != null) {
             minecraft.gameMode.handleInventoryButtonClick(menu.containerId, actionId);
         }
+    }
+
+    private static int transferActionId(boolean toTarget, boolean transferAll, boolean includeHotbar) {
+        if (toTarget) {
+            return includeHotbar
+                ? transferAll
+                    ? FakePlayerInventoryMenu.ACTION_TRANSFER_TO_TARGET_ALL_WITH_HOTBAR
+                    : FakePlayerInventoryMenu.ACTION_TRANSFER_TO_TARGET_MATCHING_WITH_HOTBAR
+                : transferAll
+                    ? FakePlayerInventoryMenu.ACTION_TRANSFER_TO_TARGET_ALL
+                    : FakePlayerInventoryMenu.ACTION_TRANSFER_TO_TARGET_MATCHING;
+        }
+        return includeHotbar
+            ? transferAll
+                ? FakePlayerInventoryMenu.ACTION_TRANSFER_TO_VIEWER_ALL_WITH_HOTBAR
+                : FakePlayerInventoryMenu.ACTION_TRANSFER_TO_VIEWER_MATCHING_WITH_HOTBAR
+            : transferAll
+                ? FakePlayerInventoryMenu.ACTION_TRANSFER_TO_VIEWER_ALL
+                : FakePlayerInventoryMenu.ACTION_TRANSFER_TO_VIEWER_MATCHING;
     }
 
     /** 用原版物品渲染图标按钮，文字仅作为悬浮提示和无障碍说明。 */
