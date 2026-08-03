@@ -35,18 +35,18 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     // 与快捷栏 18 像素格距一致，选择框覆盖整个格子。
     private static final int HOTBAR_SELECTOR_WIDTH = 18;
     private static final int VIEWER_SECTION_TOP = 164;
-    // 仅用于覆盖原版 2x2 合成区。
+    // 普通管理页面不开放假人的 2x2 合成区。
     private static final int CRAFTING_AREA_LEFT = 97;
     private static final int CRAFTING_AREA_TOP = 17;
     private static final int CRAFTING_AREA_WIDTH = 74;
     private static final int CRAFTING_AREA_HEIGHT = 36;
 
-    // 这两个按钮刚好在副手所在的上方，然后和副手位置之间空一格
+    // 三个按钮纵向排列，附身按钮正好位于末影箱下方和副手槽上方。
     private static final int ACTION_BUTTON_LEFT = 76;
     private static final int ACTION_BUTTON_TOP = 7;
     private static final int ACTION_BUTTON_WIDTH = 18;
     private static final int ACTION_BUTTON_HEIGHT = 18;
-    private static final int ACTION_BUTTON_GAP = 0; // 两个按钮之间的间距
+    private static final int ACTION_BUTTON_GAP = 0;
     private static final int DROP_PANEL_TOP = 8;
     private static final int DROP_PANEL_WIDTH = 94;
     private static final int DROP_PANEL_HEIGHT = 109;
@@ -73,7 +73,19 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     @Override
     protected void init() {
         super.init();
-        if (menu.view() != FakePlayerInventoryMenu.View.INVENTORY) {
+        if (menu.view() == FakePlayerInventoryMenu.View.ENDER_CHEST) {
+            return;
+        }
+        if (menu.view() == FakePlayerInventoryMenu.View.POSSESSED_INVENTORY) {
+            addRenderableWidget(
+                new IconButton(
+                    leftPos + ACTION_BUTTON_LEFT,
+                    topPos + ACTION_BUTTON_TOP + (ACTION_BUTTON_HEIGHT + ACTION_BUTTON_GAP) * 2,
+                    new ItemStack(Items.ENDER_EYE),
+                    Component.translatable("gui.fakeplayer.stop_possessing"),
+                    button -> sendAction(FakePlayerInventoryMenu.ACTION_POSSESS)
+                )
+            );
             return;
         }
         addRenderableWidget(
@@ -85,6 +97,21 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
                 button -> sendAction(FakePlayerInventoryMenu.ACTION_REMOVE)
             )
         );
+        IconButton possessButton = addRenderableWidget(
+            new IconButton(
+                leftPos + ACTION_BUTTON_LEFT,
+                topPos + ACTION_BUTTON_TOP + (ACTION_BUTTON_HEIGHT + ACTION_BUTTON_GAP) * 2,
+                new ItemStack(Items.ENDER_EYE),
+                menu.targetOccupied() && !menu.possessedByViewer() ? new ItemStack(Items.BARRIER) : null,
+                Component.translatable(menu.possessedByViewer()
+                    ? "gui.fakeplayer.stop_possessing"
+                    : menu.targetOccupied() ? "gui.fakeplayer.possess_disabled" : "gui.fakeplayer.possess"),
+                button -> sendAction(FakePlayerInventoryMenu.ACTION_POSSESS)
+            )
+        );
+        if (menu.targetOccupied() && !menu.possessedByViewer()) {
+            possessButton.active = false;
+        }
         addRenderableWidget(
             new IconButton(
                 leftPos + ACTION_BUTTON_LEFT,
@@ -304,10 +331,18 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     /** 用原版物品渲染图标按钮，文字仅作为悬浮提示和无障碍说明。 */
     private static final class IconButton extends Button {
         private final ItemStack icon;
+        private final ItemStack overlay;
 
         private IconButton(int x, int y, ItemStack icon, Component tooltip, OnPress onPress) {
+            this(x, y, icon, null, tooltip, onPress);
+        }
+
+        private IconButton(
+            int x, int y, ItemStack icon, ItemStack overlay, Component tooltip, OnPress onPress
+        ) {
             super(x, y, ACTION_BUTTON_WIDTH, ACTION_BUTTON_HEIGHT, tooltip, onPress, DEFAULT_NARRATION);
             this.icon = icon;
+            this.overlay = overlay;
             setTooltip(Tooltip.create(tooltip));
         }
 
@@ -329,6 +364,9 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             graphics.fill(x, bottom - 1, x + 1, bottom, 0xFF8B8B8B);
             graphics.fill(right - 1, y, right, y + 1, 0xFF8B8B8B);
             graphics.item(icon, getX() + 1, getY() + 1);
+            if (overlay != null) {
+                graphics.item(overlay, getX() + 2, getY() + 2);
+            }
         }
     }
 
@@ -541,6 +579,23 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             return;
         }
 
+        if (menu.view() == FakePlayerInventoryMenu.View.POSSESSED_INVENTORY) {
+            graphics.blit(
+                RenderPipelines.GUI_TEXTURED,
+                INVENTORY_BACKGROUND,
+                leftPos,
+                topPos,
+                0.0F,
+                0.0F,
+                imageWidth,
+                imageHeight,
+                256,
+                256
+            );
+            drawTargetEntity(graphics, mouseX, mouseY);
+            return;
+        }
+
         graphics.blit(
             RenderPipelines.GUI_TEXTURED,
             INVENTORY_BACKGROUND,
@@ -553,14 +608,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             256,
             256
         );
-        // 仅清除原版 2x2 合成区域。
-        graphics.fill(
-            leftPos + CRAFTING_AREA_LEFT,
-            topPos + CRAFTING_AREA_TOP,
-            leftPos + CRAFTING_AREA_LEFT + CRAFTING_AREA_WIDTH,
-            topPos + CRAFTING_AREA_TOP + CRAFTING_AREA_HEIGHT,
-            0xFFC6C6C6
-        );
+        clearCraftingArea(graphics);
         // 裁掉假人背包底部边框，再像原版箱子一样拼接操作者背包区域。
         graphics.blit(
             RenderPipelines.GUI_TEXTURED,
@@ -604,24 +652,39 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             graphics.fill(right - 1, y, right, y + 1, 0xFF8B8B8B);
         }
 
-        if (minecraft.level != null) {
-            Entity entity = minecraft.level.getEntity(menu.targetEntityId());
-            if (entity instanceof LivingEntity livingEntity) {
-                InventoryScreen.extractEntityInInventoryFollowsMouse(
-                    graphics,
-                    leftPos + 26,
-                    topPos + 8,
-                    leftPos + 75,
-                    topPos + 78,
-                    30,
-                    0.0625F,
-                    mouseX,
-                    mouseY,
-                    livingEntity
-                );
-            }
-        }
+        drawTargetEntity(graphics, mouseX, mouseY);
         drawSelectorAreaSideBorders(graphics);
+    }
+
+    private void clearCraftingArea(GuiGraphicsExtractor graphics) {
+        graphics.fill(
+            leftPos + CRAFTING_AREA_LEFT,
+            topPos + CRAFTING_AREA_TOP,
+            leftPos + CRAFTING_AREA_LEFT + CRAFTING_AREA_WIDTH,
+            topPos + CRAFTING_AREA_TOP + CRAFTING_AREA_HEIGHT,
+            0xFFC6C6C6
+        );
+    }
+
+    private void drawTargetEntity(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+        if (minecraft.level == null) {
+            return;
+        }
+        Entity entity = minecraft.level.getEntity(menu.targetEntityId());
+        if (entity instanceof LivingEntity livingEntity) {
+            InventoryScreen.extractEntityInInventoryFollowsMouse(
+                graphics,
+                leftPos + 26,
+                topPos + 8,
+                leftPos + 75,
+                topPos + 78,
+                30,
+                0.0625F,
+                mouseX,
+                mouseY,
+                livingEntity
+            );
+        }
     }
 
     private void drawDropPanel(GuiGraphicsExtractor graphics) {
@@ -687,6 +750,9 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         if (menu.view() == FakePlayerInventoryMenu.View.ENDER_CHEST) {
             super.extractLabels(graphics, mouseX, mouseY);
+            return;
+        }
+        if (menu.view() == FakePlayerInventoryMenu.View.POSSESSED_INVENTORY) {
             return;
         }
 

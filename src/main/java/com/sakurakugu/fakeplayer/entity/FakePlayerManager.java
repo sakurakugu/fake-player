@@ -150,6 +150,7 @@ public final class FakePlayerManager {
         if (fake.hasDisconnected()) {
             return;
         }
+        FakePlayerPossession.stopTarget(fake);
         fake.actions().stop();
         if (removeResident) {
             FakePlayerPersistence.untrack(fake);

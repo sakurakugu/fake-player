@@ -14,6 +14,7 @@ import com.sakurakugu.fakeplayer.entity.FakePlayerActions;
 import com.sakurakugu.fakeplayer.entity.FakePlayerActions.MoveDirection;
 import com.sakurakugu.fakeplayer.entity.FakePlayerActions.RepeatMode;
 import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
+import com.sakurakugu.fakeplayer.entity.FakePlayerPossession;
 import com.sakurakugu.fakeplayer.entity.ProfileResolver;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
 import com.sakurakugu.fakeplayer.menu.FakePlayerMenuOpener;
@@ -56,6 +57,9 @@ public final class FakePlayerCommand {
                         .executes(context -> spawn(context, name(context)))))
                 .then(Commands.literal("kill")
                     .then(fakeNameArgument().executes(FakePlayerCommand::kill)))
+                .then(Commands.literal("possess")
+                    .then(fakeNameArgument().executes(FakePlayerCommand::possess)))
+                .then(Commands.literal("unpossess").executes(FakePlayerCommand::unpossess))
                 .then(Commands.literal("list").executes(FakePlayerCommand::list))
                 .then(guiCommand("gui"))
                 .then(guiCommand("setting"))
@@ -81,6 +85,8 @@ public final class FakePlayerCommand {
         target.then(Commands.literal("bag").executes(FakePlayerCommand::openBag));
         target.then(Commands.literal("backpack").executes(FakePlayerCommand::openBag));
         target.then(Commands.literal("enderchest").executes(FakePlayerCommand::openEnderChest));
+        target.then(Commands.literal("possess").executes(FakePlayerCommand::possess));
+        target.then(Commands.literal("unpossess").executes(FakePlayerCommand::unpossessTarget));
         target.then(dropCommand("drop", false));
         target.then(dropCommand("dropStack", true));
         target.then(Commands.literal("hotbar")
@@ -600,6 +606,54 @@ public final class FakePlayerCommand {
         }
         FakePlayerMenuOpener.openEnderChest(viewer, fake);
         return 1;
+    }
+
+    private static int possess(CommandContext<CommandSourceStack> context) {
+        ServerPlayer viewer = context.getSource().getPlayer();
+        FakeServerPlayer fake = getFake(context);
+        if (viewer == null || fake == null) {
+            if (viewer == null) {
+                context.getSource().sendFailure(Component.translatable("commands.fakeplayer.player_only"));
+            }
+            return 0;
+        }
+        if (!FakePlayerPossession.start(viewer, fake)) {
+            return 0;
+        }
+        context.getSource().sendSuccess(
+            () -> Component.translatable("commands.fakeplayer.possessed", fake.getGameProfile().name()), false);
+        return 1;
+    }
+
+    private static int unpossess(CommandContext<CommandSourceStack> context) {
+        ServerPlayer viewer = context.getSource().getPlayer();
+        if (viewer == null) {
+            context.getSource().sendFailure(Component.translatable("commands.fakeplayer.player_only"));
+            return 0;
+        }
+        if (!FakePlayerPossession.stop(viewer)) {
+            context.getSource().sendFailure(Component.translatable("commands.fakeplayer.not_possessing"));
+            return 0;
+        }
+        context.getSource().sendSuccess(() -> Component.translatable("commands.fakeplayer.unpossessed"), false);
+        return 1;
+    }
+
+    private static int unpossessTarget(CommandContext<CommandSourceStack> context) {
+        ServerPlayer viewer = context.getSource().getPlayer();
+        FakeServerPlayer fake = getFake(context);
+        if (viewer == null || fake == null) {
+            if (viewer == null) {
+                context.getSource().sendFailure(Component.translatable("commands.fakeplayer.player_only"));
+            }
+            return 0;
+        }
+        if (!FakePlayerPossession.isControlling(viewer, fake)) {
+            context.getSource().sendFailure(Component.translatable("commands.fakeplayer.not_possessing_target",
+                fake.getGameProfile().name()));
+            return 0;
+        }
+        return unpossess(context);
     }
 
     private static String nextName(CommandContext<CommandSourceStack> context) {

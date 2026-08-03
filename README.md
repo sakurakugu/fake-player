@@ -33,6 +33,8 @@ Fake Player 提供可通过命令和图形界面控制的服务端假玩家，�
 | `/fakeplayer <名称>`         | 在执行位置生成指定名称的假玩家。                                          |
 | `/fakeplayer spawn <名称>`   | 与上一条命令相同。                                                        |
 | `/fakeplayer kill <名称>`    | 移除假玩家。生存模式且 `keepInventory=false` 时会掉落物品，否则保留背包。 |
+| `/fakeplayer possess <名称>` | 附身指定假玩家。                                                        |
+| `/fakeplayer unpossess`      | 退出当前附身。                                                          |
 | `/fakeplayer list`           | 列出当前所有假玩家。                                                      |
 | `/fakeplayer gui [名称]`     | 打开全局设置界面，指定名称时打开该假玩家的控制界面。                      |
 | `/fakeplayer setting [名称]` | `gui` 的别名。                                                            |
@@ -158,8 +160,10 @@ NeoForge 会在世界目录的 `serverconfig/fakeplayer-server.toml` 中生成�
 | `setting default` / <br />`setting reset` | 将动作和输入设置恢复为默认值，不修改背包等数据。   |
 | `bag` / `backpack`                        | 打开完整物品栏：36 格主背包、4 格盔甲和 1 格副手。 |
 | `enderchest`                              | 打开假玩家的末影箱。                               |
+| `possess`                                 | 附身该假玩家。                                     |
+| `unpossess`                               | 当正在附身该假玩家时退出附身。                     |
 
-物品栏和末影箱均支持与操作者背包双向 Shift 快捷移动；完整物品栏不包含玩家的 2×2 合成格。
+物品栏和末影箱均支持与操作者背包双向 Shift 快捷移动；附身物品栏可使用假人的 2×2 合成格，普通管理物品栏不开放合成。
 
 #### 物品操作
 

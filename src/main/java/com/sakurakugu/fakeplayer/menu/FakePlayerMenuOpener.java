@@ -2,6 +2,7 @@ package com.sakurakugu.fakeplayer.menu;
 
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
+import com.sakurakugu.fakeplayer.entity.FakePlayerPossession;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
 import java.util.List;
 import net.minecraft.network.chat.Component;
@@ -64,26 +65,35 @@ public final class FakePlayerMenuOpener {
         openStorage(viewer, fake, FakePlayerInventoryMenu.View.INVENTORY);
     }
 
+    public static void openPossessedInventory(ServerPlayer viewer, FakeServerPlayer fake) {
+        openStorage(viewer, fake, FakePlayerInventoryMenu.View.POSSESSED_INVENTORY);
+    }
+
     public static void openEnderChest(ServerPlayer viewer, FakeServerPlayer fake) {
         openStorage(viewer, fake, FakePlayerInventoryMenu.View.ENDER_CHEST);
     }
 
     private static void openStorage(ServerPlayer viewer, FakeServerPlayer fake, FakePlayerInventoryMenu.View view) {
+        boolean possessedByViewer = FakePlayerPossession.isControlling(viewer, fake);
+        boolean targetOccupied = FakePlayerPossession.isPossessed(fake);
         Component title = Component.translatable(
-            view == FakePlayerInventoryMenu.View.INVENTORY
-                ? "gui.fakeplayer.inventory"
-                : "gui.fakeplayer.ender_chest",
+            view == FakePlayerInventoryMenu.View.ENDER_CHEST
+                ? "gui.fakeplayer.ender_chest"
+                : "gui.fakeplayer.inventory",
             fake.getGameProfile().name()
         );
         viewer.openMenu(
             new SimpleMenuProvider(
-                (containerId, inventory, player) -> new FakePlayerInventoryMenu(containerId, inventory, fake, view),
+                (containerId, inventory, player) -> new FakePlayerInventoryMenu(
+                    containerId, inventory, fake, view, possessedByViewer, targetOccupied),
                 title
             ),
             data -> {
                 data.writeUtf(fake.getGameProfile().name());
-                data.writeBoolean(view == FakePlayerInventoryMenu.View.ENDER_CHEST);
+                data.writeVarInt(view.ordinal());
                 data.writeVarInt(fake.getId());
+                data.writeBoolean(possessedByViewer);
+                data.writeBoolean(targetOccupied);
             }
         );
     }

@@ -63,6 +63,7 @@ public final class FakeServerPlayer extends ServerPlayer {
         actions.tick();
         // ServerPlayer 通常由网络监听器驱动 doTick，假连接不会替我们调用它。
         doTick();
+        FakePlayerPossession.tickTarget(this);
 
         // 定期刷新网络位置和区块追踪，保证移动后的假玩家对观察者可见。
         if (tickCount % 10 == 0) {

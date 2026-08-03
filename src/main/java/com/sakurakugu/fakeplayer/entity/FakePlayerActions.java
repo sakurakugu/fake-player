@@ -58,6 +58,8 @@ public final class FakePlayerActions {
     private float blockDamage;
     private int blockBreakCooldown;
     private int useCooldown;
+    private boolean possessionAttack;
+    private boolean possessionUse;
 
     FakePlayerActions(FakeServerPlayer player) {
         this.player = player;
@@ -408,6 +410,47 @@ public final class FakePlayerActions {
         player.setYRot(yaw);
         player.setYHeadRot(yaw);
         player.setYBodyRot(yaw);
+    }
+
+    /** 将附身者的一整组实时输入原样应用到假人。 */
+    public void applyPossessionControl(
+        float forward,
+        float strafe,
+        boolean jump,
+        boolean sneak,
+        boolean sprint,
+        boolean attack,
+        boolean use
+    ) {
+        setMovementInput(forward, strafe);
+        player.setJumping(jump);
+        setSneaking(sneak);
+        setSprinting(sprint && !sneak);
+
+        if (attack != possessionAttack) {
+            possessionAttack = attack;
+            if (attack) {
+                // 首次按下可以攻击实体，随后按住则继续挖掘方块。
+                attackOnce(false);
+                schedules.put(ScheduledAction.ATTACK, new Schedule(RepeatMode.CONTINUOUS, 1));
+            } else {
+                stopAction(ScheduledAction.ATTACK);
+            }
+        }
+        if (use != possessionUse) {
+            possessionUse = use;
+            if (use) {
+                schedules.put(ScheduledAction.USE, new Schedule(RepeatMode.CONTINUOUS, 1));
+            } else {
+                stopAction(ScheduledAction.USE);
+            }
+        }
+    }
+
+    public void stopPossessionControl() {
+        possessionAttack = false;
+        possessionUse = false;
+        stop();
     }
 
     public void setSneaking(boolean sneaking) {

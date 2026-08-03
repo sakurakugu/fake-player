@@ -3,9 +3,12 @@ package com.sakurakugu.fakeplayer.menu;
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.entity.FakePlayerActions;
 import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
+import com.sakurakugu.fakeplayer.entity.FakePlayerPossession;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
@@ -15,26 +18,40 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.CraftingContainer;
 import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.inventory.InventoryMenu;
+import net.minecraft.world.inventory.ResultContainer;
+import net.minecraft.world.inventory.ResultSlot;
 import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.inventory.TransientCraftingContainer;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.CraftingInput;
+import net.minecraft.world.item.crafting.CraftingRecipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.item.enchantment.EnchantmentEffectComponents;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /** 编辑假人的完整物品栏或末影箱，并同时显示操作者背包。 */
 public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     private static final int INVENTORY_TARGET_SLOTS = 41;
+    private static final int CRAFTING_SLOT_COUNT = 5;
     private static final int ENDER_CHEST_TARGET_SLOTS = 27;
+    private static final int CRAFTING_RESULT_SLOT = INVENTORY_TARGET_SLOTS;
+    private static final int CRAFTING_INPUT_START = CRAFTING_RESULT_SLOT + 1;
+    private static final int CRAFTING_INPUT_END = CRAFTING_INPUT_START + 4;
     private static final int HOTBAR_SLOT_COUNT = 9;
     public static final int ACTION_ENDER_CHEST = HOTBAR_SLOT_COUNT;
     public static final int ACTION_REMOVE = HOTBAR_SLOT_COUNT + 1;
+    public static final int ACTION_POSSESS = HOTBAR_SLOT_COUNT + 2;
     public static final int MAX_DROP_AMOUNT = 64;
     public static final int MAX_DROP_PERCENTAGE = 100;
-    private static final int ACTION_DROP_AMOUNT_BASE = ACTION_REMOVE + 1;
+    private static final int ACTION_DROP_AMOUNT_BASE = ACTION_POSSESS + 1;
     private static final int ACTION_DROP_AMOUNT_CONTINUOUS_BASE = ACTION_DROP_AMOUNT_BASE + MAX_DROP_AMOUNT;
     private static final int ACTION_DROP_PERCENTAGE_BASE = ACTION_DROP_AMOUNT_CONTINUOUS_BASE + MAX_DROP_AMOUNT;
     private static final int ACTION_DROP_PERCENTAGE_CONTINUOUS_BASE =
@@ -57,6 +74,12 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     private final int targetEntityId;
     private final View view;
     private final int targetSlotCount;
+    private final boolean possessedByViewer;
+    private final boolean targetOccupied;
+    private final Player viewer;
+    private final Player craftingOwner;
+    private final CraftingContainer craftSlots = new TransientCraftingContainer(this, 2, 2);
+    private final ResultContainer resultSlots = new ResultContainer();
     private int selectedHotbarSlotSnapshot;
     private final DataSlot selectedHotbarSlot;
 
@@ -66,13 +89,23 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             inventory,
             null,
             data.readUtf(64),
-            data.readBoolean() ? View.ENDER_CHEST : View.INVENTORY,
-            data.readVarInt()
+            View.fromNetwork(data.readVarInt()),
+            data.readVarInt(),
+            data.readBoolean(),
+            data.readBoolean()
         );
     }
 
-    public FakePlayerInventoryMenu(int containerId, Inventory inventory, FakeServerPlayer target, View view) {
-        this(containerId, inventory, target, target.getGameProfile().name(), view, target.getId());
+    public FakePlayerInventoryMenu(
+        int containerId,
+        Inventory inventory,
+        FakeServerPlayer target,
+        View view,
+        boolean possessedByViewer,
+        boolean targetOccupied
+    ) {
+        this(containerId, inventory, target, target.getGameProfile().name(), view, target.getId(),
+            possessedByViewer, targetOccupied);
     }
 
     private FakePlayerInventoryMenu(
@@ -81,14 +114,24 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
         FakeServerPlayer target,
         String targetName,
         View view,
-        int targetEntityId
+        int targetEntityId,
+        boolean possessedByViewer,
+        boolean targetOccupied
     ) {
         super(ModMenus.FAKE_PLAYER_INVENTORY.get(), containerId);
         this.target = target;
         this.targetName = targetName;
         this.view = view;
         this.targetEntityId = targetEntityId;
-        this.targetSlotCount = view == View.INVENTORY ? INVENTORY_TARGET_SLOTS : ENDER_CHEST_TARGET_SLOTS;
+        this.possessedByViewer = possessedByViewer;
+        this.targetOccupied = targetOccupied;
+        this.viewer = viewerInventory.player;
+        this.craftingOwner = target == null ? viewer : target;
+        this.targetSlotCount = switch (view) {
+            case INVENTORY -> INVENTORY_TARGET_SLOTS;
+            case POSSESSED_INVENTORY -> INVENTORY_TARGET_SLOTS + CRAFTING_SLOT_COUNT;
+            case ENDER_CHEST -> ENDER_CHEST_TARGET_SLOTS;
+        };
         this.selectedHotbarSlot = addDataSlot(new DataSlot() {
             @Override
             public int get() {
@@ -102,11 +145,16 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
         });
 
         Container targetContainer = target == null
-            ? new SimpleContainer(targetSlotCount)
-            : view == View.INVENTORY ? target.getInventory() : target.getEnderChestInventory();
-        if (view == View.INVENTORY) {
+            ? new SimpleContainer(view == View.ENDER_CHEST ? ENDER_CHEST_TARGET_SLOTS : INVENTORY_TARGET_SLOTS)
+            : view == View.ENDER_CHEST ? target.getEnderChestInventory() : target.getInventory();
+        if (view != View.ENDER_CHEST) {
             addTargetInventorySlots(targetContainer, target == null ? viewerInventory.player : target);
-            addViewerSlots(viewerInventory, 8, 178);
+            if (view == View.POSSESSED_INVENTORY) {
+                addCraftingSlots();
+            }
+            if (view == View.INVENTORY) {
+                addViewerSlots(viewerInventory, 8, 178);
+            }
         } else {
             addGrid(targetContainer, 0, 3, 8, 18);
             addViewerSlots(viewerInventory, 8, 85);
@@ -123,6 +171,15 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             addSlot(new EquipmentSlotSlot(inventory, owner, equipmentSlot, 39 - index, 8, 8 + index * 18));
         }
         addSlot(new EquipmentSlotSlot(inventory, owner, EquipmentSlot.OFFHAND, 40, 77, 62));
+    }
+
+    private void addCraftingSlots() {
+        addSlot(new ResultSlot(craftingOwner, craftSlots, resultSlots, 0, 154, 28));
+        for (int row = 0; row < 2; row++) {
+            for (int column = 0; column < 2; column++) {
+                addSlot(new Slot(craftSlots, column + row * 2, 98 + column * 18, 18 + row * 18));
+            }
+        }
     }
 
     private void addViewerSlots(Inventory inventory, int left, int top) {
@@ -152,7 +209,10 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
 
     @Override
     public boolean clickMenuButton(Player player, int actionId) {
-        if (view != View.INVENTORY || !canAccess(player)) {
+        if (view == View.ENDER_CHEST || !canAccess(player)) {
+            return false;
+        }
+        if (view == View.POSSESSED_INVENTORY && actionId != ACTION_POSSESS) {
             return false;
         }
         if (actionId >= 0 && actionId < HOTBAR_SLOT_COUNT) {
@@ -188,6 +248,14 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             case ACTION_REMOVE -> {
                 player.closeContainer();
                 FakePlayerManager.remove(target);
+            }
+            case ACTION_POSSESS -> {
+                if (FakePlayerPossession.isControlling(viewer, target)) {
+                    FakePlayerPossession.stop(viewer);
+                    viewer.closeContainer();
+                } else {
+                    FakePlayerPossession.start(viewer, target);
+                }
             }
             case ACTION_TRANSFER_TO_TARGET_MATCHING -> transferItems(player, true, true, false);
             case ACTION_TRANSFER_TO_TARGET_ALL -> transferItems(player, true, false, false);
@@ -279,7 +347,21 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
         ItemStack original = sourceStack.copy();
         int viewerStart = targetSlotCount;
 
-        if (slotIndex < viewerStart) {
+        if (view == View.POSSESSED_INVENTORY && slotIndex == CRAFTING_RESULT_SLOT) {
+            if (!moveItemStackTo(sourceStack, 0, 36, true)) {
+                return ItemStack.EMPTY;
+            }
+            source.onQuickCraft(sourceStack, original);
+        } else if (view == View.POSSESSED_INVENTORY
+            && slotIndex >= CRAFTING_INPUT_START && slotIndex < CRAFTING_INPUT_END) {
+            if (!moveItemStackTo(sourceStack, 0, 36, false)) {
+                return ItemStack.EMPTY;
+            }
+        } else if (slotIndex < viewerStart && view == View.POSSESSED_INVENTORY) {
+            if (!moveWithinTargetInventory(sourceStack, slotIndex)) {
+                return ItemStack.EMPTY;
+            }
+        } else if (slotIndex < viewerStart) {
             if (!moveItemStackTo(sourceStack, viewerStart, slots.size(), true)) {
                 return ItemStack.EMPTY;
             }
@@ -296,7 +378,61 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             return ItemStack.EMPTY;
         }
         source.onTake(player, sourceStack);
+        if (view == View.POSSESSED_INVENTORY && slotIndex == CRAFTING_RESULT_SLOT && !sourceStack.isEmpty()) {
+            craftingOwner.drop(sourceStack, false);
+        }
         return original;
+    }
+
+    private boolean moveWithinTargetInventory(ItemStack stack, int slotIndex) {
+        if (slotIndex < 27) {
+            return moveItemStackTo(stack, 27, 36, false);
+        }
+        return moveItemStackTo(stack, 0, 27, false);
+    }
+
+    @Override
+    public void slotsChanged(Container container) {
+        if (container != craftSlots || !(craftingOwner.level() instanceof ServerLevel level)
+            || !(craftingOwner instanceof ServerPlayer serverCraftingOwner)
+            || !(viewer instanceof ServerPlayer serverViewer)) {
+            super.slotsChanged(container);
+            return;
+        }
+
+        CraftingInput input = craftSlots.asCraftInput();
+        Optional<RecipeHolder<CraftingRecipe>> recipe = level.getServer().getRecipeManager()
+            .getRecipeFor(RecipeType.CRAFTING, input, level, (RecipeHolder<CraftingRecipe>) null);
+        ItemStack result = recipe.filter(holder -> resultSlots.setRecipeUsed(serverCraftingOwner, holder))
+            .map(RecipeHolder::value)
+            .map(craftingRecipe -> craftingRecipe.assemble(input))
+            .filter(stack -> stack.isItemEnabled(level.enabledFeatures()))
+            .orElse(ItemStack.EMPTY);
+
+        resultSlots.setItem(0, result);
+        setRemoteSlot(CRAFTING_RESULT_SLOT, result);
+        serverViewer.connection.send(new ClientboundContainerSetSlotPacket(
+            containerId, incrementStateId(), CRAFTING_RESULT_SLOT, result));
+    }
+
+    @Override
+    public void removed(Player player) {
+        // 附身界面没有操作者背包，关闭时鼠标携带物也必须回到假人。
+        if (view == View.POSSESSED_INVENTORY && !player.level().isClientSide() && !getCarried().isEmpty()) {
+            ItemStack carried = getCarried();
+            setCarried(ItemStack.EMPTY);
+            craftingOwner.getInventory().placeItemBackInInventory(carried);
+        }
+        super.removed(player);
+        resultSlots.clearContent();
+        if (!craftingOwner.level().isClientSide()) {
+            clearContainer(craftingOwner, craftSlots);
+        }
+    }
+
+    @Override
+    public boolean canTakeItemForPickAll(ItemStack carried, Slot targetSlot) {
+        return targetSlot.container != resultSlots && super.canTakeItemForPickAll(carried, targetSlot);
     }
 
     private boolean moveToTarget(ItemStack stack, Player player) {
@@ -328,7 +464,8 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
         }
         return !target.hasDisconnected()
             && player instanceof ServerPlayer viewer
-            && FakePlayerConfig.canUseCommands(viewer.createCommandSourceStack());
+            && FakePlayerConfig.canUseCommands(viewer.createCommandSourceStack())
+            && (view != View.POSSESSED_INVENTORY || FakePlayerPossession.isControlling(viewer, target));
     }
 
     @Override
@@ -352,17 +489,36 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
         return selectedHotbarSlot.get();
     }
 
+    public boolean possessedByViewer() {
+        return possessedByViewer;
+    }
+
+    public boolean targetOccupied() {
+        return targetOccupied;
+    }
+
     public int screenWidth() {
         return 176;
     }
 
     public int screenHeight() {
-        return view == View.INVENTORY ? 261 : 168;
+        return switch (view) {
+            case INVENTORY -> 261;
+            case POSSESSED_INVENTORY -> 166;
+            case ENDER_CHEST -> 168;
+        };
     }
 
     public enum View {
         INVENTORY,
+        POSSESSED_INVENTORY,
         ENDER_CHEST
+
+        ;
+
+        private static View fromNetwork(int ordinal) {
+            return ordinal >= 0 && ordinal < values().length ? values()[ordinal] : INVENTORY;
+        }
     }
 
     /** 复现原版装备槽限制，并把装备变化通知给假人实体。 */

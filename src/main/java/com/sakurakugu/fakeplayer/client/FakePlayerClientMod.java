@@ -3,6 +3,7 @@ package com.sakurakugu.fakeplayer.client;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.sakurakugu.fakeplayer.FakePlayerMod;
 import com.sakurakugu.fakeplayer.network.OpenGlobalMenuPayload;
+import com.sakurakugu.fakeplayer.network.PossessionStatePayload;
 import com.sakurakugu.fakeplayer.network.RequestChunkMapPayload;
 import com.sakurakugu.fakeplayer.network.ChunkMapSnapshotPayload;
 import com.sakurakugu.fakeplayer.client.chunkloading.ClientChunkLoadingState;
@@ -14,6 +15,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 import net.neoforged.neoforge.client.network.event.RegisterClientPayloadHandlersEvent;
@@ -46,6 +48,8 @@ public final class FakePlayerClientMod {
         modBus.addListener(FakePlayerClientMod::registerGuiLayers);
         modBus.addListener(FakePlayerClientMod::registerClientPayloads);
         NeoForge.EVENT_BUS.addListener(FakePlayerClientMod::clientTick);
+        NeoForge.EVENT_BUS.addListener(FakePlayerClientMod::clientTickPre);
+        NeoForge.EVENT_BUS.addListener(FakePlayerClientMod::interactionKey);
     }
 
     private static void registerKeys(RegisterKeyMappingsEvent event) {
@@ -63,10 +67,24 @@ public final class FakePlayerClientMod {
     private static void registerClientPayloads(RegisterClientPayloadHandlersEvent event) {
         event.register(ChunkMapSnapshotPayload.TYPE,
             (payload, context) -> ClientChunkLoadingState.accept(payload));
+        event.register(PossessionStatePayload.TYPE,
+            (payload, context) -> ClientPossession.accept(payload));
+    }
+
+    private static void clientTickPre(ClientTickEvent.Pre event) {
+        ClientPossession.tickPre(Minecraft.getInstance());
+    }
+
+    private static void interactionKey(InputEvent.InteractionKeyMappingTriggered event) {
+        if (ClientPossession.active() && (event.isAttack() || event.isUseItem() || event.isPickBlock())) {
+            event.setSwingHand(false);
+            event.setCanceled(true);
+        }
     }
 
     private static void clientTick(ClientTickEvent.Post event) {
         Minecraft minecraft = Minecraft.getInstance();
+        ClientPossession.tickPost(minecraft);
         while (OPEN_LIST.consumeClick()) {
             if (minecraft.player != null && minecraft.screen == null) {
                 ClientPacketDistributor.sendToServer(new OpenGlobalMenuPayload());

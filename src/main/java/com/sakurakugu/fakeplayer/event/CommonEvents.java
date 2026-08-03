@@ -7,6 +7,7 @@ import com.sakurakugu.fakeplayer.command.ChunkLoaderCommand;
 import com.sakurakugu.fakeplayer.chunkloading.ChunkLoaderManager;
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
+import com.sakurakugu.fakeplayer.entity.FakePlayerPossession;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
 import com.sakurakugu.fakeplayer.menu.FakePlayerMenuOpener;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerPersistence;
@@ -19,6 +20,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerNegotiationEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 
@@ -79,5 +81,12 @@ public final class CommonEvents {
         // 阻止原版继续处理右键实体，避免同时触发物品交互。
         event.setCancellationResult(InteractionResult.SUCCESS);
         event.setCanceled(true);
+    }
+
+    @SubscribeEvent
+    public static void playerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player && !(player instanceof FakeServerPlayer)) {
+            FakePlayerPossession.stop(player);
+        }
     }
 }
