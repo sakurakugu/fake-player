@@ -10,7 +10,9 @@
   ],
   "client": [
     "AbstractClientPlayerMixin",
-    "PlayerAppearanceMixin"
+    "PlayerAppearanceMixin",
+    "EntityNameMixin",
+    "EntityRendererNameMixin"
   ],
   "injectors": {
     "defaultRequire": 1

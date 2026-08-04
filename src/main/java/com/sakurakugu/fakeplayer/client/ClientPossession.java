@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.PlayerSkin;
 import net.minecraft.world.entity.player.PlayerModelPart;
@@ -68,6 +69,69 @@ public final class ClientPossession {
         resolvingSkin = true;
         try {
             return proxyPlayer.isModelPartShown(part);
+        } finally {
+            resolvingSkin = false;
+        }
+    }
+
+    /** 附身期间名称也跟随当前显示的身体，避免皮肤与名称不一致。 */
+    public static Component proxyName(AbstractClientPlayer player) {
+        if (resolvingSkin) {
+            return null;
+        }
+        Integer proxyId = APPEARANCE_PROXIES.get(player.getId());
+        if (proxyId == null || player.level() == null) {
+            return null;
+        }
+        Entity proxy = player.level().getEntity(proxyId);
+        if (!(proxy instanceof AbstractClientPlayer proxyPlayer)) {
+            return null;
+        }
+        resolvingSkin = true;
+        try {
+            return proxyPlayer.getName();
+        } finally {
+            resolvingSkin = false;
+        }
+    }
+
+    /** 名牌渲染通常直接读取显示名称，因此需要代理完整显示组件。 */
+    public static Component proxyDisplayName(AbstractClientPlayer player) {
+        if (resolvingSkin) {
+            return null;
+        }
+        Integer proxyId = APPEARANCE_PROXIES.get(player.getId());
+        if (proxyId == null || player.level() == null) {
+            return null;
+        }
+        Entity proxy = player.level().getEntity(proxyId);
+        if (!(proxy instanceof AbstractClientPlayer proxyPlayer)) {
+            return null;
+        }
+        resolvingSkin = true;
+        try {
+            return proxyPlayer.getDisplayName();
+        } finally {
+            resolvingSkin = false;
+        }
+    }
+
+    /** 计分板和部分名牌渲染直接读取字符串名称，也必须使用对侧身体的名称。 */
+    public static String proxyScoreboardName(AbstractClientPlayer player) {
+        if (resolvingSkin) {
+            return null;
+        }
+        Integer proxyId = APPEARANCE_PROXIES.get(player.getId());
+        if (proxyId == null || player.level() == null) {
+            return null;
+        }
+        Entity proxy = player.level().getEntity(proxyId);
+        if (!(proxy instanceof AbstractClientPlayer proxyPlayer)) {
+            return null;
+        }
+        resolvingSkin = true;
+        try {
+            return proxyPlayer.getScoreboardName();
         } finally {
             resolvingSkin = false;
         }
