@@ -12,7 +12,6 @@ public final class FakePlayerConfig {
     private static final ModConfigSpec.BooleanValue ALLOW_OFFLINE_PROFILES;
     private static final ModConfigSpec.EnumValue<ProfileStrategy> PROFILE_STRATEGY;
     private static final ModConfigSpec.BooleanValue RESTORE_FAKE_PLAYERS;
-    private static final ModConfigSpec.BooleanValue RESTORE_ACTIONS;
     private static final ModConfigSpec.BooleanValue AUTO_REPLENISHMENT;
     private static final ModConfigSpec.BooleanValue AUTO_REPLENISHMENT_FROM_SHULKER_BOXES;
     private static final ModConfigSpec.BooleanValue AUTO_REPLACE_TOOLS;
@@ -40,9 +39,6 @@ public final class FakePlayerConfig {
         RESTORE_FAKE_PLAYERS = builder
             .comment("服务器启动后是否恢复上次仍在线的假玩家。")
             .define("restoreFakePlayers", true);
-        RESTORE_ACTIONS = builder
-            .comment("恢复驻留假玩家时是否同时恢复持续动作。")
-            .define("restoreActions", true);
         builder.pop();
 
         builder.push("automation");
@@ -93,10 +89,6 @@ public final class FakePlayerConfig {
         return RESTORE_FAKE_PLAYERS.get();
     }
 
-    public static boolean restoreActions() {
-        return RESTORE_ACTIONS.get();
-    }
-
     public static boolean autoReplenishment() {
         return AUTO_REPLENISHMENT.get();
     }
@@ -141,7 +133,6 @@ public final class FakePlayerConfig {
 
     public enum GlobalSetting {
         RESTORE_FAKE_PLAYERS,
-        RESTORE_ACTIONS,
         AUTO_REPLENISHMENT,
         AUTO_REPLENISHMENT_FROM_SHULKER_BOXES,
         AUTO_REPLACE_TOOLS,
@@ -150,7 +141,6 @@ public final class FakePlayerConfig {
         private ModConfigSpec.BooleanValue value() {
             return switch (this) {
                 case RESTORE_FAKE_PLAYERS -> FakePlayerConfig.RESTORE_FAKE_PLAYERS;
-                case RESTORE_ACTIONS -> FakePlayerConfig.RESTORE_ACTIONS;
                 case AUTO_REPLENISHMENT -> FakePlayerConfig.AUTO_REPLENISHMENT;
                 case AUTO_REPLENISHMENT_FROM_SHULKER_BOXES -> FakePlayerConfig.AUTO_REPLENISHMENT_FROM_SHULKER_BOXES;
                 case AUTO_REPLACE_TOOLS -> FakePlayerConfig.AUTO_REPLACE_TOOLS;

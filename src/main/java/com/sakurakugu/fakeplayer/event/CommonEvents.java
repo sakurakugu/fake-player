@@ -66,7 +66,8 @@ public final class CommonEvents {
             try {
                 FakeServerPlayer fake = FakePlayerManager.find(server, event.getProfile());
                 if (fake != null) {
-                    FakePlayerManager.remove(fake);
+                    // 保留驻留记录，假人只会在服务器下次启动时按名称和 UUID 占用情况决定是否恢复。
+                    FakePlayerManager.remove(fake, false);
                 }
                 removal.complete(null);
             } catch (RuntimeException exception) {

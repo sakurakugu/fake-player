@@ -3,6 +3,7 @@ package com.sakurakugu.fakeplayer.persistence;
 import com.mojang.authlib.GameProfile;
 import com.sakurakugu.fakeplayer.FakePlayerMod;
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
+import com.sakurakugu.fakeplayer.entity.FakePlayerActions;
 import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerSavedData.PlayerSnapshot;
@@ -76,7 +77,7 @@ public final class FakePlayerPersistence {
         if (!FakePlayerConfig.restoreFakePlayers() || player.hasDisconnected()) {
             return;
         }
-        data(player.server()).putResident(Resident.from(player, FakePlayerConfig.restoreActions()));
+        data(player.server()).putResident(Resident.from(player));
     }
 
     public static void untrack(FakeServerPlayer player) {
@@ -131,7 +132,7 @@ public final class FakePlayerPersistence {
         }
 
         for (Resident resident : savedData.residents()) {
-            LoadResult result = loadResident(server, resident, FakePlayerConfig.restoreActions());
+            LoadResult result = loadResident(server, resident);
             if (!result.successful()) {
                 FakePlayerMod.LOGGER.warn("无法恢复驻留假玩家 {}：{}", resident.name(), result.reason());
             }
@@ -142,14 +143,15 @@ public final class FakePlayerPersistence {
         return load(server, preset.player(), true);
     }
 
-    private static LoadResult loadResident(MinecraftServer server, Resident resident, boolean restoreActions) {
+    private static LoadResult loadResident(MinecraftServer server, Resident resident) {
         NameAndId identity = new NameAndId(resident.uuid(), resident.name());
         Optional<CompoundTag> saved = server.getPlayerList().loadPlayerData(identity);
         if (saved.isEmpty()) {
             return LoadResult.failure("原版玩家存档不存在：" + resident.uuid());
         }
-        return load(server, new PlayerSnapshot(resident.uuid(), resident.name(), saved.get(), resident.actions()),
-            restoreActions);
+        // 驻留恢复不携带持续动作，启动后由操作者重新设置。
+        return load(server, new PlayerSnapshot(resident.uuid(), resident.name(), saved.get(),
+            FakePlayerActions.State.EMPTY), false);
     }
 
     private static LoadResult load(MinecraftServer server, PlayerSnapshot snapshot, boolean restoreActions) {

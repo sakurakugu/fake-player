@@ -146,11 +146,7 @@ class FakePlayerSavedDataTest {
     }
 
     private static FakePlayerSavedData.Resident resident(UUID uuid, String name) {
-        return new FakePlayerSavedData.Resident(
-            uuid,
-            name,
-            FakePlayerActions.State.EMPTY
-        );
+        return new FakePlayerSavedData.Resident(uuid, name);
     }
 
     private static CompoundTag playerData(String marker) {

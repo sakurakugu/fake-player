@@ -144,13 +144,13 @@ public final class FakePlayerManager {
         remove(fake, true);
     }
 
-    /** 移除假玩家；附身会话只会被丢弃，不恢复操作者的身体。 */
+    /** 移除假玩家；若正在被附身，先把身体状态交换回去再移除。 */
     public static void remove(FakeServerPlayer fake, boolean removeResident) {
         // 移除操作可能由死亡回调和菜单同时触发，需要保证可重复调用。
         if (fake.hasDisconnected()) {
             return;
         }
-        FakePlayerPossession.discardTarget(fake);
+        FakePlayerPossession.restoreTarget(fake);
         fake.actions().stop();
         if (removeResident) {
             FakePlayerPersistence.untrack(fake);

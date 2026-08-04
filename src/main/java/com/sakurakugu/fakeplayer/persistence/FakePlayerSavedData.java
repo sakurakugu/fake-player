@@ -57,8 +57,7 @@ public final class FakePlayerSavedData extends SavedData {
     public static final Codec<Resident> RESIDENT_CODEC = RecordCodecBuilder.create(instance ->
         instance.group(
             UUIDUtil.CODEC.fieldOf("uuid").forGetter(Resident::uuid),
-            Codec.STRING.fieldOf("name").forGetter(Resident::name),
-            ACTION_STATE_CODEC.optionalFieldOf("actions", FakePlayerActions.State.EMPTY).forGetter(Resident::actions)
+            Codec.STRING.fieldOf("name").forGetter(Resident::name)
         ).apply(instance, Resident::new)
     );
     public static final Codec<PlayerSnapshot> PLAYER_SNAPSHOT_CODEC = RecordCodecBuilder.create(instance ->
@@ -217,17 +216,13 @@ public final class FakePlayerSavedData extends SavedData {
         }, Enum::name);
     }
 
+    /** 驻留记录只用于服务器重启后按名称和 UUID 恢复假人，不保存持续动作。 */
     public record Resident(
         UUID uuid,
-        String name,
-        FakePlayerActions.State actions
+        String name
     ) {
-        public static Resident from(FakeServerPlayer player, boolean saveActions) {
-            return new Resident(
-                player.getUUID(),
-                player.getGameProfile().name(),
-                saveActions ? player.actions().snapshot() : FakePlayerActions.State.EMPTY
-            );
+        public static Resident from(FakeServerPlayer player) {
+            return new Resident(player.getUUID(), player.getGameProfile().name());
         }
     }
 
