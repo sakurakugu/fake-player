@@ -33,8 +33,8 @@ Fake Player 提供可通过命令和图形界面控制的服务端假玩家，�
 | `/fakeplayer <名称>`         | 在执行位置生成指定名称的假玩家。                                          |
 | `/fakeplayer spawn <名称>`   | 与上一条命令相同。                                                        |
 | `/fakeplayer kill <名称>`    | 移除假玩家。生存模式且 `keepInventory=false` 时会掉落物品，否则保留背包。 |
-| `/fakeplayer possess <名称>` | 附身指定假玩家。                                                        |
-| `/fakeplayer unpossess`      | 退出当前附身。                                                          |
+| `/fakeplayer possess <名称>` | 附身指定假玩家。                                                          |
+| `/fakeplayer unpossess`      | 退出当前附身。                                                            |
 | `/fakeplayer list`           | 列出当前所有假玩家。                                                      |
 | `/fakeplayer gui [名称]`     | 打开全局设置界面，指定名称时打开该假玩家的控制界面。                      |
 | `/fakeplayer setting [名称]` | `gui` 的别名。                                                            |
@@ -57,11 +57,13 @@ Fake Player 提供可通过命令和图形界面控制的服务端假玩家，�
 
 ```text
 /player <名称> spawn
-/player <名称> spawn in <游戏模式>
+/player <名称> spawn in <游戏模式>（兼容 Carpet）
+/player <名称> spawn gamemode <游戏模式>
 /player <名称> spawn at <位置>
 /player <名称> spawn at <位置> facing <旋转>
 /player <名称> spawn at <位置> facing <旋转> in <维度>
-/player <名称> spawn at <位置> facing <旋转> in <维度> in <游戏模式>
+/player <名称> spawn at <位置> facing <旋转> in <维度> in <游戏模式>（兼容 Carpet）
+/player <名称> spawn at <位置> facing <旋转> in <维度> gamemode <游戏模式>
 ```
 
 例如：
@@ -147,10 +149,7 @@ NeoForge 会在世界目录的 `serverconfig/fakeplayer-server.toml` 中生成�
 仍按普通在线玩家参与模拟距离、玩家附近生物生成和随机刻。加载点配置与 NeoForge 所有者隔离票据一同持久化，
 不会影响原版 `/forceload` 或其他模组的票据。
 
-每次成功修改都会在世界目录 `fakeplayer/backups` 写入独立 JSON 备份，原子替换临时文件并最多
-保留 5 份。主 SavedData 无法解析时会自动从最新可读备份恢复；手动恢复也会从新到旧跳过损坏文件。
-`restore confirm` 会先撤销当前配置拥有的票据，
-再载入备份并重新对齐票据。
+会自动备份并在读取失败时读取旧配置
 
 #### 界面与背包
 
@@ -162,8 +161,6 @@ NeoForge 会在世界目录的 `serverconfig/fakeplayer-server.toml` 中生成�
 | `enderchest`                              | 打开假玩家的末影箱。                               |
 | `possess`                                 | 附身该假玩家。                                     |
 | `unpossess`                               | 当正在附身该假玩家时退出附身。                     |
-
-物品栏和末影箱均支持与操作者背包双向 Shift 快捷移动；附身物品栏可使用假人的 2×2 合成格，普通管理物品栏不开放合成。
 
 #### 物品操作
 
@@ -251,15 +248,8 @@ NeoForge 会在世界目录的 `serverconfig/fakeplayer-server.toml` 中生成�
 
 ## 构建
 
-项目需要 Java 25：
-
 ```powershell
-$env:JAVA_HOME = '你的java地址'
 .\gradlew.bat build
 ```
 
-Gradle 会通过 Foojay 自动获取 Minecraft 26.1 所需的 Java 25 工具链。构建产物位于 `build/libs/`。
-
-## 开发原因
-
-Carpet 没有 NeoForge 版本，而部分新版本假玩家模组不再维护。这个项目用于补充图形界面、背包管理和完整命令控制等功能。
+构建产物位于 `build/libs/`。

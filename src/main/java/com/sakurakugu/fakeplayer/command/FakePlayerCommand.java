@@ -116,10 +116,8 @@ public final class FakePlayerCommand {
     private static LiteralArgumentBuilder<CommandSourceStack> spawnCommand() {
         LiteralArgumentBuilder<CommandSourceStack> spawn = Commands.literal("spawn")
             .executes(context -> spawn(context, name(context)));
-        spawn.then(Commands.literal("in")
-            .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
-            .then(Commands.argument("gamemode", GameModeArgument.gameMode())
-                .executes(context -> spawn(context, name(context)))));
+        spawn.then(gamemodeBranch());
+        spawn.then(gamemodeBranch("gamemode"));
 
         var position = Commands.argument("position", Vec3Argument.vec3())
             .executes(context -> spawn(context, name(context)));
@@ -127,16 +125,27 @@ public final class FakePlayerCommand {
             .executes(context -> spawn(context, name(context)));
         var dimension = Commands.argument("dimension", DimensionArgument.dimension())
             .executes(context -> spawn(context, name(context)));
-        dimension.then(Commands.literal("in")
-            .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
-            .then(Commands.argument("gamemode", GameModeArgument.gameMode())
-                .executes(context -> spawn(context, name(context)))));
+        dimension.then(gamemodeBranch());
+        dimension.then(gamemodeBranch("gamemode"));
+        rotation.then(gamemodeBranch());
+        rotation.then(gamemodeBranch("gamemode"));
         rotation.then(Commands.literal("in")
             .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
             .then(dimension));
         position.then(Commands.literal("facing").then(rotation));
         spawn.then(Commands.literal("at").then(position));
         return spawn;
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> gamemodeBranch() {
+        return gamemodeBranch("in");
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> gamemodeBranch(String literal) {
+        return Commands.literal(literal)
+            .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
+            .then(Commands.argument("gamemode", GameModeArgument.gameMode())
+                .executes(context -> spawn(context, name(context))));
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> repeatingCommand(String literal, RepeatingAction action) {
