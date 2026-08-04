@@ -119,7 +119,7 @@
   "gui.fakeplayer.global.empty": "There are no fake players",
   "gui.fakeplayer.global.refresh": "Refresh list",
   "gui.fakeplayer.global.page": "Page %s/%s - %s fake players",
-  "gui.fakeplayer.global.setting.restore_players": "Restore players",
+  "gui.fakeplayer.global.setting.restore_players": "Restore on restart",
   "gui.fakeplayer.global.setting.container_transfer_buttons": "Container transfer buttons",
   "gui.fakeplayer.global.enabled": "On",
   "gui.fakeplayer.global.disabled": "Off",

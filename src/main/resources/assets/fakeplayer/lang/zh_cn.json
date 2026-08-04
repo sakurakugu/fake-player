@@ -119,7 +119,7 @@
   "gui.fakeplayer.global.empty": "当前没有假人",
   "gui.fakeplayer.global.refresh": "刷新列表",
   "gui.fakeplayer.global.page": "第 %s/%s 页 · 共 %s 个假人",
-  "gui.fakeplayer.global.setting.restore_players": "恢复假人",
+  "gui.fakeplayer.global.setting.restore_players": "重启恢复假人",
   "gui.fakeplayer.global.setting.container_transfer_buttons": "普通容器转移按钮",
   "gui.fakeplayer.global.enabled": "开",
   "gui.fakeplayer.global.disabled": "关",

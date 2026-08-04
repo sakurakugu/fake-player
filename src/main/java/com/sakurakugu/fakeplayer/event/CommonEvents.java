@@ -49,7 +49,8 @@ public final class CommonEvents {
 
     @SubscribeEvent
     public static void serverStopping(ServerStoppingEvent event) {
-        FakePlayerPossession.discardAll();
+        // 原版即将保存 playerdata，必须先把真人恢复到附身前的位置。
+        FakePlayerPossession.stopAll();
     }
 
     @SubscribeEvent
@@ -110,7 +111,10 @@ public final class CommonEvents {
     @SubscribeEvent
     public static void playerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer player && !(player instanceof FakeServerPlayer)) {
-            FakePlayerPossession.discard(player);
+            // 真人退出前先恢复附身前的身体状态，确保原版保存的 playerdata 仍是真人原来的位置。
+            if (!FakePlayerPossession.stop(player)) {
+                FakePlayerPossession.discard(player);
+            }
         }
     }
 

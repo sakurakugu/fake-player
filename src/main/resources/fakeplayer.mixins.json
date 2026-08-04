@@ -6,7 +6,8 @@
   "mixins": [
     "FishingHookMixin",
     "FoodDataAccessor",
-    "PlayerEnderChestMixin"
+    "PlayerEnderChestMixin",
+    "PlayerListInvoker"
   ],
   "client": [
     "AbstractClientPlayerMixin",

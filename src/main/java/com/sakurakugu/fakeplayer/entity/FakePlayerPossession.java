@@ -2,6 +2,7 @@ package com.sakurakugu.fakeplayer.entity;
 
 import com.sakurakugu.fakeplayer.FakePlayerMod;
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
+import com.sakurakugu.fakeplayer.mixin.PlayerListInvoker;
 import com.sakurakugu.fakeplayer.network.PossessionStatePayload;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerPersistence;
 import java.util.HashMap;
@@ -109,6 +110,16 @@ public final class FakePlayerPossession {
         }
     }
 
+    /** 服务器保存玩家数据前恢复所有附身会话。 */
+    public static void stopAll() {
+        for (Session session : BY_VIEWER.values().toArray(Session[]::new)) {
+            if (!stop(session)) {
+                // 恢复失败时保留原有的失败处理，避免阻断服务器关闭流程。
+                removeSession(session);
+            }
+        }
+    }
+
     private static boolean stop(Session session) {
         if (session.state != State.ACTIVE) {
             return false;
@@ -141,9 +152,23 @@ public final class FakePlayerPossession {
 
     private static void finish(Session session) {
         session.target.actions().restore(session.targetActions);
+        // 退出事件可能已经触发过一次原版保存；交换完成后再次写入，避免把附身中的位置留在 playerdata。
+        savePlayerData(session);
         FakePlayerPersistence.track(session.target);
         removeSession(session);
         broadcast(session, false);
+    }
+
+    private static void savePlayerData(Session session) {
+        try {
+            var playerList = session.viewer.level().getServer().getPlayerList();
+            PlayerListInvoker invoker = (PlayerListInvoker) playerList;
+            invoker.fakeplayer$save(session.viewer);
+            invoker.fakeplayer$save(session.target);
+        } catch (RuntimeException exception) {
+            // 保存失败不影响内存中的身体交换，服务器后续仍可按原版流程继续处理退出。
+            FakePlayerMod.LOGGER.warn("保存附身恢复后的玩家数据失败", exception);
+        }
     }
 
     private static boolean recoverOriginal(Session session) {

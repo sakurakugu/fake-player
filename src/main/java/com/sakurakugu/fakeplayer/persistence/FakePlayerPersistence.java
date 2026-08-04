@@ -224,7 +224,9 @@ public final class FakePlayerPersistence {
             }
             Vec3 position = input.read("Pos", Vec3.CODEC)
                 .orElseThrow(() -> new IllegalArgumentException("原版玩家存档缺少位置"));
-            Vec2 rotation = input.read("Rotation", Vec2.CODEC).orElse(Vec2.ZERO);
+            // 原版玩家存档按 [yaw, pitch] 保存，内部命令和实体 API 统一使用 [pitch, yaw]。
+            Vec2 savedRotation = input.read("Rotation", Vec2.CODEC).orElse(Vec2.ZERO);
+            Vec2 rotation = new Vec2(savedRotation.y, savedRotation.x);
             GameType gameType = input.read("playerGameType", GameType.LEGACY_ID_CODEC)
                 .orElse(GameType.SURVIVAL);
             boolean flying = input.read("abilities", Abilities.Packed.CODEC)
