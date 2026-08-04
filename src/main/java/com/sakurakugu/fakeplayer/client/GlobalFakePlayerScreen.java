@@ -16,7 +16,7 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
     private static final int BUTTON_HEIGHT = 24;
     private static final int ROW_GAP = 5;
     private static final String[] SETTING_KEYS = {
-        "restore_players"
+        "restore_players", "container_transfer_buttons"
     };
 
     private int page;
@@ -25,6 +25,8 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
     public GlobalFakePlayerScreen(GlobalFakePlayerMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, PANEL_WIDTH, PANEL_HEIGHT);
         showingList = menu.openListInitially();
+        ClientGlobalSettings.setContainerTransferButtons(
+            menu.settingEnabled(FakePlayerConfig.GlobalSetting.CONTAINER_TRANSFER_BUTTONS.ordinal()));
     }
 
     @Override

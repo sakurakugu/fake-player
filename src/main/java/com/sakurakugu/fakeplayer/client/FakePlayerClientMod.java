@@ -10,13 +10,16 @@ import com.sakurakugu.fakeplayer.network.ChunkMapSnapshotPayload;
 import com.sakurakugu.fakeplayer.client.chunkloading.ClientChunkLoadingState;
 import com.sakurakugu.fakeplayer.client.chunkloading.ChunkLoadingHud;
 import com.sakurakugu.fakeplayer.client.ui.IconButton;
+import com.sakurakugu.fakeplayer.client.ui.TransferButton;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.inventory.ChestMenu;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
@@ -29,14 +32,14 @@ import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import net.neoforged.neoforge.common.NeoForge;
 import org.lwjgl.glfw.GLFW;
 
-/** 客户端入口，负责注册并处理假人全局设置快捷键。 */
+/** 客户端入口，负责注册并处理全局设置快捷键。 */
 @Mod(value = FakePlayerMod.MOD_ID, dist = Dist.CLIENT)
 public final class FakePlayerClientMod {
     private static final KeyMapping.Category CATEGORY = new KeyMapping.Category(
         Identifier.fromNamespaceAndPath(FakePlayerMod.MOD_ID, "main")
     );
-    private static final KeyMapping OPEN_LIST = new KeyMapping(
-        "key.fakeplayer.open_list",
+    private static final KeyMapping OPEN_GLOBAL = new KeyMapping(
+        "key.fakeplayer.open_global",
         InputConstants.Type.KEYSYM,
         GLFW.GLFW_KEY_G,
         CATEGORY
@@ -64,7 +67,7 @@ public final class FakePlayerClientMod {
 
     private static void registerKeys(RegisterKeyMappingsEvent event) {
         event.registerCategory(CATEGORY);
-        event.register(OPEN_LIST);
+        event.register(OPEN_GLOBAL);
         event.register(OPEN_CHUNK_MAP);
         event.register(TOGGLE_CHUNK_HUD);
         event.register(STOP_POSSESSION);
@@ -91,7 +94,7 @@ public final class FakePlayerClientMod {
                 ClientPacketDistributor.sendToServer(new StopPossessionPayload());
             }
         }
-        while (OPEN_LIST.consumeClick()) {
+        while (OPEN_GLOBAL.consumeClick()) {
             if (minecraft.player != null && minecraft.screen == null) {
                 ClientPacketDistributor.sendToServer(new OpenGlobalMenuPayload());
             }
@@ -124,6 +127,13 @@ public final class FakePlayerClientMod {
 
     /** 附身期间在原版个人背包中提供可见的退出入口。 */
     private static void addInventoryButtons(ScreenEvent.Init.Post event) {
+        if (event.getScreen() instanceof AbstractContainerScreen<?> containerScreen
+            && containerScreen.getMenu() instanceof ChestMenu
+            && !(containerScreen instanceof FakePlayerInventoryScreen)
+            && !(containerScreen instanceof GlobalFakePlayerScreen)
+            && ClientGlobalSettings.containerTransferButtons()) {
+            TransferButton.forContainer(containerScreen).forEach(event::addListener);
+        }
         if (!(event.getScreen() instanceof InventoryScreen || event.getScreen() instanceof CreativeModeInventoryScreen)
             || !ClientPossession.active()) {
             return;

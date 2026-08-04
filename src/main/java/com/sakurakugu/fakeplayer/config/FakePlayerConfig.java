@@ -13,6 +13,7 @@ public final class FakePlayerConfig {
     private static final ModConfigSpec.EnumValue<ProfileStrategy> PROFILE_STRATEGY;
     private static final ModConfigSpec.BooleanValue RESTORE_FAKE_PLAYERS;
     private static final ModConfigSpec.IntValue MAX_CHUNK_LOADING_RADIUS;
+    private static final ModConfigSpec.BooleanValue ENABLE_CONTAINER_TRANSFER_BUTTONS;
 
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
@@ -41,6 +42,11 @@ public final class FakePlayerConfig {
         MAX_CHUNK_LOADING_RADIUS = builder
             .comment("单个区块加载点允许的最大半径，0 表示仅中心区块，范围 0-32。")
             .defineInRange("maxRadius", 8, 0, 32);
+        builder.pop();
+        builder.push("ui");
+        ENABLE_CONTAINER_TRANSFER_BUTTONS = builder
+            .comment("普通容器是否显示物品转移按钮；假人物品栏始终显示。")
+            .define("enableContainerTransferButtons", true);
         builder.pop();
         SPEC = builder.build();
     }
@@ -74,6 +80,10 @@ public final class FakePlayerConfig {
         return MAX_CHUNK_LOADING_RADIUS.get();
     }
 
+    public static boolean containerTransferButtons() {
+        return ENABLE_CONTAINER_TRANSFER_BUTTONS.get();
+    }
+
     /** 返回全局界面可即时调整的布尔配置快照。 */
     public static int globalSettingsMask() {
         int mask = 0;
@@ -97,11 +107,13 @@ public final class FakePlayerConfig {
     }
 
     public enum GlobalSetting {
-        RESTORE_FAKE_PLAYERS;
+        RESTORE_FAKE_PLAYERS,
+        CONTAINER_TRANSFER_BUTTONS;
 
         private ModConfigSpec.BooleanValue value() {
             return switch (this) {
                 case RESTORE_FAKE_PLAYERS -> FakePlayerConfig.RESTORE_FAKE_PLAYERS;
+                case CONTAINER_TRANSFER_BUTTONS -> FakePlayerConfig.ENABLE_CONTAINER_TRANSFER_BUTTONS;
             };
         }
 

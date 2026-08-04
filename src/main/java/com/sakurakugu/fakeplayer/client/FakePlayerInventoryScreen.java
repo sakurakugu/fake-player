@@ -65,6 +65,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private static final int DROP_TAB_HEIGHT = 24;
     private static final int TRANSFER_BUTTON_LEFT = 144;
     private static final int TRANSFER_BUTTON_TOP = 165;
+    private static final int ENDER_CHEST_TRANSFER_BUTTON_TOP = 73;
     // 自动化标签放在 Q 键丢弃标签按钮下方。
     private static final int AUTOMATION_PANEL_TOP = DROP_PANEL_TOP + DROP_TAB_HEIGHT + 2;
     private static final int AUTOMATION_PANEL_WIDTH = 94;
@@ -92,6 +93,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     protected void init() {
         super.init();
         if (menu.view() == FakePlayerInventoryMenu.View.ENDER_CHEST) {
+            addTransferButtons(ENDER_CHEST_TRANSFER_BUTTON_TOP);
             return;
         }
         if (menu.view() == FakePlayerInventoryMenu.View.POSSESSED_INVENTORY) {
@@ -139,20 +141,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
                 button -> sendAction(FakePlayerInventoryMenu.ACTION_ENDER_CHEST)
             )
         );
-        addRenderableWidget(new TransferButton(
-            leftPos + TRANSFER_BUTTON_LEFT,
-            topPos + TRANSFER_BUTTON_TOP,
-            TransferButton.Direction.TO_CONTAINER,
-            (transferAll, includeHotbar) -> sendAction(
-                transferActionId(true, transferAll, includeHotbar))
-        ));
-        addRenderableWidget(new TransferButton(
-            leftPos + TRANSFER_BUTTON_LEFT + TransferButton.SIZE,
-            topPos + TRANSFER_BUTTON_TOP,
-            TransferButton.Direction.TO_INVENTORY,
-            (transferAll, includeHotbar) -> sendAction(
-                transferActionId(false, transferAll, includeHotbar))
-        ));
+        addTransferButtons(TRANSFER_BUTTON_TOP);
 
         int automationLeft = leftPos + imageWidth;
         int automationTop = topPos + AUTOMATION_PANEL_TOP + 21;
@@ -228,6 +217,23 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         automationPanel.bind(automationTabButton, automationButtons);
         dropPanel.bind(tabButton, dropPanelOverlay, dropModeButton, dropAmountSlider,
             continuousDropButton, executeDropButton);
+    }
+
+    private void addTransferButtons(int buttonTop) {
+        addRenderableWidget(new TransferButton(
+            leftPos + TRANSFER_BUTTON_LEFT,
+            topPos + buttonTop,
+            TransferButton.Direction.TO_CONTAINER,
+            (transferAll, includeHotbar) -> sendAction(
+                transferActionId(true, transferAll, includeHotbar))
+        ));
+        addRenderableWidget(new TransferButton(
+            leftPos + TRANSFER_BUTTON_LEFT + TransferButton.SIZE,
+            topPos + buttonTop,
+            TransferButton.Direction.TO_INVENTORY,
+            (transferAll, includeHotbar) -> sendAction(
+                transferActionId(false, transferAll, includeHotbar))
+        ));
     }
 
     private Component dropModeMessage() {
