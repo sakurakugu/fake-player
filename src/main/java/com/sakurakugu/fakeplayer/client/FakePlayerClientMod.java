@@ -11,6 +11,10 @@ import com.sakurakugu.fakeplayer.client.chunkloading.ClientChunkLoadingState;
 import com.sakurakugu.fakeplayer.client.chunkloading.ChunkLoadingHud;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
@@ -18,6 +22,7 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
+import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.client.network.event.RegisterClientPayloadHandlersEvent;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import net.neoforged.neoforge.common.NeoForge;
@@ -45,12 +50,15 @@ public final class FakePlayerClientMod {
         "key.fakeplayer.stop_possession", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_P, CATEGORY
     );
     private static int refreshTicks;
+    private static CreativeModeInventoryScreen creativeInventoryScreen;
+    private static Button creativePossessionButton;
 
     public FakePlayerClientMod(IEventBus modBus) {
         modBus.addListener(FakePlayerClientMod::registerKeys);
         modBus.addListener(FakePlayerClientMod::registerGuiLayers);
         modBus.addListener(FakePlayerClientMod::registerClientPayloads);
         NeoForge.EVENT_BUS.addListener(FakePlayerClientMod::clientTick);
+        NeoForge.EVENT_BUS.addListener(FakePlayerClientMod::addInventoryButtons);
     }
 
     private static void registerKeys(RegisterKeyMappingsEvent event) {
@@ -76,6 +84,7 @@ public final class FakePlayerClientMod {
     private static void clientTick(ClientTickEvent.Post event) {
         Minecraft minecraft = Minecraft.getInstance();
         ClientPossession.tick(minecraft);
+        updateCreativePossessionButton(minecraft);
         while (STOP_POSSESSION.consumeClick()) {
             if (ClientPossession.active()) {
                 ClientPacketDistributor.sendToServer(new StopPossessionPayload());
@@ -102,5 +111,39 @@ public final class FakePlayerClientMod {
             ClientPacketDistributor.sendToServer(new RequestChunkMapPayload(false));
             refreshTicks = 40;
         }
+    }
+
+    private static void updateCreativePossessionButton(Minecraft minecraft) {
+        if (!(minecraft.screen instanceof CreativeModeInventoryScreen screen)
+            || screen != creativeInventoryScreen || creativePossessionButton == null) {
+            return;
+        }
+        creativePossessionButton.visible = ClientPossession.active() && screen.isInventoryOpen();
+    }
+
+    /** 附身期间在原版个人背包中提供可见的退出入口。 */
+    private static void addInventoryButtons(ScreenEvent.Init.Post event) {
+        if (!(event.getScreen() instanceof InventoryScreen || event.getScreen() instanceof CreativeModeInventoryScreen)
+            || !ClientPossession.active()) {
+            return;
+        }
+        var screen = event.getScreen();
+        int buttonX = screen.width / 2
+            + (screen instanceof CreativeModeInventoryScreen ? 28 : -12);
+        int buttonY = screen.height / 2 
+            + (screen instanceof CreativeModeInventoryScreen ? -50 : -40);;
+        Button button = new FakePlayerInventoryScreen.IconButton(
+            buttonX,
+            buttonY,
+            FakePlayerInventoryScreen.POSSESSION_EXIT_ICON,
+            Component.translatable("gui.fakeplayer.stop_possessing"),
+            clicked -> ClientPacketDistributor.sendToServer(new StopPossessionPayload())
+        );
+        if (screen instanceof CreativeModeInventoryScreen creativeScreen) {
+            creativeInventoryScreen = creativeScreen;
+            creativePossessionButton = button;
+            button.visible = creativeScreen.isInventoryOpen();
+        }
+        event.addListener(button);
     }
 }

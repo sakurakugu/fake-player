@@ -8,7 +8,6 @@ import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerSavedData.PlayerSnapshot;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerSavedData.Preset;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerSavedData.Resident;
-import com.sakurakugu.fakeplayer.persistence.FakePlayerSavedData.PossessionRecovery;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -106,21 +105,6 @@ public final class FakePlayerPersistence {
             ValueInput input = TagValueInput.create(collector, player.registryAccess(), playerData);
             player.load(input);
         }
-    }
-
-    public static void beginPossessionRecovery(ServerPlayer operator, FakeServerPlayer target) {
-        data(operator.level().getServer()).putPossessionRecovery(new PossessionRecovery(
-            operator.getUUID(),
-            operator.getGameProfile().name(),
-            target.getUUID(),
-            target.getGameProfile().name(),
-            snapshot(operator),
-            snapshot(target)
-        ));
-    }
-
-    public static void completePossessionRecovery(MinecraftServer server, UUID operatorUuid) {
-        data(server).removePossessionRecovery(operatorUuid);
     }
 
     /** 玩家加入世界后恢复依赖世界实体列表的末影珍珠和载具。 */

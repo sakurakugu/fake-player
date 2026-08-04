@@ -144,15 +144,13 @@ public final class FakePlayerManager {
         remove(fake, true);
     }
 
-    /** 移除假玩家；恢复快照失败时保留原有驻留记录，避免半成品覆盖存档。 */
+    /** 移除假玩家；附身会话只会被丢弃，不恢复操作者的身体。 */
     public static void remove(FakeServerPlayer fake, boolean removeResident) {
         // 移除操作可能由死亡回调和菜单同时触发，需要保证可重复调用。
         if (fake.hasDisconnected()) {
             return;
         }
-        if (!FakePlayerPossession.stopTarget(fake)) {
-            return;
-        }
+        FakePlayerPossession.discardTarget(fake);
         fake.actions().stop();
         if (removeResident) {
             FakePlayerPersistence.untrack(fake);
@@ -162,9 +160,6 @@ public final class FakePlayerManager {
     }
 
     public static void kill(FakeServerPlayer fake) {
-        if (!FakePlayerPossession.stopTarget(fake)) {
-            return;
-        }
         boolean keepInventory = fake.level().getGameRules().get(GameRules.KEEP_INVENTORY);
         if (!keepInventory && fake.gameMode.getGameModeForPlayer() == GameType.SURVIVAL) {
             // 生存模式遵循 keepInventory；其他模式直接保存背包，便于下次同名玩家恢复。

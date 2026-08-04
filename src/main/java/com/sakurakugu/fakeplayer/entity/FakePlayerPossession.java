@@ -1,18 +1,13 @@
 package com.sakurakugu.fakeplayer.entity;
 
-import com.mojang.authlib.GameProfile;
 import com.sakurakugu.fakeplayer.FakePlayerMod;
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.network.PossessionStatePayload;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerPersistence;
-import com.sakurakugu.fakeplayer.persistence.FakePlayerSavedData.PossessionRecovery;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.inventory.PlayerEnderChestContainer;
@@ -23,10 +18,6 @@ import net.neoforged.neoforge.network.PacketDistributor;
 public final class FakePlayerPossession {
     private static final Map<UUID, Session> BY_VIEWER = new HashMap<>();
     private static final Map<UUID, Session> BY_TARGET = new HashMap<>();
-    private static final Map<UUID, PossessionRecovery> PENDING_RECOVERIES = new HashMap<>();
-    private static final Set<UUID> RECOVERY_LOCKS = new HashSet<>();
-    private static final Set<UUID> RESTORED_RECOVERY_TARGETS = new HashSet<>();
-
     private FakePlayerPossession() {
     }
 
@@ -34,7 +25,7 @@ public final class FakePlayerPossession {
         if (isControlling(viewer, target)) {
             return true;
         }
-        if (BY_VIEWER.containsKey(viewer.getUUID()) || PENDING_RECOVERIES.containsKey(viewer.getUUID())) {
+        if (BY_VIEWER.containsKey(viewer.getUUID())) {
             viewer.sendSystemMessage(Component.translatable("gui.fakeplayer.possess_unavailable"));
             return false;
         }
@@ -50,14 +41,6 @@ public final class FakePlayerPossession {
         prepareForExchange(target);
         PossessionBodyState viewerOriginal = PossessionBodyState.capture(viewer);
         PossessionBodyState targetOriginal = PossessionBodyState.capture(target);
-        try {
-            // 先落恢复记录，再修改任一实体；正常退出后才提交并删除记录。
-            FakePlayerPersistence.beginPossessionRecovery(viewer, target);
-        } catch (RuntimeException exception) {
-            FakePlayerMod.LOGGER.error("写入附身恢复记录失败", exception);
-            viewer.sendSystemMessage(Component.translatable("gui.fakeplayer.possess_failed"));
-            return false;
-        }
         Session session = new Session(
             viewer, target, viewerOriginal, targetOriginal, target.actions().snapshot(), State.STARTING
         );
@@ -75,7 +58,6 @@ public final class FakePlayerPossession {
             FakePlayerMod.LOGGER.error("开始附身身体交换失败，正在恢复 {} 与 {}",
                 viewer.getGameProfile().name(), target.getGameProfile().name(), exception);
             if (recoverOriginal(session)) {
-                FakePlayerPersistence.completePossessionRecovery(viewer.level().getServer(), viewer.getUUID());
                 removeSession(session);
             }
             viewer.sendSystemMessage(Component.translatable("gui.fakeplayer.possess_failed"));
@@ -88,17 +70,24 @@ public final class FakePlayerPossession {
         return session != null && stop(session);
     }
 
-    public static boolean stopTarget(FakeServerPlayer target) {
-        Session session = BY_TARGET.get(target.getUUID());
+    /** 生命周期结束时仅丢弃会话，不再尝试恢复附身前的身体。 */
+    public static void discard(ServerPlayer viewer) {
+        Session session = BY_VIEWER.get(viewer.getUUID());
         if (session != null) {
-            stop(session);
+            removeSession(session);
         }
-        return !isPossessed(target);
     }
 
-    public static void stopAll() {
+    public static void discardTarget(FakeServerPlayer target) {
+        Session session = BY_TARGET.get(target.getUUID());
+        if (session != null) {
+            removeSession(session);
+        }
+    }
+
+    public static void discardAll() {
         for (Session session : BY_VIEWER.values().toArray(Session[]::new)) {
-            stop(session);
+            removeSession(session);
         }
     }
 
@@ -113,7 +102,12 @@ public final class FakePlayerPossession {
             PossessionBodyState activeBody = PossessionBodyState.capture(session.viewer);
             PossessionBodyState shellBody = PossessionBodyState.capture(session.target);
             shellBody.apply(session.viewer);
-            activeBody.apply(session.target);
+            if (activeBody.isSpectator()) {
+                // 旁观模式只用于操作者脱离活动身体，不能覆盖假人进入附身前的模式和能力。
+                activeBody.applyWithGameModeFrom(session.target, session.targetOriginal);
+            } else {
+                activeBody.apply(session.target);
+            }
             finish(session);
             return true;
         } catch (RuntimeException exception) {
@@ -130,9 +124,6 @@ public final class FakePlayerPossession {
     private static void finish(Session session) {
         session.target.actions().restore(session.targetActions);
         FakePlayerPersistence.track(session.target);
-        FakePlayerPersistence.completePossessionRecovery(
-            session.viewer.level().getServer(), session.viewer.getUUID()
-        );
         removeSession(session);
         broadcast(session, false);
     }
@@ -189,7 +180,7 @@ public final class FakePlayerPossession {
     }
 
     public static boolean isPossessed(FakeServerPlayer target) {
-        return BY_TARGET.containsKey(target.getUUID()) || RECOVERY_LOCKS.contains(target.getUUID());
+        return BY_TARGET.containsKey(target.getUUID());
     }
 
     public static PlayerEnderChestContainer possessedEnderChest(ServerPlayer viewer) {
@@ -220,63 +211,6 @@ public final class FakePlayerPossession {
                 session.viewer.getId(), session.target.getId()
             ));
         }
-    }
-
-    /** 世界启动时先恢复假人，并把真实玩家快照保留到该玩家下次登录。 */
-    public static void recoverSavedSessions(MinecraftServer server) {
-        PENDING_RECOVERIES.clear();
-        RECOVERY_LOCKS.clear();
-        RESTORED_RECOVERY_TARGETS.clear();
-        for (PossessionRecovery recovery : FakePlayerPersistence.data(server).possessionRecoveries()) {
-            PENDING_RECOVERIES.put(recovery.operatorUuid(), recovery);
-            RECOVERY_LOCKS.add(recovery.targetUuid());
-            FakeServerPlayer target = FakePlayerManager.find(
-                server, new GameProfile(recovery.targetUuid(), recovery.targetName())
-            );
-            if (target == null) {
-                FakePlayerMod.LOGGER.warn("附身恢复记录中的假人 {} 尚未恢复，继续保留访问锁", recovery.targetName());
-                continue;
-            }
-            try {
-                FakePlayerPersistence.applyPlayerData(target, recovery.targetData());
-                syncAfterPersistentRecovery(target);
-                FakePlayerPersistence.track(target);
-                RESTORED_RECOVERY_TARGETS.add(recovery.targetUuid());
-            } catch (RuntimeException exception) {
-                FakePlayerMod.LOGGER.error("恢复附身假人 {} 的原状态失败", recovery.targetName(), exception);
-            }
-        }
-    }
-
-    public static void recoverPlayer(ServerPlayer player) {
-        PossessionRecovery recovery = PENDING_RECOVERIES.get(player.getUUID());
-        if (recovery == null) {
-            return;
-        }
-        try {
-            FakePlayerPersistence.applyPlayerData(player, recovery.operatorData());
-            syncAfterPersistentRecovery(player);
-            if (RESTORED_RECOVERY_TARGETS.contains(recovery.targetUuid())) {
-                FakePlayerPersistence.completePossessionRecovery(player.level().getServer(), player.getUUID());
-                PENDING_RECOVERIES.remove(player.getUUID());
-                RECOVERY_LOCKS.remove(recovery.targetUuid());
-                RESTORED_RECOVERY_TARGETS.remove(recovery.targetUuid());
-            }
-            player.sendSystemMessage(Component.translatable("gui.fakeplayer.possess_recovered"));
-        } catch (RuntimeException exception) {
-            FakePlayerMod.LOGGER.error("恢复玩家 {} 的附身前状态失败", player.getGameProfile().name(), exception);
-            player.sendSystemMessage(Component.translatable("gui.fakeplayer.possess_recovery_failed"));
-        }
-    }
-
-    private static void syncAfterPersistentRecovery(ServerPlayer player) {
-        player.connection.teleport(
-            player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot()
-        );
-        player.onUpdateAbilities();
-        player.inventoryMenu.broadcastFullState();
-        player.connection.resetPosition();
-        player.level().getChunkSource().move(player);
     }
 
     private static boolean canStart(ServerPlayer viewer, FakeServerPlayer target) {

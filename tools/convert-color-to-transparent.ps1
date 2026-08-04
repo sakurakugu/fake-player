@@ -1,15 +1,29 @@
+<#
+.SYNOPSIS
+将图片中指定的 RGB 颜色转换为透明色。
+
+.EXAMPLE
+.\convert-color-to-transparent.ps1 .\input.png 00A2E8
+
+.EXAMPLE
+.\convert-color-to-transparent.ps1 .\input.png -Color "#FF00FF"
+
+.NOTES
+在 PowerShell 中，未加引号的 # 会开始一段注释。建议直接使用 RRGGBB，
+或者给 #RRGGBB 加引号。
+#>
 param(
     [Parameter(Mandatory = $true, Position = 0)]
     [string]$Path,
 
-    [Parameter(Position = 1)]
-    [string]$Color = "#00A2E8"
+    [Parameter(Mandatory = $true, Position = 1)]
+    [string]$Color
 )
 
 $ErrorActionPreference = "Stop"
 
-if ($Color -notmatch '^#?([0-9A-Fa-f]{6})$') {
-    throw "颜色必须使用 RRGGBB 或 #RRGGBB 格式，例如 #00A2E8。"
+if ($Color -notmatch '^(?:#|0[xX])?([0-9A-Fa-f]{6})$') {
+    throw '颜色必须使用 RRGGBB、0xRRGGBB 或带引号的 "#RRGGBB" 格式，例如 00A2E8。'
 }
 
 $hexColor = $Matches[1]
@@ -47,7 +61,10 @@ try {
     }
 
     $result.Save($outputPath, [System.Drawing.Imaging.ImageFormat]::Png)
-    Write-Output "已将 $changedPixels 个像素设为透明：$outputPath"
+    if ($changedPixels -eq 0) {
+        Write-Warning "图片中没有找到颜色 #$hexColor 的精确匹配像素。"
+    }
+    Write-Output "已将 $changedPixels 个 #$hexColor 像素设为透明：$outputPath"
 } finally {
     if ($null -ne $result) {
         $result.Dispose()

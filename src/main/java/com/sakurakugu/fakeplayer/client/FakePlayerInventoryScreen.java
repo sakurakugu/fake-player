@@ -25,6 +25,10 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         Identifier.withDefaultNamespace("textures/gui/container/inventory.png");
     private static final Identifier DROP_TAB_ICON =
         Identifier.fromNamespaceAndPath("fakeplayer", "textures/gui/drop_tab.png");
+    static final Identifier POSSESSION_ENTER_ICON =
+        Identifier.fromNamespaceAndPath("fakeplayer", "textures/gui/possession_enter.png");
+    static final Identifier POSSESSION_EXIT_ICON =
+        Identifier.fromNamespaceAndPath("fakeplayer", "textures/gui/possession_exit.png");
     private static final int TARGET_INVENTORY_HEIGHT = 159;
     private static final int HOTBAR_SELECTOR_TOP = 159;
     private static final int HOTBAR_SELECTOR_HEIGHT = 5;
@@ -81,7 +85,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
                 new IconButton(
                     leftPos + ACTION_BUTTON_LEFT,
                     topPos + ACTION_BUTTON_TOP + (ACTION_BUTTON_HEIGHT + ACTION_BUTTON_GAP) * 2,
-                    new ItemStack(Items.ENDER_EYE),
+                    POSSESSION_EXIT_ICON,
                     Component.translatable("gui.fakeplayer.stop_possessing"),
                     button -> sendAction(FakePlayerInventoryMenu.ACTION_POSSESS)
                 )
@@ -101,7 +105,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             new IconButton(
                 leftPos + ACTION_BUTTON_LEFT,
                 topPos + ACTION_BUTTON_TOP + (ACTION_BUTTON_HEIGHT + ACTION_BUTTON_GAP) * 2,
-                new ItemStack(Items.ENDER_EYE),
+                menu.possessedByViewer() ? POSSESSION_EXIT_ICON : POSSESSION_ENTER_ICON,
                 menu.targetOccupied() && !menu.possessedByViewer() ? new ItemStack(Items.BARRIER) : null,
                 Component.translatable(menu.possessedByViewer()
                     ? "gui.fakeplayer.stop_possessing"
@@ -329,20 +333,33 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     }
 
     /** 用原版物品渲染图标按钮，文字仅作为悬浮提示和无障碍说明。 */
-    private static final class IconButton extends Button {
+    static final class IconButton extends Button {
         private final ItemStack icon;
+        private final Identifier textureIcon;
         private final ItemStack overlay;
 
-        private IconButton(int x, int y, ItemStack icon, Component tooltip, OnPress onPress) {
-            this(x, y, icon, null, tooltip, onPress);
+        IconButton(int x, int y, ItemStack icon, Component tooltip, OnPress onPress) {
+            this(x, y, icon, null, null, tooltip, onPress);
+        }
+
+        IconButton(int x, int y, Identifier textureIcon, Component tooltip, OnPress onPress) {
+            this(x, y, null, null, textureIcon, tooltip, onPress);
+        }
+
+        IconButton(
+            int x, int y, Identifier textureIcon, ItemStack overlay, Component tooltip, OnPress onPress
+        ) {
+            this(x, y, null, overlay, textureIcon, tooltip, onPress);
         }
 
         private IconButton(
-            int x, int y, ItemStack icon, ItemStack overlay, Component tooltip, OnPress onPress
+            int x, int y, ItemStack icon, ItemStack overlay, Identifier textureIcon,
+            Component tooltip, OnPress onPress
         ) {
             super(x, y, ACTION_BUTTON_WIDTH, ACTION_BUTTON_HEIGHT, tooltip, onPress, DEFAULT_NARRATION);
             this.icon = icon;
             this.overlay = overlay;
+            this.textureIcon = textureIcon;
             setTooltip(Tooltip.create(tooltip));
         }
 
@@ -363,7 +380,12 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             graphics.fill(x + 1, y + 1, right - 1, bottom - 1, color);
             graphics.fill(x, bottom - 1, x + 1, bottom, 0xFF8B8B8B);
             graphics.fill(right - 1, y, right, y + 1, 0xFF8B8B8B);
-            graphics.item(icon, getX() + 1, getY() + 1);
+            if (textureIcon != null) {
+                graphics.blit(RenderPipelines.GUI_TEXTURED, textureIcon, getX() + 1, getY() + 1,
+                    0.0F, 0.0F, 16, 16, 16, 16);
+            } else {
+                graphics.item(icon, getX() + 1, getY() + 1);
+            }
             if (overlay != null) {
                 graphics.item(overlay, getX() + 2, getY() + 2);
             }

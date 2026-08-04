@@ -85,6 +85,19 @@ final class PossessionBodyState {
 
     /** 应用快照时只写身体字段，不触碰身份、连接、统计、进度或末影箱。 */
     public void apply(ServerPlayer player) {
+        apply(player, this);
+    }
+
+    /** 应用身体状态，但从指定快照恢复游戏模式及对应能力。 */
+    public void applyWithGameModeFrom(ServerPlayer player, PossessionBodyState gameModeState) {
+        apply(player, gameModeState);
+    }
+
+    public boolean isSpectator() {
+        return gameType == GameType.SPECTATOR;
+    }
+
+    private void apply(ServerPlayer player, PossessionBodyState gameModeState) {
         player.stopUsingItem();
         player.connection.teleport(position.x, position.y, position.z, yaw, pitch);
         player.setDeltaMovement(velocity);
@@ -99,8 +112,8 @@ final class PossessionBodyState {
         destination.setSelectedSlot(selectedSlot);
         destination.setChanged();
 
-        player.setGameMode(gameType);
-        player.getAbilities().apply(abilities);
+        player.setGameMode(gameModeState.gameType);
+        player.getAbilities().apply(gameModeState.abilities);
         player.onUpdateAbilities();
 
         player.removeAllEffects();

@@ -44,14 +44,12 @@ public final class CommonEvents {
     @SubscribeEvent
     public static void serverStarted(ServerStartedEvent event) {
         FakePlayerPersistence.restore(event.getServer());
-        FakePlayerPossession.recoverSavedSessions(event.getServer());
         ChunkLoaderManager.reconcile(event.getServer());
     }
 
     @SubscribeEvent
     public static void serverStopping(ServerStoppingEvent event) {
-        // 正常关服前完成恢复，让随后保存的 playerdata 和驻留假人状态保持一致。
-        FakePlayerPossession.stopAll();
+        FakePlayerPossession.discardAll();
     }
 
     @SubscribeEvent
@@ -88,7 +86,8 @@ public final class CommonEvents {
             return;
         }
         if (FakePlayerPossession.isPossessed(fake)) {
-            viewer.sendSystemMessage(Component.translatable("gui.fakeplayer.possess_locked"));
+            // 附身中的假人表现为当前玩家的躯壳，右键时应与普通玩家一样不打开管理界面。
+            // viewer.sendSystemMessage(Component.translatable("gui.fakeplayer.possess_locked"));
             event.setCancellationResult(InteractionResult.FAIL);
             event.setCanceled(true);
             return;
@@ -101,17 +100,16 @@ public final class CommonEvents {
     }
 
     @SubscribeEvent
-    public static void playerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
-        if (event.getEntity() instanceof ServerPlayer player && !(player instanceof FakeServerPlayer)) {
-            FakePlayerPossession.stop(player);
+    public static void playerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            FakePlayerPossession.syncTo(player);
         }
     }
 
     @SubscribeEvent
-    public static void playerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
-        if (event.getEntity() instanceof ServerPlayer player) {
-            FakePlayerPossession.recoverPlayer(player);
-            FakePlayerPossession.syncTo(player);
+    public static void playerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player && !(player instanceof FakeServerPlayer)) {
+            FakePlayerPossession.discard(player);
         }
     }
 
