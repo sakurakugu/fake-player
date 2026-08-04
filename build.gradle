@@ -29,7 +29,29 @@ neoForge {
     version = project.neo_version
 
     runs {
-        client { client() }
+        client {
+            client()
+            programArgument '--username'
+            programArgument 'Player1'
+        }
+        clientServer1 {
+            client()
+            ideName = 'Minecraft Client Server 1'
+            gameDirectory = project.layout.projectDirectory.dir('run/client-server-1')
+            programArgument '--username'
+            programArgument 'Player1'
+            programArgument '--server'
+            programArgument '127.0.0.1:25565'
+        }
+        clientServer2 {
+            client()
+            ideName = 'Minecraft Client Server 2'
+            gameDirectory = project.layout.projectDirectory.dir('run/client-server-2')
+            programArgument '--username'
+            programArgument 'Player2'
+            programArgument '--server'
+            programArgument '127.0.0.1:25565'
+        }
         server {
             server()
             programArgument '--nogui'
