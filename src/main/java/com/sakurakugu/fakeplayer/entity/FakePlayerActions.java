@@ -58,13 +58,25 @@ public final class FakePlayerActions {
     private float blockDamage;
     private int blockBreakCooldown;
     private int useCooldown;
+    private int movementInputTicks;
+    private float heldTurn;
+    private int lastJumpTick = -1000;
 
     FakePlayerActions(FakeServerPlayer player) {
         this.player = player;
     }
 
     public void tick() {
+        if (useCooldown > 0) {
+            useCooldown--;
+        }
         applyMovementInput();
+        if (movementInputTicks > 0 && --movementInputTicks == 0) {
+            setMovementInput(0.0F, 0.0F);
+        }
+        if (heldTurn != 0.0F) {
+            turn(heldTurn);
+        }
         if (player.isSpectator()) {
             stopTransientActions();
             return;
@@ -275,7 +287,6 @@ public final class FakePlayerActions {
 
     private boolean performUse() {
         if (useCooldown > 0) {
-            useCooldown--;
             return true;
         }
         if (player.isUsingItem()) {
@@ -318,7 +329,9 @@ public final class FakePlayerActions {
             Entity entity = entityHit.getEntity();
             if (player.level().getWorldBorder().isWithinBounds(entity.blockPosition())
                 && player.isWithinEntityInteractionRange(entity, 0.0)) {
-                return player.interactOn(entity, hand, entityHit.getLocation());
+                Vec3 relativeHit = entityHit.getLocation().subtract(entity.position());
+                InteractionResult result = entity.interact(player, hand, relativeHit);
+                return result.consumesAction() ? result : player.interactOn(entity, hand, relativeHit);
             }
         }
         return InteractionResult.PASS;
@@ -360,10 +373,19 @@ public final class FakePlayerActions {
     private void jumpOnce(boolean held) {
         if (held) {
             player.setJumping(true);
+        } else if (player.getAbilities().mayfly
+            && player.tickCount - lastJumpTick <= 10
+            && (player.getAbilities().flying || !player.onGround())) {
+            // 假人没有客户端按键包，因此在服务端按两次跳跃直接切换飞行状态。
+            player.getAbilities().flying = !player.getAbilities().flying;
+            player.onUpdateAbilities();
+            lastJumpTick = -1000;
         } else if (player.onGround()) {
             player.jumpFromGround();
+            lastJumpTick = player.tickCount;
         } else if (!player.onClimbable()) {
             player.tryToStartFallFlying();
+            lastJumpTick = player.tickCount;
         }
     }
 
@@ -374,6 +396,65 @@ public final class FakePlayerActions {
             case LEFT -> setMovementInput(0.0F, 1.0F);
             case RIGHT -> setMovementInput(0.0F, -1.0F);
         }
+    }
+
+    /** 执行一个刻的移动输入，供控制界面的单击使用。 */
+    public void moveOnce(MoveDirection direction) {
+        move(direction);
+        movementInputTicks = 1;
+    }
+
+    /** 在飞行状态下给假人一个竖直方向的移动速度。 */
+    public void flyVertical(boolean upward) {
+        if (!player.getAbilities().flying) {
+            return;
+        }
+        Vec3 movement = player.getDeltaMovement();
+        player.setDeltaMovement(movement.x, upward ? 0.3D : -0.3D, movement.z);
+        player.hurtMarked = true;
+    }
+
+    /** 开始持续移动，直到界面发送停止动作。 */
+    public void startMove(MoveDirection direction) {
+        move(direction);
+        movementInputTicks = Integer.MAX_VALUE;
+    }
+
+    public void stopMove() {
+        movementInputTicks = 0;
+        setMovementInput(0.0F, 0.0F);
+    }
+
+    public void startAttack() {
+        attack(RepeatMode.CONTINUOUS, 1);
+    }
+
+    public void startUse() {
+        use(RepeatMode.CONTINUOUS, 1);
+    }
+
+    public void startJump() {
+        jump(RepeatMode.CONTINUOUS, 1);
+    }
+
+    public void stopAttack() {
+        stopAction(ScheduledAction.ATTACK);
+    }
+
+    public void stopUse() {
+        stopAction(ScheduledAction.USE);
+    }
+
+    public void stopJump() {
+        stopAction(ScheduledAction.JUMP);
+    }
+
+    public void startTurn(float yawDelta) {
+        heldTurn = yawDelta;
+    }
+
+    public void stopTurn() {
+        heldTurn = 0.0F;
     }
 
     private void setMovementInput(float forward, float strafe) {
@@ -478,6 +559,8 @@ public final class FakePlayerActions {
         dropRequest = null;
         forwardInput = 0.0F;
         strafeInput = 0.0F;
+        movementInputTicks = 0;
+        heldTurn = 0.0F;
         player.zza = 0.0F;
         player.xxa = 0.0F;
         player.setShiftKeyDown(false);

@@ -80,7 +80,7 @@ public final class CommonEvents {
 
     @SubscribeEvent
     public static void interact(PlayerInteractEvent.EntityInteract event) {
-        // 仅服务端真实玩家右键假玩家时打开控制菜单。
+        // 仅服务端真实玩家右键假玩家时打开物品栏管理页面。
         if (!(event.getEntity() instanceof ServerPlayer viewer) || !(event.getTarget() instanceof FakeServerPlayer fake)) {
             return;
         }
@@ -95,7 +95,7 @@ public final class CommonEvents {
             return;
         }
 
-        FakePlayerMenuOpener.openControl(viewer, fake);
+        FakePlayerMenuOpener.openInventory(viewer, fake);
         // 阻止原版继续处理右键实体，避免同时触发物品交互。
         event.setCancellationResult(InteractionResult.SUCCESS);
         event.setCanceled(true);

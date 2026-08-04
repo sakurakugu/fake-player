@@ -78,15 +78,15 @@ public final class FakePlayerCommand {
         target.then(spawnCommand());
         target.then(Commands.literal("kill").executes(FakePlayerCommand::kill));
         target.then(Commands.literal("shadow").executes(FakePlayerCommand::shadow));
-        target.then(Commands.literal("gui").executes(FakePlayerCommand::openPlayerGui));
+        target.then(Commands.literal("gui")
+            .executes(FakePlayerCommand::openPlayerGui)
+            .then(Commands.literal("bag").executes(FakePlayerCommand::openPlayerGui))
+            .then(Commands.literal("enderchest").executes(FakePlayerCommand::openEnderChest)));
         target.then(Commands.literal("setting")
             .executes(FakePlayerCommand::openPlayerGui)
             .then(Commands.literal("default").executes(FakePlayerCommand::resetSettings))
             .then(Commands.literal("reset").executes(FakePlayerCommand::resetSettings)));
         target.then(automationCommand());
-        target.then(Commands.literal("bag").executes(FakePlayerCommand::openBag));
-        target.then(Commands.literal("backpack").executes(FakePlayerCommand::openBag));
-        target.then(Commands.literal("enderchest").executes(FakePlayerCommand::openEnderChest));
         target.then(Commands.literal("possess").executes(FakePlayerCommand::possess));
         target.then(Commands.literal("unpossess").executes(FakePlayerCommand::unpossessTarget));
         target.then(dropCommand("drop", false));
@@ -657,19 +657,6 @@ public final class FakePlayerCommand {
     }
 
     private static int openPlayerGui(CommandContext<CommandSourceStack> context) {
-        ServerPlayer viewer = context.getSource().getPlayer();
-        FakeServerPlayer fake = getFake(context);
-        if (viewer == null || fake == null) {
-            if (viewer == null) {
-                context.getSource().sendFailure(Component.translatable("commands.fakeplayer.player_only"));
-            }
-            return 0;
-        }
-        FakePlayerMenuOpener.openControl(viewer, fake);
-        return 1;
-    }
-
-    private static int openBag(CommandContext<CommandSourceStack> context) {
         ServerPlayer viewer = context.getSource().getPlayer();
         FakeServerPlayer fake = getFake(context);
         if (viewer == null || fake == null) {

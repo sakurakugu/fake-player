@@ -70,7 +70,7 @@ public final class GlobalFakePlayerMenu extends AbstractContainerMenu {
             FakePlayerMenuOpener.openList(viewer);
             return true;
         }
-        FakePlayerMenuOpener.openControl(viewer, target);
+        FakePlayerMenuOpener.openInventory(viewer, target);
         return true;
     }
 

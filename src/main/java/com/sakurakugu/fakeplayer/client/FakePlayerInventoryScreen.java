@@ -49,8 +49,12 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     // 普通管理页面不开放假人的 2x2 合成区。
     private static final int CRAFTING_AREA_LEFT = 97;
     private static final int CRAFTING_AREA_TOP = 17;
-    private static final int CRAFTING_AREA_WIDTH = 74;
-    private static final int CRAFTING_AREA_HEIGHT = 36;
+    private static final int CRAFTING_AREA_WIDTH = 76;
+    private static final int CRAFTING_AREA_HEIGHT = 55;
+    private static final int CONTROL_LEFT = 97;
+    private static final int CONTROL_TOP = 18;
+    private static final int CONTROL_SIZE = 18;
+    private static final int SNEAK_BUTTON_LEFT = 155;
 
     // 三个按钮纵向排列，附身按钮正好位于末影箱下方和副手槽上方。
     private static final int ACTION_BUTTON_LEFT = 76;
@@ -82,8 +86,13 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private boolean percentageDrop;
     private int dropAmount = 1;
     private int dropPercentage = 100;
+    private int heldAction = -1;
+    private int heldTicks;
+    private boolean heldStarted;
     private DropAmountSlider dropAmountSlider;
     private Button dropModeButton;
+    private Button flyUpButton;
+    private Button flyDownButton;
 
     public FakePlayerInventoryScreen(FakePlayerInventoryMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, menu.screenWidth(), menu.screenHeight());
@@ -142,6 +151,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             )
         );
         addTransferButtons(TRANSFER_BUTTON_TOP);
+        addControlButtons();
 
         int automationLeft = leftPos + imageWidth;
         int automationTop = topPos + AUTOMATION_PANEL_TOP + 21;
@@ -217,6 +227,76 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         automationPanel.bind(automationTabButton, automationButtons);
         dropPanel.bind(tabButton, dropPanelOverlay, dropModeButton, dropAmountSlider,
             continuousDropButton, executeDropButton);
+    }
+
+    /** 在假人物品栏的空白区域添加移动和即时动作操控杆。 */
+    private void addControlButtons() {
+        addControlButton(0, 0, "↶", FakePlayerInventoryMenu.ACTION_TURN_LEFT);
+        addControlButton(1, 0, "↑", FakePlayerInventoryMenu.ACTION_MOVE_FORWARD);
+        addControlButton(2, 0, "↷", FakePlayerInventoryMenu.ACTION_TURN_RIGHT);
+        addControlButton(0, 1, "←", FakePlayerInventoryMenu.ACTION_MOVE_LEFT);
+        addControlButton(1, 1, "S", FakePlayerInventoryMenu.ACTION_SNEAK);
+        addControlButton(2, 1, "→", FakePlayerInventoryMenu.ACTION_MOVE_RIGHT);
+        addControlButton(0, 2, "L", FakePlayerInventoryMenu.ACTION_ATTACK_ONCE);
+        addControlButton(1, 2, "↓", FakePlayerInventoryMenu.ACTION_MOVE_BACKWARD);
+        addControlButton(2, 2, "R", FakePlayerInventoryMenu.ACTION_USE_ONCE);
+
+        addControlButtonAt(
+            leftPos + SNEAK_BUTTON_LEFT,
+            topPos + CONTROL_TOP + CONTROL_SIZE,
+            "J",
+            FakePlayerInventoryMenu.ACTION_JUMP
+        );
+
+        flyUpButton = addControlButtonAt(
+            leftPos + SNEAK_BUTTON_LEFT,
+            topPos + CONTROL_TOP,
+            "↑",
+            FakePlayerInventoryMenu.ACTION_FLY_UP
+        );
+        flyUpButton.setTooltip(Tooltip.create(Component.translatable("gui.fakeplayer.fly_up")));
+        flyDownButton = addControlButtonAt(
+            leftPos + SNEAK_BUTTON_LEFT,
+            topPos + CONTROL_TOP + CONTROL_SIZE * 2,
+            "↓",
+            FakePlayerInventoryMenu.ACTION_FLY_DOWN
+        );
+        flyDownButton.setTooltip(Tooltip.create(Component.translatable("gui.fakeplayer.fly_down")));
+        updateFlyingButtons();
+    }
+
+    private void addControlButton(int column, int row, String label, int actionId) {
+        addControlButtonAt(
+            leftPos + CONTROL_LEFT + column * CONTROL_SIZE,
+            topPos + CONTROL_TOP + row * CONTROL_SIZE,
+            label,
+            actionId
+        );
+    }
+
+    private Button addControlButtonAt(int x, int y, String label, int actionId) {
+        return addRenderableWidget(new CompactButton(
+            x,
+            y,
+            CONTROL_SIZE,
+            CONTROL_SIZE,
+            Component.literal(label),
+            ignored -> {
+                sendAction(actionId);
+                heldAction = actionId;
+                heldTicks = 0;
+                heldStarted = false;
+            }
+        ));
+    }
+
+    private void updateFlyingButtons() {
+        if (flyUpButton == null || flyDownButton == null) {
+            return;
+        }
+        boolean visible = menu.isFlying();
+        flyUpButton.visible = visible;
+        flyDownButton.visible = visible;
     }
 
     private void addTransferButtons(int buttonTop) {
@@ -301,6 +381,38 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
                 && mouseY >= getY() && mouseY < getY() + DROP_TAB_HEIGHT;
             return !overTab && super.isMouseOver(mouseX, mouseY);
         }
+    }
+
+    @Override
+    protected void containerTick() {
+        super.containerTick();
+        updateFlyingButtons();
+        if (heldAction < 0) {
+            return;
+        }
+        heldTicks++;
+        if (!heldStarted && heldTicks >= 5) {
+            int continuous = continuousAction(heldAction);
+            if (continuous >= 0) {
+                sendAction(continuous);
+                heldStarted = true;
+            }
+        }
+    }
+
+    private static int continuousAction(int action) {
+        return switch (action) {
+            case FakePlayerInventoryMenu.ACTION_TURN_LEFT -> FakePlayerInventoryMenu.ACTION_TURN_LEFT_HELD;
+            case FakePlayerInventoryMenu.ACTION_MOVE_FORWARD -> FakePlayerInventoryMenu.ACTION_MOVE_FORWARD_HELD;
+            case FakePlayerInventoryMenu.ACTION_TURN_RIGHT -> FakePlayerInventoryMenu.ACTION_TURN_RIGHT_HELD;
+            case FakePlayerInventoryMenu.ACTION_MOVE_LEFT -> FakePlayerInventoryMenu.ACTION_MOVE_LEFT_HELD;
+            case FakePlayerInventoryMenu.ACTION_JUMP -> FakePlayerInventoryMenu.ACTION_JUMP_HELD;
+            case FakePlayerInventoryMenu.ACTION_MOVE_RIGHT -> FakePlayerInventoryMenu.ACTION_MOVE_RIGHT_HELD;
+            case FakePlayerInventoryMenu.ACTION_ATTACK_ONCE -> FakePlayerInventoryMenu.ACTION_ATTACK_HELD;
+            case FakePlayerInventoryMenu.ACTION_MOVE_BACKWARD -> FakePlayerInventoryMenu.ACTION_MOVE_BACKWARD_HELD;
+            case FakePlayerInventoryMenu.ACTION_USE_ONCE -> FakePlayerInventoryMenu.ACTION_USE_HELD;
+            default -> -1;
+        };
     }
 
     /** 根据当前计量模式，将滑块位置映射到整数数量或百分比。 */
@@ -538,6 +650,32 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             }
         }
         return super.mouseClicked(event, doubleClick);
+    }
+
+    @Override
+    public boolean mouseReleased(MouseButtonEvent event) {
+        if (event.button() == 0 && heldAction >= 0) {
+            if (heldStarted) {
+                sendAction(FakePlayerInventoryMenu.ACTION_STOP_HELD);
+            }
+            resetHeldAction();
+        }
+        return super.mouseReleased(event);
+    }
+
+    @Override
+    public void removed() {
+        if (heldStarted) {
+            sendAction(FakePlayerInventoryMenu.ACTION_STOP_HELD);
+        }
+        resetHeldAction();
+        super.removed();
+    }
+
+    private void resetHeldAction() {
+        heldAction = -1;
+        heldStarted = false;
+        heldTicks = 0;
     }
 
     @Override

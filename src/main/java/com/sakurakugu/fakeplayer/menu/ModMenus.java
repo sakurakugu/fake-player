@@ -12,12 +12,6 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 public final class ModMenus {
     private static final DeferredRegister<MenuType<?>> MENUS = DeferredRegister.create(Registries.MENU, FakePlayerMod.MOD_ID);
 
-    public static final DeferredHolder<MenuType<?>, MenuType<FakePlayerMenu>> FAKE_PLAYER = MENUS.register(
-        "control",
-        // 扩展菜单类型允许 NeoForge 将打开菜单时的附加网络数据交给客户端构造器。
-        () -> IMenuTypeExtension.create(FakePlayerMenu::new)
-    );
-
     public static final DeferredHolder<MenuType<?>, MenuType<GlobalFakePlayerMenu>> GLOBAL_FAKE_PLAYER = MENUS.register(
         "global",
         () -> IMenuTypeExtension.create(GlobalFakePlayerMenu::new)

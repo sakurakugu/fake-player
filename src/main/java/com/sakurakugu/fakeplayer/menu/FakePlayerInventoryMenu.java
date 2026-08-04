@@ -69,6 +69,28 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     public static final int ACTION_AUTO_REPLENISHMENT_FROM_SHULKER_BOXES = ACTION_AUTO_REPLENISHMENT + 1;
     public static final int ACTION_AUTO_REPLACE_TOOLS = ACTION_AUTO_REPLENISHMENT_FROM_SHULKER_BOXES + 1;
     public static final int ACTION_AUTO_FISHING = ACTION_AUTO_REPLACE_TOOLS + 1;
+    public static final int ACTION_MOVE_FORWARD = ACTION_AUTO_FISHING + 1;
+    public static final int ACTION_MOVE_BACKWARD = ACTION_MOVE_FORWARD + 1;
+    public static final int ACTION_MOVE_LEFT = ACTION_MOVE_BACKWARD + 1;
+    public static final int ACTION_MOVE_RIGHT = ACTION_MOVE_LEFT + 1;
+    public static final int ACTION_JUMP = ACTION_MOVE_RIGHT + 1;
+    public static final int ACTION_ATTACK_ONCE = ACTION_JUMP + 1;
+    public static final int ACTION_USE_ONCE = ACTION_ATTACK_ONCE + 1;
+    public static final int ACTION_TURN_LEFT = ACTION_USE_ONCE + 1;
+    public static final int ACTION_TURN_RIGHT = ACTION_TURN_LEFT + 1;
+    public static final int ACTION_SNEAK = ACTION_TURN_RIGHT + 1;
+    public static final int ACTION_MOVE_FORWARD_HELD = ACTION_SNEAK + 1;
+    public static final int ACTION_MOVE_BACKWARD_HELD = ACTION_MOVE_FORWARD_HELD + 1;
+    public static final int ACTION_MOVE_LEFT_HELD = ACTION_MOVE_BACKWARD_HELD + 1;
+    public static final int ACTION_MOVE_RIGHT_HELD = ACTION_MOVE_LEFT_HELD + 1;
+    public static final int ACTION_TURN_LEFT_HELD = ACTION_MOVE_RIGHT_HELD + 1;
+    public static final int ACTION_TURN_RIGHT_HELD = ACTION_TURN_LEFT_HELD + 1;
+    public static final int ACTION_STOP_HELD = ACTION_TURN_RIGHT_HELD + 1;
+    public static final int ACTION_ATTACK_HELD = ACTION_STOP_HELD + 1;
+    public static final int ACTION_USE_HELD = ACTION_ATTACK_HELD + 1;
+    public static final int ACTION_JUMP_HELD = ACTION_USE_HELD + 1;
+    public static final int ACTION_FLY_UP = ACTION_JUMP_HELD + 1;
+    public static final int ACTION_FLY_DOWN = ACTION_FLY_UP + 1;
     private static final EquipmentSlot[] ARMOR_SLOTS = {
         EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET
     };
@@ -88,6 +110,9 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     private final DataSlot selectedHotbarSlot;
     private int automationMaskSnapshot;
     private final DataSlot automationMask;
+    private int flyingSnapshot;
+    private final DataSlot flying;
+    private int heldControlAction = -1;
 
     public FakePlayerInventoryMenu(int containerId, Inventory inventory, RegistryFriendlyByteBuf data) {
         this(
@@ -161,6 +186,17 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             @Override
             public void set(int value) {
                 automationMaskSnapshot = value;
+            }
+        });
+        this.flying = addDataSlot(new DataSlot() {
+            @Override
+            public int get() {
+                return target == null ? flyingSnapshot : target.getAbilities().flying ? 1 : 0;
+            }
+
+            @Override
+            public void set(int value) {
+                flyingSnapshot = value;
             }
         });
 
@@ -294,11 +330,73 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
                 // 只同步数据槽，保留客户端展开状态。
                 broadcastChanges();
             }
+            case ACTION_MOVE_FORWARD -> target.actions().moveOnce(FakePlayerActions.MoveDirection.FORWARD);
+            case ACTION_MOVE_BACKWARD -> target.actions().moveOnce(FakePlayerActions.MoveDirection.BACKWARD);
+            case ACTION_MOVE_LEFT -> target.actions().moveOnce(FakePlayerActions.MoveDirection.LEFT);
+            case ACTION_MOVE_RIGHT -> target.actions().moveOnce(FakePlayerActions.MoveDirection.RIGHT);
+            case ACTION_JUMP -> target.actions().jump();
+            case ACTION_ATTACK_ONCE -> target.actions().attackOnce();
+            case ACTION_USE_ONCE -> target.actions().useOnce();
+            case ACTION_TURN_LEFT -> target.actions().turn(-1.0F);
+            case ACTION_TURN_RIGHT -> target.actions().turn(1.0F);
+            case ACTION_SNEAK -> target.actions().toggleSneak();
+            case ACTION_MOVE_FORWARD_HELD -> startHeldMove(FakePlayerActions.MoveDirection.FORWARD);
+            case ACTION_MOVE_BACKWARD_HELD -> startHeldMove(FakePlayerActions.MoveDirection.BACKWARD);
+            case ACTION_MOVE_LEFT_HELD -> startHeldMove(FakePlayerActions.MoveDirection.LEFT);
+            case ACTION_MOVE_RIGHT_HELD -> startHeldMove(FakePlayerActions.MoveDirection.RIGHT);
+            case ACTION_TURN_LEFT_HELD -> startHeldTurn(-1.0F);
+            case ACTION_TURN_RIGHT_HELD -> startHeldTurn(1.0F);
+            case ACTION_STOP_HELD -> {
+                stopHeldControl();
+            }
+            case ACTION_ATTACK_HELD -> {
+                target.actions().startAttack();
+                heldControlAction = ACTION_ATTACK_HELD;
+            }
+            case ACTION_USE_HELD -> {
+                target.actions().startUse();
+                heldControlAction = ACTION_USE_HELD;
+            }
+            case ACTION_JUMP_HELD -> {
+                target.actions().startJump();
+                heldControlAction = ACTION_JUMP_HELD;
+            }
+            case ACTION_FLY_UP -> target.actions().flyVertical(true);
+            case ACTION_FLY_DOWN -> target.actions().flyVertical(false);
             default -> {
                 return false;
             }
         }
         return true;
+    }
+
+    private void startHeldMove(FakePlayerActions.MoveDirection direction) {
+        target.actions().startMove(direction);
+        heldControlAction = switch (direction) {
+            case FORWARD -> ACTION_MOVE_FORWARD_HELD;
+            case BACKWARD -> ACTION_MOVE_BACKWARD_HELD;
+            case LEFT -> ACTION_MOVE_LEFT_HELD;
+            case RIGHT -> ACTION_MOVE_RIGHT_HELD;
+        };
+    }
+
+    private void startHeldTurn(float yawDelta) {
+        target.actions().startTurn(yawDelta);
+        heldControlAction = yawDelta < 0.0F ? ACTION_TURN_LEFT_HELD : ACTION_TURN_RIGHT_HELD;
+    }
+
+    private void stopHeldControl() {
+        switch (heldControlAction) {
+            case ACTION_MOVE_FORWARD_HELD, ACTION_MOVE_BACKWARD_HELD,
+                ACTION_MOVE_LEFT_HELD, ACTION_MOVE_RIGHT_HELD -> target.actions().stopMove();
+            case ACTION_TURN_LEFT_HELD, ACTION_TURN_RIGHT_HELD -> target.actions().stopTurn();
+            case ACTION_ATTACK_HELD -> target.actions().stopAttack();
+            case ACTION_USE_HELD -> target.actions().stopUse();
+            case ACTION_JUMP_HELD -> target.actions().stopJump();
+            default -> {
+            }
+        }
+        heldControlAction = -1;
     }
 
     /** 默认只处理双方的 27 格主背包；按住 Ctrl 才包含快捷栏，装备槽始终保持原样。 */
@@ -446,6 +544,9 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
 
     @Override
     public void removed(Player player) {
+        if (heldControlAction >= 0 && target != null) {
+            stopHeldControl();
+        }
         // 附身界面没有操作者背包，关闭时鼠标携带物也必须回到假人。
         if (view == View.POSSESSED_INVENTORY && !player.level().isClientSide() && !getCarried().isEmpty()) {
             ItemStack carried = getCarried();
@@ -524,6 +625,10 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
 
     public boolean targetOccupied() {
         return targetOccupied;
+    }
+
+    public boolean isFlying() {
+        return flying.get() != 0;
     }
 
     public boolean automationEnabled(int index) {
