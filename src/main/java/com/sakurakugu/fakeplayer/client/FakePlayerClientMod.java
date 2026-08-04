@@ -9,6 +9,7 @@ import com.sakurakugu.fakeplayer.network.StopPossessionPayload;
 import com.sakurakugu.fakeplayer.network.ChunkMapSnapshotPayload;
 import com.sakurakugu.fakeplayer.client.chunkloading.ClientChunkLoadingState;
 import com.sakurakugu.fakeplayer.client.chunkloading.ChunkLoadingHud;
+import com.sakurakugu.fakeplayer.client.ui.IconButton;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
@@ -132,7 +133,7 @@ public final class FakePlayerClientMod {
             + (screen instanceof CreativeModeInventoryScreen ? 28 : -12);
         int buttonY = screen.height / 2 
             + (screen instanceof CreativeModeInventoryScreen ? -50 : -40);;
-        Button button = new FakePlayerInventoryScreen.IconButton(
+        Button button = new IconButton(
             buttonX,
             buttonY,
             FakePlayerInventoryScreen.POSSESSION_EXIT_ICON,

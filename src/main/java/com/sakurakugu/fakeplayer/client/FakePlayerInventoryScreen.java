@@ -1,8 +1,15 @@
 package com.sakurakugu.fakeplayer.client;
 
 import com.sakurakugu.fakeplayer.menu.FakePlayerInventoryMenu;
+import com.sakurakugu.fakeplayer.client.ui.CompactButton;
+import com.sakurakugu.fakeplayer.client.ui.CompactSliderButton;
+import com.sakurakugu.fakeplayer.client.ui.IconButton;
+import com.sakurakugu.fakeplayer.client.ui.IconTabButton;
+import com.sakurakugu.fakeplayer.client.ui.OverlayPanelManager;
+import com.sakurakugu.fakeplayer.client.ui.PixelGui;
+import com.sakurakugu.fakeplayer.client.ui.ToggleSwitchButton;
+import com.sakurakugu.fakeplayer.client.ui.TransferButton;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
@@ -25,9 +32,9 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         Identifier.withDefaultNamespace("textures/gui/container/inventory.png");
     private static final Identifier DROP_TAB_ICON =
         Identifier.fromNamespaceAndPath("fakeplayer", "textures/gui/drop_tab.png");
-    static final Identifier POSSESSION_ENTER_ICON =
+    public static final Identifier POSSESSION_ENTER_ICON =
         Identifier.fromNamespaceAndPath("fakeplayer", "textures/gui/possession_enter.png");
-    static final Identifier POSSESSION_EXIT_ICON =
+    public static final Identifier POSSESSION_EXIT_ICON =
         Identifier.fromNamespaceAndPath("fakeplayer", "textures/gui/possession_exit.png");
     private static final int TARGET_INVENTORY_HEIGHT = 159;
     private static final int HOTBAR_SELECTOR_TOP = 159;
@@ -58,27 +65,24 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private static final int DROP_TAB_HEIGHT = 24;
     private static final int TRANSFER_BUTTON_LEFT = 144;
     private static final int TRANSFER_BUTTON_TOP = 165;
-    private static final int TRANSFER_BUTTON_SIZE = 12;
-    // 自动化标签放在 Q 键丢弃标签下方。
-    private static final int AUTOMATION_PANEL_TOP = DROP_PANEL_TOP + DROP_PANEL_HEIGHT + 2;
+    // 自动化标签放在 Q 键丢弃标签按钮下方。
+    private static final int AUTOMATION_PANEL_TOP = DROP_PANEL_TOP + DROP_TAB_HEIGHT + 2;
     private static final int AUTOMATION_PANEL_WIDTH = 94;
-    private static final int AUTOMATION_PANEL_HEIGHT = 105;
+    private static final int AUTOMATION_PANEL_HEIGHT = 97;
     private static final int AUTOMATION_BUTTON_HEIGHT = 16;
     private static final String[] AUTOMATION_KEYS = {
         "auto_replenishment", "shulker_replenishment", "auto_replace_tools", "auto_fishing"
     };
 
-    private boolean dropPanelOpen;
-    private boolean automationPanelOpen;
+    private final OverlayPanelManager panelManager = new OverlayPanelManager();
+    private final OverlayPanelManager.Panel automationPanel = panelManager.addPanel();
+    private final OverlayPanelManager.Panel dropPanel = panelManager.addPanel();
     private boolean continuousDrop;
     private boolean percentageDrop;
     private int dropAmount = 1;
     private int dropPercentage = 100;
     private DropAmountSlider dropAmountSlider;
     private Button dropModeButton;
-    private ContinuousDropSwitch continuousDropButton;
-    private Button executeDropButton;
-    private AutomationSwitch[] automationButtons = new AutomationSwitch[0];
 
     public FakePlayerInventoryScreen(FakePlayerInventoryMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, menu.screenWidth(), menu.screenHeight());
@@ -138,48 +142,64 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         addRenderableWidget(new TransferButton(
             leftPos + TRANSFER_BUTTON_LEFT,
             topPos + TRANSFER_BUTTON_TOP,
-            true
+            TransferButton.Direction.TO_CONTAINER,
+            (transferAll, includeHotbar) -> sendAction(
+                transferActionId(true, transferAll, includeHotbar))
         ));
         addRenderableWidget(new TransferButton(
-            leftPos + TRANSFER_BUTTON_LEFT + TRANSFER_BUTTON_SIZE,
+            leftPos + TRANSFER_BUTTON_LEFT + TransferButton.SIZE,
             topPos + TRANSFER_BUTTON_TOP,
-            false
+            TransferButton.Direction.TO_INVENTORY,
+            (transferAll, includeHotbar) -> sendAction(
+                transferActionId(false, transferAll, includeHotbar))
         ));
 
         int automationLeft = leftPos + imageWidth;
         int automationTop = topPos + AUTOMATION_PANEL_TOP + 21;
-        automationButtons = new AutomationSwitch[AUTOMATION_KEYS.length];
+        ToggleSwitchButton[] automationButtons = new ToggleSwitchButton[AUTOMATION_KEYS.length];
         for (int index = 0; index < AUTOMATION_KEYS.length; index++) {
             int actionId = FakePlayerInventoryMenu.ACTION_AUTO_REPLENISHMENT + index;
-            automationButtons[index] = addRenderableWidget(new AutomationSwitch(
+            int automationIndex = index;
+            automationButtons[index] = addRenderableWidget(new ToggleSwitchButton(
                 automationLeft + 6,
                 automationTop + index * (AUTOMATION_BUTTON_HEIGHT + 2),
                 AUTOMATION_PANEL_WIDTH - 12,
                 AUTOMATION_BUTTON_HEIGHT,
-                index,
+                Component.translatable("gui.fakeplayer.automation." + AUTOMATION_KEYS[index]),
+                () -> menu.automationEnabled(automationIndex),
                 button -> sendAction(actionId)
             ));
-            automationButtons[index].visible = false;
         }
 
         int panelLeft = leftPos + imageWidth;
         int panelTop = topPos + DROP_PANEL_TOP;
-        Button tabButton = addRenderableWidget(new DropTabButton(
+        Button automationTabButton = addRenderableWidget(new IconTabButton(
+            panelLeft,
+            topPos + AUTOMATION_PANEL_TOP,
+            DROP_TAB_WIDTH,
+            DROP_TAB_HEIGHT,
+            new ItemStack(Items.REPEATER),
+            Component.translatable("gui.fakeplayer.automation.title"),
+            button -> automationPanel.toggle()
+        ));
+        automationTabButton.setTooltip(Tooltip.create(Component.translatable("gui.fakeplayer.automation.title")));
+
+        // 控件始终在背景之后绘制，因此用覆盖层让展开的 Q 面板遮住下方自动化控件。
+        DropPanelOverlay dropPanelOverlay = addRenderableWidget(new DropPanelOverlay(panelLeft, panelTop));
+
+        Button tabButton = addRenderableWidget(new IconTabButton(
             panelLeft,
             panelTop,
-            button -> setDropPanelOpen(!dropPanelOpen)
+            DROP_TAB_WIDTH,
+            DROP_TAB_HEIGHT,
+            DROP_TAB_ICON,
+            Component.translatable("gui.fakeplayer.drop_tab"),
+            button -> dropPanel.toggle()
         ));
         tabButton.setTooltip(Tooltip.create(Component.translatable("gui.fakeplayer.drop_tab")));
 
-        Button automationTab = addRenderableWidget(new AutomationTabButton(
-            panelLeft,
-            topPos + AUTOMATION_PANEL_TOP,
-            button -> setAutomationPanelOpen(!automationPanelOpen)
-        ));
-        automationTab.setTooltip(Tooltip.create(Component.translatable("gui.fakeplayer.automation.title")));
-
         dropModeButton = addRenderableWidget(
-            new PanelButton(panelLeft + 74, panelTop + 28, 14, 14, dropModeMessage(), button -> toggleDropMode())
+            new CompactButton(panelLeft + 74, panelTop + 28, 14, 14, dropModeMessage(), button -> toggleDropMode())
         );
         updateDropModeTooltip();
         dropAmountSlider = addRenderableWidget(new DropAmountSlider(
@@ -188,13 +208,14 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             82,
             16
         ));
-        continuousDropButton = addRenderableWidget(
-            new ContinuousDropSwitch(panelLeft + 6, panelTop + 67, 82, 16, button -> {
+        ToggleSwitchButton continuousDropButton = addRenderableWidget(
+            new ToggleSwitchButton(panelLeft + 6, panelTop + 67, 82, 16,
+                Component.translatable("gui.fakeplayer.drop_continuous"), () -> continuousDrop, button -> {
                 continuousDrop = !continuousDrop;
             })
         );
-        executeDropButton = addRenderableWidget(
-            new PanelButton(
+        Button executeDropButton = addRenderableWidget(
+            new CompactButton(
                 panelLeft + 6,
                 panelTop + 88,
                 82,
@@ -204,112 +225,9 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
                     currentDropValue(), percentageDrop, continuousDrop))
             )
         );
-        setDropPanelOpen(dropPanelOpen);
-        setAutomationPanelOpen(automationPanelOpen);
-    }
-
-    /** 复刻参考界面的 12 像素转移按钮，按下 Shift 时由虚线箭头切换为完整箭头。（隐藏箭杆中间的一行像素） */
-    private final class TransferButton extends Button {
-        private final boolean toTarget;
-        private boolean showingAll;
-        private boolean showingHotbar;
-
-        private TransferButton(int x, int y, boolean toTarget) {
-            super(x, y, TRANSFER_BUTTON_SIZE, TRANSFER_BUTTON_SIZE, Component.empty(), button -> {
-                boolean transferAll = minecraft.hasShiftDown();
-                boolean includeHotbar = minecraft.hasControlDown();
-                sendAction(transferActionId(toTarget, transferAll, includeHotbar));
-            }, DEFAULT_NARRATION);
-            this.toTarget = toTarget;
-            updateTooltip(false, false);
-        }
-
-        @Override
-        protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            boolean transferAll = minecraft.hasShiftDown();
-            boolean includeHotbar = minecraft.hasControlDown();
-            if (showingAll != transferAll || showingHotbar != includeHotbar) {
-                updateTooltip(transferAll, includeHotbar);
-            }
-            drawSmallButtonBackground(graphics, isMouseOver(mouseX, mouseY));
-            drawTransferArrow(graphics, transferAll);
-        }
-
-        private void updateTooltip(boolean transferAll, boolean includeHotbar) {
-            showingAll = transferAll;
-            showingHotbar = includeHotbar;
-            String direction = toTarget ? "to_container" : "to_inventory";
-            Component message = Component.translatable("gui.fakeplayer.transfer_" + direction
-                + (transferAll ? "_all" : "_matching"));
-            if (includeHotbar) {
-                message = message.copy().append(Component.translatable("gui.fakeplayer.transfer_hotbar_suffix"));
-            }
-            setMessage(message);
-            Component tooltip = getMessage().copy();
-            if (!includeHotbar) {
-                tooltip = tooltip.copy().append(Component.literal("\n"))
-                    .append(Component.translatable("gui.fakeplayer.transfer_hotbar_hint")
-                        .withColor(0x555555));
-            }
-            if (!transferAll) {
-                tooltip = tooltip.copy().append(Component.literal("\n"))
-                    .append(Component.translatable("gui.fakeplayer.transfer_all_hint")
-                        .withColor(0x555555));
-            }
-            setTooltip(Tooltip.create(tooltip));
-        }
-
-        private void drawSmallButtonBackground(GuiGraphicsExtractor graphics, boolean hovered) {
-            int x = getX();
-            int y = getY();
-            int right = x + getWidth();
-            int bottom = y + getHeight();
-            if (hovered) {
-                graphics.fill(x, y, right, bottom, 0xFFFFFFFF);
-            }
-            graphics.fill(x + 1, y + 1, right - 1, bottom - 1, 0xFFAAAAAA);
-            graphics.fill(x + 2, y + 2, right - 1, bottom - 1, 0xFF8B8B8B);
-            graphics.fill(x + 1, bottom - 2, right - 1, bottom - 1, 0xFF555555);
-            graphics.fill(right - 2, y + 1, right - 1, bottom - 1, 0xFF555555);
-        }
-
-        private void drawTransferArrow(GuiGraphicsExtractor graphics, boolean transferAll) {
-            int centerX = getX() + 6;
-            int top = getY() + (toTarget ? 1 : 3);
-            int color = toTarget ? 0xFF78A849 : 0xFFC53212;
-            int shadow = toTarget ? 0xFF59843C : 0xFF8D0B05;
-            if (toTarget) {
-                drawUpArrow(graphics, centerX, top, color, shadow, transferAll);
-            } else {
-                drawDownArrow(graphics, centerX - 1, top - 2, color, shadow, transferAll);
-            }
-        }
-
-        private void drawUpArrow(
-            GuiGraphicsExtractor graphics, int x, int y, int color, int shadow, boolean showGap
-        ) {
-            graphics.fill(x - 1, y + 4, x, y + 9, color);
-            graphics.fill(x - 1, y + 1, x + 1, y + 2, color);
-            graphics.fill(x - 2, y + 2, x + 2, y + 3, color);
-            graphics.fill(x - 3, y + 3, x + 3, y + 4, color);
-            graphics.fill(x, y + 4, x + 1, y + 9, shadow);
-            if (showGap) {
-                graphics.fill(x - 1, y + 6, x + 1, y + 7, 0xFF8B8B8B);
-            }
-        }
-
-        private void drawDownArrow(
-            GuiGraphicsExtractor graphics, int x, int y, int color, int shadow, boolean showGap
-        ) {
-            graphics.fill(x, y + 1, x + 1, y + 6, color);
-            graphics.fill(x - 2, y + 6, x + 4, y + 7, color);
-            graphics.fill(x - 1, y + 7, x + 3, y + 8, color);
-            graphics.fill(x, y + 8, x + 2, y + 9, color);
-            graphics.fill(x + 1, y + 1, x + 2, y + 6, shadow);
-            if (showGap) {
-                graphics.fill(x, y + 3, x + 2, y + 4, 0xFF8B8B8B);
-            }
-        }
+        automationPanel.bind(automationTabButton, automationButtons);
+        dropPanel.bind(tabButton, dropPanelOverlay, dropModeButton, dropAmountSlider,
+            continuousDropButton, executeDropButton);
     }
 
     private Component dropModeMessage() {
@@ -331,21 +249,6 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
 
     private int currentDropValue() {
         return percentageDrop ? dropPercentage : dropAmount;
-    }
-
-    private void setDropPanelOpen(boolean open) {
-        dropPanelOpen = open;
-        dropModeButton.visible = open;
-        dropAmountSlider.visible = open;
-        continuousDropButton.visible = open;
-        executeDropButton.visible = open;
-    }
-
-    private void setAutomationPanelOpen(boolean open) {
-        automationPanelOpen = open;
-        for (AutomationSwitch button : automationButtons) {
-            button.visible = open;
-        }
     }
 
     private void sendAction(int actionId) {
@@ -373,156 +276,29 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
                 : FakePlayerInventoryMenu.ACTION_TRANSFER_TO_VIEWER_MATCHING;
     }
 
-    /** 用原版物品渲染图标按钮，文字仅作为悬浮提示和无障碍说明。 */
-    static final class IconButton extends Button {
-        private final ItemStack icon;
-        private final Identifier textureIcon;
-        private final ItemStack overlay;
-
-        IconButton(int x, int y, ItemStack icon, Component tooltip, OnPress onPress) {
-            this(x, y, icon, null, null, tooltip, onPress);
-        }
-
-        IconButton(int x, int y, Identifier textureIcon, Component tooltip, OnPress onPress) {
-            this(x, y, null, null, textureIcon, tooltip, onPress);
-        }
-
-        IconButton(
-            int x, int y, Identifier textureIcon, ItemStack overlay, Component tooltip, OnPress onPress
-        ) {
-            this(x, y, null, overlay, textureIcon, tooltip, onPress);
-        }
-
-        private IconButton(
-            int x, int y, ItemStack icon, ItemStack overlay, Identifier textureIcon,
-            Component tooltip, OnPress onPress
-        ) {
-            super(x, y, ACTION_BUTTON_WIDTH, ACTION_BUTTON_HEIGHT, tooltip, onPress, DEFAULT_NARRATION);
-            this.icon = icon;
-            this.overlay = overlay;
-            this.textureIcon = textureIcon;
-            setTooltip(Tooltip.create(tooltip));
+    /** 让上方面板遮住下方的。 */
+    private final class DropPanelOverlay extends Button {
+        private DropPanelOverlay(int x, int y) {
+            super(x, y, DROP_PANEL_WIDTH, DROP_PANEL_HEIGHT, Component.empty(), button -> {}, DEFAULT_NARRATION);
+            active = false;
         }
 
         @Override
         protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            int x = getX();
-            int y = getY();
-            int right = x + getWidth();
-            int bottom = y + getHeight();
-            boolean hovered = mouseX >= x && mouseX < right && mouseY >= y && mouseY < bottom;
-            int color = hovered ? 0xFFC0C0C0 : 0xFF8B8B8B;
-
-            // 使用原版物品栏的凹槽边框：内部 16x16，整体 18x18。
-            graphics.fill(x, y, right, y + 1, 0xFF373737);
-            graphics.fill(x, y + 1, x + 1, bottom, 0xFF373737);
-            graphics.fill(x + 1, bottom - 1, right, bottom, 0xFFFFFFFF);
-            graphics.fill(right - 1, y + 1, right, bottom, 0xFFFFFFFF);
-            graphics.fill(x + 1, y + 1, right - 1, bottom - 1, color);
-            graphics.fill(x, bottom - 1, x + 1, bottom, 0xFF8B8B8B);
-            graphics.fill(right - 1, y, right, y + 1, 0xFF8B8B8B);
-            if (textureIcon != null) {
-                graphics.blit(RenderPipelines.GUI_TEXTURED, textureIcon, getX() + 1, getY() + 1,
-                    0.0F, 0.0F, 16, 16, 16, 16);
-            } else {
-                graphics.item(icon, getX() + 1, getY() + 1);
-            }
-            if (overlay != null) {
-                graphics.item(overlay, getX() + 2, getY() + 2);
-            }
-        }
-    }
-
-    /** 使用自定义纹理作为紧凑标签。 */
-    private final class DropTabButton extends Button {
-        private DropTabButton(int x, int y, OnPress onPress) {
-            super(x, y, DROP_TAB_WIDTH, DROP_TAB_HEIGHT, Component.translatable("gui.fakeplayer.drop_tab"),
-                onPress, DEFAULT_NARRATION);
+            drawDropPanel(graphics);
         }
 
         @Override
-        protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            int iconX = getX() + 2;
-            int iconY = getY() + 4;
-            graphics.blit(
-                RenderPipelines.GUI_TEXTURED,
-                DROP_TAB_ICON,
-                iconX,
-                iconY,
-                0.0F,
-                0.0F,
-                16,
-                16,
-                16,
-                16
-            );
-        }
-    }
-
-    /** 自动化标签使用原版物品图标作为占位图标。 */
-    private final class AutomationTabButton extends Button {
-        private AutomationTabButton(int x, int y, OnPress onPress) {
-            super(x, y, DROP_TAB_WIDTH, DROP_TAB_HEIGHT,
-                Component.translatable("gui.fakeplayer.automation.title"), onPress, DEFAULT_NARRATION);
-        }
-
-        @Override
-        protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            graphics.item(new ItemStack(Items.REPEATER), getX() + 2, getY() + 4);
-        }
-    }
-
-    /** 绘制参考模组使用的紧凑像素按钮，避免原版宽按钮挤占侧栏空间。 */
-    private final class PanelButton extends Button {
-        private PanelButton(int x, int y, int width, int height, Component message, OnPress onPress) {
-            super(x, y, width, height, message, onPress, DEFAULT_NARRATION);
-        }
-
-        @Override
-        protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            drawCompactControl(graphics, getX(), getY(), getWidth(), getHeight(), isMouseOver(mouseX, mouseY));
-            drawCenteredTextWithoutShadow(graphics, getMessage(), getX(), getY(), getWidth(), getHeight(),
-                active ? 0xFFFFFFFF : 0xFF777777);
-        }
-    }
-
-    /** 左侧显示固定标签，右侧使用旅行者背包风格的紧凑开关。 */
-    private final class ContinuousDropSwitch extends Button {
-        private static final int SWITCH_WIDTH = 24;
-        private static final int SWITCH_HEIGHT = 12;
-        private static final int HANDLE_WIDTH = 8;
-
-        private ContinuousDropSwitch(int x, int y, int width, int height, OnPress onPress) {
-            super(x, y, width, height, Component.translatable("gui.fakeplayer.drop_continuous"),
-                onPress, DEFAULT_NARRATION);
-        }
-
-        @Override
-        protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            Component label = Component.translatable("gui.fakeplayer.drop_continuous");
-            graphics.text(font, label, getX(), getY() + (getHeight() - 8) / 2, 0xFF404040, false);
-
-            int switchX = getX() + getWidth() - SWITCH_WIDTH;
-            int switchY = getY() + (getHeight() - SWITCH_HEIGHT) / 2;
-            drawSwitch(graphics, switchX, switchY, isMouseOver(mouseX, mouseY));
-        }
-
-        private void drawSwitch(GuiGraphicsExtractor graphics, int x, int y, boolean hovered) {
-            int right = x + SWITCH_WIDTH;
-            int bottom = y + SWITCH_HEIGHT;
-            graphics.fill(x, y, right, bottom, hovered ? 0xFFFFFFFF : 0xFF373737);
-            graphics.fill(x + 1, y + 1, right - 1, bottom - 1,
-                continuousDrop ? 0xFF36B54A : 0xFF565656);
-
-            int handleLeft = continuousDrop ? right - HANDLE_WIDTH - 2 : x + 2;
-            int handleRight = handleLeft + HANDLE_WIDTH;
-            graphics.fill(handleLeft, y + 2, handleRight, bottom - 2, 0xFFFFFFFF);
-            graphics.fill(handleLeft + 1, y + 3, handleRight - 1, bottom - 3, 0xFFC6C6C6);
+        public boolean isMouseOver(double mouseX, double mouseY) {
+            // 左上角由丢弃标签按钮处理，覆盖层不能抢先吞掉它的点击。
+            boolean overTab = mouseX >= getX() && mouseX < getX() + DROP_TAB_WIDTH
+                && mouseY >= getY() && mouseY < getY() + DROP_TAB_HEIGHT;
+            return !overTab && super.isMouseOver(mouseX, mouseY);
         }
     }
 
     /** 根据当前计量模式，将滑块位置映射到整数数量或百分比。 */
-    private final class DropAmountSlider extends AbstractSliderButton {
+    private final class DropAmountSlider extends CompactSliderButton {
         private DropAmountSlider(int x, int y, int width, int height) {
             super(
                 x,
@@ -559,80 +335,6 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             setValue((double) (currentDropValue() - 1) / (maximum - 1));
         }
 
-        @Override
-        public void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            int x = getX();
-            int y = getY();
-            int width = getWidth();
-            int height = getHeight();
-            drawSliderTrack(graphics, x, y, width, height);
-
-            // 保留原版 8 像素宽、占满控件高度的滑块手柄，只改用纯色绘制。
-            int handleX = x + (int) (value * (width - 8));
-            drawSliderHandle(graphics, handleX, y, height, isMouseOver(mouseX, mouseY));
-            drawCenteredTextWithoutShadow(graphics, getMessage(), x, y, width, height, 0xFFFFFFFF);
-        }
-    }
-
-    private void drawCenteredTextWithoutShadow(
-        GuiGraphicsExtractor graphics,
-        Component message,
-        int x,
-        int y,
-        int width,
-        int height,
-        int color
-    ) {
-        graphics.text(font, message, x + (width - font.width(message)) / 2, y + (height - 8) / 2,
-            color, false);
-    }
-
-    private void drawAutomationSwitch(
-        GuiGraphicsExtractor graphics, int x, int y, boolean enabled, boolean hovered
-    ) {
-        int right = x + 24;
-        int bottom = y + 12;
-        graphics.fill(x, y, right, bottom, hovered ? 0xFFFFFFFF : 0xFF373737);
-        graphics.fill(x + 1, y + 1, right - 1, bottom - 1, enabled ? 0xFF36B54A : 0xFF565656);
-        int handleLeft = enabled ? right - 10 : x + 2;
-        graphics.fill(handleLeft, y + 2, handleLeft + 8, bottom - 2, 0xFFFFFFFF);
-        graphics.fill(handleLeft + 1, y + 3, handleLeft + 7, bottom - 3, 0xFFC6C6C6);
-    }
-
-    private void drawCompactControl(
-        GuiGraphicsExtractor graphics,
-        int x,
-        int y,
-        int width,
-        int height,
-        boolean hovered
-    ) {
-        int right = x + width;
-        int bottom = y + height;
-        graphics.fill(x, y, right, bottom, hovered ? 0xFFFFFFFF : 0xFF373737);
-        graphics.fill(x + 1, y + 1, right - 1, bottom - 1, 0xFF8B8B8B);
-        graphics.fill(x + 1, y + 1, right - 1, y + 2, 0xFFAAAAAA);
-        graphics.fill(x + 1, y + 1, x + 2, bottom - 1, 0xFFAAAAAA);
-        graphics.fill(x + 1, bottom - 2, right - 1, bottom - 1, 0xFF565656);
-        graphics.fill(right - 2, y + 1, right - 1, bottom - 1, 0xFF565656);
-        graphics.fill(x + 1, bottom - 2, x + 2, bottom - 1, 0xFF8B8B8B);
-        graphics.fill(right - 2, y + 1, right - 1, y + 2, 0xFF8B8B8B);
-    }
-
-    private void drawSliderHandle(
-        GuiGraphicsExtractor graphics,
-        int x,
-        int y,
-        int height,
-        boolean hovered
-    ) {
-        drawCompactControl(graphics, x, y, 8, height, hovered);
-    }
-
-    /** 滑动条轨道使用无高光的深色内底，手柄仍保留原来的明暗边框。 */
-    private void drawSliderTrack(GuiGraphicsExtractor graphics, int x, int y, int width, int height) {
-        graphics.fill(x, y, x + width, y + height, 0xFF373737);
-        graphics.fill(x + 1, y + 1, x + width - 1, y + height - 1, 0xFF565656);
     }
 
     @Override
@@ -718,8 +420,8 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             0xFFC6C6C6
         );
 
-        drawDropPanel(graphics);
         drawAutomationPanel(graphics);
+        drawDropPanel(graphics);
 
         for (int slot = 0; slot < HOTBAR_SLOT_COUNT; slot++) {
             int x = leftPos + HOTBAR_SELECTOR_LEFT + slot * HOTBAR_SLOT_SPACING;
@@ -779,11 +481,11 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private void drawDropPanel(GuiGraphicsExtractor graphics) {
         int left = leftPos + imageWidth;
         int top = topPos + DROP_PANEL_TOP;
-        int width = dropPanelOpen ? DROP_PANEL_WIDTH : DROP_TAB_WIDTH;
-        int height = dropPanelOpen ? DROP_PANEL_HEIGHT : DROP_TAB_HEIGHT;
-        drawTabBackground(graphics, left, top, width, height);
+        int width = dropPanel.isOpen() ? DROP_PANEL_WIDTH : DROP_TAB_WIDTH;
+        int height = dropPanel.isOpen() ? DROP_PANEL_HEIGHT : DROP_TAB_HEIGHT;
+        PixelGui.drawTabBackground(graphics, left, top, width, height);
 
-        if (dropPanelOpen) {
+        if (dropPanel.isOpen()) {
             graphics.text(font, Component.translatable("gui.fakeplayer.drop_panel_title"), left + 22, top + 8,
                 0xFF404040, false);
             graphics.text(font, Component.translatable("gui.fakeplayer.drop_amount"), left + 6, top + 31,
@@ -791,56 +493,17 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         }
     }
 
-    /** 自动化设置使用紧凑的开关轨道。 */
-    private final class AutomationSwitch extends Button {
-        private final int index;
-
-        private AutomationSwitch(int x, int y, int width, int height, int index, OnPress onPress) {
-            super(x, y, width, height, Component.empty(), onPress, DEFAULT_NARRATION);
-            this.index = index;
-            setTooltip(Tooltip.create(Component.translatable(
-                "gui.fakeplayer.automation." + AUTOMATION_KEYS[index])));
-        }
-
-        @Override
-        protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            Component label = Component.translatable("gui.fakeplayer.automation." + AUTOMATION_KEYS[index]);
-            String visibleLabel = font.plainSubstrByWidth(label.getString(), getWidth() - 34);
-            graphics.text(font, Component.literal(visibleLabel), getX(),
-                getY() + (getHeight() - 8) / 2, 0xFF404040, false);
-            int switchX = getX() + getWidth() - 24;
-            int switchY = getY() + (getHeight() - 12) / 2;
-            drawAutomationSwitch(graphics, switchX, switchY, menu.automationEnabled(index), isMouseOver(mouseX, mouseY));
-        }
-    }
-
     private void drawAutomationPanel(GuiGraphicsExtractor graphics) {
         int left = leftPos + imageWidth;
         int top = topPos + AUTOMATION_PANEL_TOP;
-        int width = automationPanelOpen ? AUTOMATION_PANEL_WIDTH : DROP_TAB_WIDTH;
-        int height = automationPanelOpen ? AUTOMATION_PANEL_HEIGHT : DROP_TAB_HEIGHT;
-        drawTabBackground(graphics, left, top, width, height);
-        if (automationPanelOpen) {
+        int width = automationPanel.isOpen() ? AUTOMATION_PANEL_WIDTH : DROP_TAB_WIDTH;
+        int height = automationPanel.isOpen() ? AUTOMATION_PANEL_HEIGHT : DROP_TAB_HEIGHT;
+        PixelGui.drawTabBackground(graphics, left, top, width, height);
+        if (automationPanel.isOpen()) {
             // 标签图标仍覆盖在面板左侧，因此标题从图标右侧开始绘制。
             graphics.text(font, Component.translatable("gui.fakeplayer.automation.title"), left + 22, top + 8,
                 0xFF404040, false);
         }
-    }
-
-    /** 左侧留出连接边，使展开页看起来是从容器边缘伸出的标签。 */
-    private void drawTabBackground(GuiGraphicsExtractor graphics, int left, int top, int width, int height) {
-        int right = left + width;
-        int bottom = top + height;
-        // 左侧与物品栏直接相连，只绘制上、右、下三边的黑色外框。
-        graphics.fill(left, top, right - 2, top + 1, 0xFF000000);
-        graphics.fill(left, top + 1, right - 1, top + 2, 0xFF000000);
-        graphics.fill(right - 1, top + 2, right, bottom - 2, 0xFF000000);
-        graphics.fill(left, bottom - 2, right - 1, bottom - 1, 0xFF000000);
-        graphics.fill(left, bottom - 1, right - 2, bottom, 0xFF000000);
-        graphics.fill(left, top + 2, right - 1, bottom - 2, 0xFFC6C6C6);
-        graphics.fill(left, top + 1, right - 2, top + 2, 0xFFFFFFFF);
-        graphics.fill(right - 2, top + 2, right - 1, bottom - 2, 0xFF565656);
-        graphics.fill(left, bottom - 2, right - 2, bottom - 1, 0xFF565656);
     }
 
     /** 给快捷栏选择区左右两侧绘制外边框，左侧黑边内为高光，右侧黑边内为阴影。 */
