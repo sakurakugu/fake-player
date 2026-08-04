@@ -12,10 +12,6 @@ public final class FakePlayerConfig {
     private static final ModConfigSpec.BooleanValue ALLOW_OFFLINE_PROFILES;
     private static final ModConfigSpec.EnumValue<ProfileStrategy> PROFILE_STRATEGY;
     private static final ModConfigSpec.BooleanValue RESTORE_FAKE_PLAYERS;
-    private static final ModConfigSpec.BooleanValue AUTO_REPLENISHMENT;
-    private static final ModConfigSpec.BooleanValue AUTO_REPLENISHMENT_FROM_SHULKER_BOXES;
-    private static final ModConfigSpec.BooleanValue AUTO_REPLACE_TOOLS;
-    private static final ModConfigSpec.BooleanValue AUTO_FISHING;
     private static final ModConfigSpec.IntValue MAX_CHUNK_LOADING_RADIUS;
 
     static {
@@ -39,21 +35,6 @@ public final class FakePlayerConfig {
         RESTORE_FAKE_PLAYERS = builder
             .comment("服务器启动后是否恢复上次仍在线的假玩家。")
             .define("restoreFakePlayers", true);
-        builder.pop();
-
-        builder.push("automation");
-        AUTO_REPLENISHMENT = builder
-            .comment("手中可堆叠物品低于阈值时，是否从 36 格主背包自动补货。")
-            .define("autoReplenishment", false);
-        AUTO_REPLENISHMENT_FROM_SHULKER_BOXES = builder
-            .comment("自动补货时是否也可从主背包内的潜影盒取出物品。")
-            .define("autoReplenishmentFromShulkerBoxes", false);
-        AUTO_REPLACE_TOOLS = builder
-            .comment("主手或副手工具剩余耐久不超过 10 时，是否自动换上背包中的同种工具。")
-            .define("autoReplaceTools", false);
-        AUTO_FISHING = builder
-            .comment("原版浮漂检测到咬钩后，是否自动收杆并再次抛竿。")
-            .define("autoFishing", false);
         builder.pop();
 
         builder.push("chunkloading");
@@ -89,22 +70,6 @@ public final class FakePlayerConfig {
         return RESTORE_FAKE_PLAYERS.get();
     }
 
-    public static boolean autoReplenishment() {
-        return AUTO_REPLENISHMENT.get();
-    }
-
-    public static boolean autoReplenishmentFromShulkerBoxes() {
-        return AUTO_REPLENISHMENT_FROM_SHULKER_BOXES.get();
-    }
-
-    public static boolean autoReplaceTools() {
-        return AUTO_REPLACE_TOOLS.get();
-    }
-
-    public static boolean autoFishing() {
-        return AUTO_FISHING.get();
-    }
-
     public static int maxChunkLoadingRadius() {
         return MAX_CHUNK_LOADING_RADIUS.get();
     }
@@ -132,19 +97,11 @@ public final class FakePlayerConfig {
     }
 
     public enum GlobalSetting {
-        RESTORE_FAKE_PLAYERS,
-        AUTO_REPLENISHMENT,
-        AUTO_REPLENISHMENT_FROM_SHULKER_BOXES,
-        AUTO_REPLACE_TOOLS,
-        AUTO_FISHING;
+        RESTORE_FAKE_PLAYERS;
 
         private ModConfigSpec.BooleanValue value() {
             return switch (this) {
                 case RESTORE_FAKE_PLAYERS -> FakePlayerConfig.RESTORE_FAKE_PLAYERS;
-                case AUTO_REPLENISHMENT -> FakePlayerConfig.AUTO_REPLENISHMENT;
-                case AUTO_REPLENISHMENT_FROM_SHULKER_BOXES -> FakePlayerConfig.AUTO_REPLENISHMENT_FROM_SHULKER_BOXES;
-                case AUTO_REPLACE_TOOLS -> FakePlayerConfig.AUTO_REPLACE_TOOLS;
-                case AUTO_FISHING -> FakePlayerConfig.AUTO_FISHING;
             };
         }
 

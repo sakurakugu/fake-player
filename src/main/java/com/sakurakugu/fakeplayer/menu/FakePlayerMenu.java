@@ -24,26 +24,40 @@ public final class FakePlayerMenu extends AbstractContainerMenu {
     public static final int ACTION_REMOVE = 7;
     public static final int ACTION_INVENTORY = 8;
     public static final int ACTION_ENDER_CHEST = 9;
+    public static final int ACTION_AUTO_REPLENISHMENT = 10;
+    public static final int ACTION_AUTO_REPLENISHMENT_FROM_SHULKER_BOXES = 11;
+    public static final int ACTION_AUTO_REPLACE_TOOLS = 12;
+    public static final int ACTION_AUTO_FISHING = 13;
 
     private final FakeServerPlayer target;
     private final int targetId;
     private final String targetName;
+    private final int automationMask;
 
     public FakePlayerMenu(int containerId, Inventory inventory, RegistryFriendlyByteBuf data) {
         // 客户端构造：目标实体只存在于服务端，网络数据仅用于显示。
-        this(containerId, inventory, null, data.readVarInt(), data.readUtf(64));
+        this(containerId, inventory, null, data.readVarInt(), data.readUtf(64), data.readVarInt());
     }
 
     public FakePlayerMenu(int containerId, Inventory inventory, FakeServerPlayer target) {
         // 服务端构造：保留目标引用，以便点击按钮时直接执行动作。
-        this(containerId, inventory, target, target.getId(), target.getGameProfile().name());
+        this(containerId, inventory, target, target.getId(), target.getGameProfile().name(),
+            automationMask(target));
     }
 
-    private FakePlayerMenu(int containerId, Inventory inventory, FakeServerPlayer target, int targetId, String targetName) {
+    private FakePlayerMenu(
+        int containerId,
+        Inventory inventory,
+        FakeServerPlayer target,
+        int targetId,
+        String targetName,
+        int automationMask
+    ) {
         super(ModMenus.FAKE_PLAYER.get(), containerId);
         this.target = target;
         this.targetId = targetId;
         this.targetName = targetName;
+        this.automationMask = automationMask;
     }
 
     @Override
@@ -67,6 +81,20 @@ public final class FakePlayerMenu extends AbstractContainerMenu {
             case ACTION_REMOVE -> {
                 player.closeContainer();
                 FakePlayerManager.remove(target);
+            }
+            case ACTION_AUTO_REPLENISHMENT,
+                ACTION_AUTO_REPLENISHMENT_FROM_SHULKER_BOXES,
+                ACTION_AUTO_REPLACE_TOOLS,
+                ACTION_AUTO_FISHING -> {
+                int index = switch (actionId) {
+                    case ACTION_AUTO_REPLENISHMENT -> 0;
+                    case ACTION_AUTO_REPLENISHMENT_FROM_SHULKER_BOXES -> 1;
+                    case ACTION_AUTO_REPLACE_TOOLS -> 2;
+                    default -> 3;
+                };
+                // 重新打开菜单，把切换后的状态同步给客户端界面。
+                target.automation().toggleSetting(index);
+                FakePlayerMenuOpener.openControl(viewer, target);
             }
             default -> {
                 return false;
@@ -92,5 +120,27 @@ public final class FakePlayerMenu extends AbstractContainerMenu {
 
     public String targetName() {
         return targetName;
+    }
+
+    public boolean automationEnabled(int index) {
+        return (automationMask & (1 << index)) != 0;
+    }
+
+    private static int automationMask(FakeServerPlayer fake) {
+        var settings = fake.automation().settings();
+        int mask = 0;
+        if (settings.autoReplenishment()) {
+            mask |= 1;
+        }
+        if (settings.autoReplenishmentFromShulkerBoxes()) {
+            mask |= 1 << 1;
+        }
+        if (settings.autoReplaceTools()) {
+            mask |= 1 << 2;
+        }
+        if (settings.autoFishing()) {
+            mask |= 1 << 3;
+        }
+        return mask;
     }
 }

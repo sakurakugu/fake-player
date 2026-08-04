@@ -16,12 +16,7 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
     private static final int BUTTON_HEIGHT = 24;
     private static final int ROW_GAP = 5;
     private static final String[] SETTING_KEYS = {
-        "restore_players",
-        "restore_actions",
-        "auto_replenishment",
-        "shulker_replenishment",
-        "auto_replace_tools",
-        "auto_fishing"
+        "restore_players"
     };
 
     private int page;

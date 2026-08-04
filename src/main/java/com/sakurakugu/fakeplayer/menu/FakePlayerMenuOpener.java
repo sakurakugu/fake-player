@@ -60,6 +60,21 @@ public final class FakePlayerMenuOpener {
                 // 客户端没有 FakeServerPlayer 引用，只传递界面展示所需的稳定快照。
                 data.writeVarInt(fake.getId());
                 data.writeUtf(fake.getGameProfile().name());
+                var settings = fake.automation().settings();
+                int mask = 0;
+                if (settings.autoReplenishment()) {
+                    mask |= 1;
+                }
+                if (settings.autoReplenishmentFromShulkerBoxes()) {
+                    mask |= 1 << 1;
+                }
+                if (settings.autoReplaceTools()) {
+                    mask |= 1 << 2;
+                }
+                if (settings.autoFishing()) {
+                    mask |= 1 << 3;
+                }
+                data.writeVarInt(mask);
             }
         );
     }

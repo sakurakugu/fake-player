@@ -140,13 +140,18 @@ class FakePlayerSavedDataTest {
                 UUID.nameUUIDFromBytes(id.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
                 "TestBot",
                 playerData(id),
-                actions
+                actions,
+                com.sakurakugu.fakeplayer.automation.FakePlayerAutomation.AutomationState.DEFAULT
             )
         );
     }
 
     private static FakePlayerSavedData.Resident resident(UUID uuid, String name) {
-        return new FakePlayerSavedData.Resident(uuid, name);
+        return new FakePlayerSavedData.Resident(
+            uuid,
+            name,
+            com.sakurakugu.fakeplayer.automation.FakePlayerAutomation.AutomationState.DEFAULT
+        );
     }
 
     private static CompoundTag playerData(String marker) {

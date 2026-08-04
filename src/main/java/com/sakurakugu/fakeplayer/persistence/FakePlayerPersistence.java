@@ -149,9 +149,9 @@ public final class FakePlayerPersistence {
         if (saved.isEmpty()) {
             return LoadResult.failure("原版玩家存档不存在：" + resident.uuid());
         }
-        // 驻留恢复不携带持续动作，启动后由操作者重新设置。
+        // 驻留恢复不携带持续动作，启动后由操作者重新设置；自动化设置仍随驻留记录恢复。
         return load(server, new PlayerSnapshot(resident.uuid(), resident.name(), saved.get(),
-            FakePlayerActions.State.EMPTY), false);
+            FakePlayerActions.State.EMPTY, resident.automation()), false);
     }
 
     private static LoadResult load(MinecraftServer server, PlayerSnapshot snapshot, boolean restoreActions) {
@@ -195,6 +195,7 @@ public final class FakePlayerPersistence {
             if (restoreActions) {
                 fake.actions().restore(snapshot.actions());
             }
+            fake.automation().setSettings(snapshot.automation());
             track(fake);
             return LoadResult.success(fake);
         } catch (RuntimeException exception) {

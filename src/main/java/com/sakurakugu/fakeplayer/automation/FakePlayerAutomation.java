@@ -1,6 +1,5 @@
 package com.sakurakugu.fakeplayer.automation;
 
-import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,6 +21,7 @@ public final class FakePlayerAutomation {
     private static final int FISH_RECAST_DELAY = 10;
 
     private final FakeServerPlayer player;
+    private AutomationState settings = AutomationState.DEFAULT;
     private FishingHook pendingHook;
     private InteractionHand fishingHand;
     private int reelDelay = -1;
@@ -32,11 +32,11 @@ public final class FakePlayerAutomation {
     }
 
     public void tick() {
-        if (FakePlayerConfig.autoReplaceTools()) {
+        if (settings.autoReplaceTools()) {
             replaceWornTool(EquipmentSlot.MAINHAND);
             replaceWornTool(EquipmentSlot.OFFHAND);
         }
-        if (FakePlayerConfig.autoReplenishment()) {
+        if (settings.autoReplenishment()) {
             replenish(player.getMainHandItem());
             replenish(player.getOffhandItem());
         }
@@ -45,7 +45,7 @@ public final class FakePlayerAutomation {
 
     /** 该方法只由浮漂 Mixin 在咬钩状态由 false 切换为 true 时调用。 */
     public void onFishBite(FishingHook hook) {
-        if (!FakePlayerConfig.autoFishing() || player.fishing != hook || pendingHook == hook) {
+        if (!settings.autoFishing() || player.fishing != hook || pendingHook == hook) {
             return;
         }
         InteractionHand hand = findFishingRodHand();
@@ -59,7 +59,7 @@ public final class FakePlayerAutomation {
     }
 
     private void tickAutoFishing() {
-        if (!FakePlayerConfig.autoFishing()) {
+        if (!settings.autoFishing()) {
             clearFishingPlan();
             return;
         }
@@ -183,7 +183,7 @@ public final class FakePlayerAutomation {
             needed -= moved;
         }
 
-        if (needed > 0 && FakePlayerConfig.autoReplenishmentFromShulkerBoxes()) {
+        if (needed > 0 && settings.autoReplenishmentFromShulkerBoxes()) {
             for (int slot = 0; slot < 36; slot++) {
                 if (slot == player.getInventory().getSelectedSlot()) {
                     continue;
@@ -227,5 +227,51 @@ public final class FakePlayerAutomation {
             requested.grow(moved);
         }
         return moved;
+    }
+
+    public AutomationState settings() {
+        return settings;
+    }
+
+    public void setSettings(AutomationState settings) {
+        this.settings = settings;
+    }
+
+    /** 切换一项自动化设置并返回新的状态。 */
+    public AutomationState toggleSetting(int index) {
+        settings = switch (index) {
+            case 0 -> settings.withAutoReplenishment(!settings.autoReplenishment());
+            case 1 -> settings.withAutoReplenishmentFromShulkerBoxes(!settings.autoReplenishmentFromShulkerBoxes());
+            case 2 -> settings.withAutoReplaceTools(!settings.autoReplaceTools());
+            case 3 -> settings.withAutoFishing(!settings.autoFishing());
+            default -> settings;
+        };
+        return settings;
+    }
+
+    /** 自动化开关的每假人设置快照。 */
+    public record AutomationState(
+        boolean autoReplenishment,
+        boolean autoReplenishmentFromShulkerBoxes,
+        boolean autoReplaceTools,
+        boolean autoFishing
+    ) {
+        public static final AutomationState DEFAULT = new AutomationState(false, false, false, false);
+
+        public AutomationState withAutoReplenishment(boolean value) {
+            return new AutomationState(value, autoReplenishmentFromShulkerBoxes, autoReplaceTools, autoFishing);
+        }
+
+        public AutomationState withAutoReplenishmentFromShulkerBoxes(boolean value) {
+            return new AutomationState(autoReplenishment, value, autoReplaceTools, autoFishing);
+        }
+
+        public AutomationState withAutoReplaceTools(boolean value) {
+            return new AutomationState(autoReplenishment, autoReplenishmentFromShulkerBoxes, value, autoFishing);
+        }
+
+        public AutomationState withAutoFishing(boolean value) {
+            return new AutomationState(autoReplenishment, autoReplenishmentFromShulkerBoxes, autoReplaceTools, value);
+        }
     }
 }

@@ -4,6 +4,7 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import com.sakurakugu.fakeplayer.FakePlayerMod;
+import com.sakurakugu.fakeplayer.automation.FakePlayerAutomation;
 import com.sakurakugu.fakeplayer.entity.FakePlayerActions;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
 import java.util.ArrayList;
@@ -25,6 +26,16 @@ public final class FakePlayerSavedData extends SavedData {
         enumCodec(FakePlayerActions.RepeatMode.class);
     private static final Codec<FakePlayerActions.ScheduledAction> ACTION_CODEC =
         enumCodec(FakePlayerActions.ScheduledAction.class);
+    private static final Codec<FakePlayerAutomation.AutomationState> AUTOMATION_CODEC =
+        RecordCodecBuilder.create(instance ->
+            instance.group(
+                Codec.BOOL.fieldOf("autoReplenishment").forGetter(FakePlayerAutomation.AutomationState::autoReplenishment),
+                Codec.BOOL.fieldOf("autoReplenishmentFromShulkerBoxes")
+                    .forGetter(FakePlayerAutomation.AutomationState::autoReplenishmentFromShulkerBoxes),
+                Codec.BOOL.fieldOf("autoReplaceTools").forGetter(FakePlayerAutomation.AutomationState::autoReplaceTools),
+                Codec.BOOL.fieldOf("autoFishing").forGetter(FakePlayerAutomation.AutomationState::autoFishing)
+            ).apply(instance, FakePlayerAutomation.AutomationState::new)
+        );
 
     private static final Codec<FakePlayerActions.ScheduledState> SCHEDULE_CODEC = RecordCodecBuilder.create(instance ->
         instance.group(
@@ -57,7 +68,8 @@ public final class FakePlayerSavedData extends SavedData {
     public static final Codec<Resident> RESIDENT_CODEC = RecordCodecBuilder.create(instance ->
         instance.group(
             UUIDUtil.CODEC.fieldOf("uuid").forGetter(Resident::uuid),
-            Codec.STRING.fieldOf("name").forGetter(Resident::name)
+            Codec.STRING.fieldOf("name").forGetter(Resident::name),
+            AUTOMATION_CODEC.fieldOf("automation").forGetter(Resident::automation)
         ).apply(instance, Resident::new)
     );
     public static final Codec<PlayerSnapshot> PLAYER_SNAPSHOT_CODEC = RecordCodecBuilder.create(instance ->
@@ -65,8 +77,8 @@ public final class FakePlayerSavedData extends SavedData {
             UUIDUtil.CODEC.fieldOf("uuid").forGetter(PlayerSnapshot::uuid),
             Codec.STRING.fieldOf("name").forGetter(PlayerSnapshot::name),
             CompoundTag.CODEC.fieldOf("player_data").forGetter(PlayerSnapshot::playerData),
-            ACTION_STATE_CODEC.optionalFieldOf("actions", FakePlayerActions.State.EMPTY)
-                .forGetter(PlayerSnapshot::actions)
+            ACTION_STATE_CODEC.fieldOf("actions").forGetter(PlayerSnapshot::actions),
+            AUTOMATION_CODEC.fieldOf("automation").forGetter(PlayerSnapshot::automation)
         ).apply(instance, PlayerSnapshot::new)
     );
     public static final Codec<Preset> PRESET_CODEC = RecordCodecBuilder.create(instance ->
@@ -219,10 +231,12 @@ public final class FakePlayerSavedData extends SavedData {
     /** 驻留记录只用于服务器重启后按名称和 UUID 恢复假人，不保存持续动作。 */
     public record Resident(
         UUID uuid,
-        String name
+        String name,
+        FakePlayerAutomation.AutomationState automation
     ) {
         public static Resident from(FakeServerPlayer player) {
-            return new Resident(player.getUUID(), player.getGameProfile().name());
+            return new Resident(player.getUUID(), player.getGameProfile().name(),
+                player.automation().settings());
         }
     }
 
@@ -230,7 +244,8 @@ public final class FakePlayerSavedData extends SavedData {
         UUID uuid,
         String name,
         CompoundTag playerData,
-        FakePlayerActions.State actions
+        FakePlayerActions.State actions,
+        FakePlayerAutomation.AutomationState automation
     ) {
         public PlayerSnapshot {
             playerData = playerData.copy();
@@ -241,7 +256,8 @@ public final class FakePlayerSavedData extends SavedData {
                 player.getUUID(),
                 player.getGameProfile().name(),
                 FakePlayerPersistence.snapshot(player),
-                saveActions ? player.actions().snapshot() : FakePlayerActions.State.EMPTY
+                saveActions ? player.actions().snapshot() : FakePlayerActions.State.EMPTY,
+                player.automation().settings()
             );
         }
     }

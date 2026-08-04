@@ -119,12 +119,15 @@
   "gui.fakeplayer.global.refresh": "Refresh list",
   "gui.fakeplayer.global.page": "Page %s/%s - %s fake players",
   "gui.fakeplayer.global.setting.restore_players": "Restore players",
-  "gui.fakeplayer.global.setting.restore_actions": "Restore actions",
-  "gui.fakeplayer.global.setting.auto_replenishment": "Auto replenish",
-  "gui.fakeplayer.global.setting.shulker_replenishment": "Shulker replenish",
-  "gui.fakeplayer.global.setting.auto_replace_tools": "Replace tools",
-  "gui.fakeplayer.global.setting.auto_fishing": "Auto fishing",
   "gui.fakeplayer.global.enabled": "On",
   "gui.fakeplayer.global.disabled": "Off",
-  "gui.fakeplayer.global.setting_value": "%1$s: %2$s"
+  "gui.fakeplayer.global.setting_value": "%1$s: %2$s",
+  "gui.fakeplayer.automation.title": "Automation",
+  "gui.fakeplayer.automation.auto_replenishment": "Auto replenish",
+  "gui.fakeplayer.automation.shulker_replenishment": "Shulker replenish",
+  "gui.fakeplayer.automation.auto_replace_tools": "Replace tools",
+  "gui.fakeplayer.automation.auto_fishing": "Auto fishing",
+  "gui.fakeplayer.automation.enabled": "On",
+  "gui.fakeplayer.automation.disabled": "Off",
+  "gui.fakeplayer.automation.setting_value": "%1$s: %2$s"
 }
