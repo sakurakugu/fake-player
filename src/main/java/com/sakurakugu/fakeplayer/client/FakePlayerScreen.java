@@ -14,12 +14,6 @@ public final class FakePlayerScreen extends AbstractContainerScreen<FakePlayerMe
     private static final int PADDING = 12;
     private static final int BUTTON_GAP = 8;
     private static final int BUTTON_HEIGHT = 22;
-    private static final String[] AUTOMATION_KEYS = {
-        "auto_replenishment",
-        "shulker_replenishment",
-        "auto_replace_tools",
-        "auto_fishing"
-    };
 
     public FakePlayerScreen(FakePlayerMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, PANEL_WIDTH, PANEL_HEIGHT);
@@ -44,13 +38,6 @@ public final class FakePlayerScreen extends AbstractContainerScreen<FakePlayerMe
         addActionButton(left, firstRow + rowStep * 3, buttonWidth, "gui.fakeplayer.open_inventory", FakePlayerMenu.ACTION_INVENTORY);
         addActionButton(right, firstRow + rowStep * 3, buttonWidth, "gui.fakeplayer.stop", FakePlayerMenu.ACTION_STOP);
 
-        int automationFirstRow = firstRow + rowStep * 4;
-        addAutomationButton(left, automationFirstRow, buttonWidth, 0, FakePlayerMenu.ACTION_AUTO_REPLENISHMENT);
-        addAutomationButton(right, automationFirstRow, buttonWidth, 1,
-            FakePlayerMenu.ACTION_AUTO_REPLENISHMENT_FROM_SHULKER_BOXES);
-        addAutomationButton(left, automationFirstRow + rowStep, buttonWidth, 2,
-            FakePlayerMenu.ACTION_AUTO_REPLACE_TOOLS);
-        addAutomationButton(right, automationFirstRow + rowStep, buttonWidth, 3, FakePlayerMenu.ACTION_AUTO_FISHING);
     }
 
     private void addActionButton(int x, int y, int width, String translationKey, int actionId) {
@@ -58,19 +45,6 @@ public final class FakePlayerScreen extends AbstractContainerScreen<FakePlayerMe
             Button.builder(Component.translatable(translationKey), button -> sendAction(actionId))
                 .bounds(x, y, width, BUTTON_HEIGHT)
                 .build()
-        );
-    }
-
-    private void addAutomationButton(int x, int y, int width, int index, int actionId) {
-        Component name = Component.translatable("gui.fakeplayer.automation." + AUTOMATION_KEYS[index]);
-        Component state = Component.translatable(menu.automationEnabled(index)
-            ? "gui.fakeplayer.automation.enabled"
-            : "gui.fakeplayer.automation.disabled");
-        addRenderableWidget(
-            Button.builder(
-                Component.translatable("gui.fakeplayer.automation.setting_value", name, state),
-                button -> sendAction(actionId)
-            ).bounds(x, y, width, BUTTON_HEIGHT).build()
         );
     }
 
@@ -98,13 +72,6 @@ public final class FakePlayerScreen extends AbstractContainerScreen<FakePlayerMe
             Component.translatable("gui.fakeplayer.status", menu.targetName()),
             PANEL_WIDTH / 2,
             25,
-            0xFFB8D8C5
-        );
-        graphics.centeredText(
-            font,
-            Component.translatable("gui.fakeplayer.automation.title"),
-            PANEL_WIDTH / 2,
-            48 + (BUTTON_HEIGHT + BUTTON_GAP) * 4 - 12,
             0xFFB8D8C5
         );
     }

@@ -10,6 +10,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.sakurakugu.fakeplayer.FakePlayerMod;
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
+import com.sakurakugu.fakeplayer.automation.FakePlayerAutomation;
 import com.sakurakugu.fakeplayer.entity.FakePlayerActions;
 import com.sakurakugu.fakeplayer.entity.FakePlayerActions.MoveDirection;
 import com.sakurakugu.fakeplayer.entity.FakePlayerActions.RepeatMode;
@@ -82,6 +83,7 @@ public final class FakePlayerCommand {
             .executes(FakePlayerCommand::openPlayerGui)
             .then(Commands.literal("default").executes(FakePlayerCommand::resetSettings))
             .then(Commands.literal("reset").executes(FakePlayerCommand::resetSettings)));
+        target.then(automationCommand());
         target.then(Commands.literal("bag").executes(FakePlayerCommand::openBag));
         target.then(Commands.literal("backpack").executes(FakePlayerCommand::openBag));
         target.then(Commands.literal("enderchest").executes(FakePlayerCommand::openEnderChest));
@@ -111,6 +113,70 @@ public final class FakePlayerCommand {
         target.then(simpleAction("stop", fake -> fake.actions().stop()));
         player.then(target);
         dispatcher.register(player);
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> automationCommand() {
+        LiteralArgumentBuilder<CommandSourceStack> command = Commands.literal("automation");
+        String[] names = {"autoReplenishment", "shulkerReplenishment", "autoReplaceTools", "autoFishing"};
+        for (int index = 0; index < names.length; index++) {
+            command.then(automationSetting(names[index], index));
+        }
+        return command;
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> automationSetting(String name, int index) {
+        LiteralArgumentBuilder<CommandSourceStack> setting = Commands.literal(name)
+            .executes(context -> setAutomation(context, index, null));
+        setting.then(Commands.literal("on").executes(context -> setAutomation(context, index, true)));
+        setting.then(Commands.literal("off").executes(context -> setAutomation(context, index, false)));
+        setting.then(Commands.literal("toggle").executes(context -> setAutomation(context, index, null)));
+        return setting;
+    }
+
+    private static int setAutomation(CommandContext<CommandSourceStack> context, int index, Boolean value)
+        throws CommandSyntaxException {
+        FakeServerPlayer fake = getFake(context);
+        FakePlayerAutomation.AutomationState state = fake.automation().settings();
+        boolean next = value == null ? automationValue(state, index) : value;
+        if (value == null) {
+            next = !next;
+        }
+        boolean enabled = next;
+        fake.automation().setSettings(withAutomationValue(state, index, enabled));
+        context.getSource().sendSuccess(() -> Component.translatable(
+            "commands.fakeplayer.automation_set", fake.getGameProfile().name(), indexName(index),
+            enabled ? Component.translatable("gui.fakeplayer.automation.enabled")
+                : Component.translatable("gui.fakeplayer.automation.disabled")), true);
+        return 1;
+    }
+
+    private static boolean automationValue(FakePlayerAutomation.AutomationState state, int index) {
+        return switch (index) {
+            case 0 -> state.autoReplenishment();
+            case 1 -> state.autoReplenishmentFromShulkerBoxes();
+            case 2 -> state.autoReplaceTools();
+            default -> state.autoFishing();
+        };
+    }
+
+    private static FakePlayerAutomation.AutomationState withAutomationValue(
+        FakePlayerAutomation.AutomationState state, int index, boolean value
+    ) {
+        return switch (index) {
+            case 0 -> state.withAutoReplenishment(value);
+            case 1 -> state.withAutoReplenishmentFromShulkerBoxes(value);
+            case 2 -> state.withAutoReplaceTools(value);
+            default -> state.withAutoFishing(value);
+        };
+    }
+
+    private static String indexName(int index) {
+        return switch (index) {
+            case 0 -> "autoReplenishment";
+            case 1 -> "shulkerReplenishment";
+            case 2 -> "autoReplaceTools";
+            default -> "autoFishing";
+        };
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> spawnCommand() {

@@ -23,6 +23,7 @@
   "commands.fakeplayer.not_possessing": "You are not possessing a fake player",
   "commands.fakeplayer.not_possessing_target": "You are not possessing fake player %s",
   "commands.fakeplayer.settings_reset": "Reset settings for fake player %s to defaults",
+  "commands.fakeplayer.automation_set": "Set automation %2$s for fake player %1$s to %3$s",
   "commands.fakeplayer.no_mount": "No rideable entity was found nearby",
   "commands.fakeplayer.shadowed": "Kicked player %s and spawned a fake player with the same name at their position",
   "commands.fakeplayer.shadow_kicked": "You have been replaced by a fake player with your name",

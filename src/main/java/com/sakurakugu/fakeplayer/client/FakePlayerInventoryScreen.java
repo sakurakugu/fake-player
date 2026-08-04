@@ -59,8 +59,17 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private static final int TRANSFER_BUTTON_LEFT = 144;
     private static final int TRANSFER_BUTTON_TOP = 165;
     private static final int TRANSFER_BUTTON_SIZE = 12;
+    // 自动化标签放在 Q 键丢弃标签下方。
+    private static final int AUTOMATION_PANEL_TOP = DROP_PANEL_TOP + DROP_PANEL_HEIGHT + 2;
+    private static final int AUTOMATION_PANEL_WIDTH = 94;
+    private static final int AUTOMATION_PANEL_HEIGHT = 105;
+    private static final int AUTOMATION_BUTTON_HEIGHT = 16;
+    private static final String[] AUTOMATION_KEYS = {
+        "auto_replenishment", "shulker_replenishment", "auto_replace_tools", "auto_fishing"
+    };
 
     private boolean dropPanelOpen;
+    private boolean automationPanelOpen;
     private boolean continuousDrop;
     private boolean percentageDrop;
     private int dropAmount = 1;
@@ -69,6 +78,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private Button dropModeButton;
     private ContinuousDropSwitch continuousDropButton;
     private Button executeDropButton;
+    private AutomationSwitch[] automationButtons = new AutomationSwitch[0];
 
     public FakePlayerInventoryScreen(FakePlayerInventoryMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, menu.screenWidth(), menu.screenHeight());
@@ -136,6 +146,22 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             false
         ));
 
+        int automationLeft = leftPos + imageWidth;
+        int automationTop = topPos + AUTOMATION_PANEL_TOP + 21;
+        automationButtons = new AutomationSwitch[AUTOMATION_KEYS.length];
+        for (int index = 0; index < AUTOMATION_KEYS.length; index++) {
+            int actionId = FakePlayerInventoryMenu.ACTION_AUTO_REPLENISHMENT + index;
+            automationButtons[index] = addRenderableWidget(new AutomationSwitch(
+                automationLeft + 6,
+                automationTop + index * (AUTOMATION_BUTTON_HEIGHT + 2),
+                AUTOMATION_PANEL_WIDTH - 12,
+                AUTOMATION_BUTTON_HEIGHT,
+                index,
+                button -> sendAction(actionId)
+            ));
+            automationButtons[index].visible = false;
+        }
+
         int panelLeft = leftPos + imageWidth;
         int panelTop = topPos + DROP_PANEL_TOP;
         Button tabButton = addRenderableWidget(new DropTabButton(
@@ -144,6 +170,13 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             button -> setDropPanelOpen(!dropPanelOpen)
         ));
         tabButton.setTooltip(Tooltip.create(Component.translatable("gui.fakeplayer.drop_tab")));
+
+        Button automationTab = addRenderableWidget(new AutomationTabButton(
+            panelLeft,
+            topPos + AUTOMATION_PANEL_TOP,
+            button -> setAutomationPanelOpen(!automationPanelOpen)
+        ));
+        automationTab.setTooltip(Tooltip.create(Component.translatable("gui.fakeplayer.automation.title")));
 
         dropModeButton = addRenderableWidget(
             new PanelButton(panelLeft + 74, panelTop + 28, 14, 14, dropModeMessage(), button -> toggleDropMode())
@@ -172,6 +205,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             )
         );
         setDropPanelOpen(dropPanelOpen);
+        setAutomationPanelOpen(automationPanelOpen);
     }
 
     /** 复刻参考界面的 12 像素转移按钮，按下 Shift 时由虚线箭头切换为完整箭头。（隐藏箭杆中间的一行像素） */
@@ -307,6 +341,13 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         executeDropButton.visible = open;
     }
 
+    private void setAutomationPanelOpen(boolean open) {
+        automationPanelOpen = open;
+        for (AutomationSwitch button : automationButtons) {
+            button.visible = open;
+        }
+    }
+
     private void sendAction(int actionId) {
         if (minecraft.gameMode != null) {
             minecraft.gameMode.handleInventoryButtonClick(menu.containerId, actionId);
@@ -415,6 +456,19 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
                 16,
                 16
             );
+        }
+    }
+
+    /** 自动化标签使用原版物品图标作为占位图标。 */
+    private final class AutomationTabButton extends Button {
+        private AutomationTabButton(int x, int y, OnPress onPress) {
+            super(x, y, DROP_TAB_WIDTH, DROP_TAB_HEIGHT,
+                Component.translatable("gui.fakeplayer.automation.title"), onPress, DEFAULT_NARRATION);
+        }
+
+        @Override
+        protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+            graphics.item(new ItemStack(Items.REPEATER), getX() + 2, getY() + 4);
         }
     }
 
@@ -531,6 +585,18 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     ) {
         graphics.text(font, message, x + (width - font.width(message)) / 2, y + (height - 8) / 2,
             color, false);
+    }
+
+    private void drawAutomationSwitch(
+        GuiGraphicsExtractor graphics, int x, int y, boolean enabled, boolean hovered
+    ) {
+        int right = x + 24;
+        int bottom = y + 12;
+        graphics.fill(x, y, right, bottom, hovered ? 0xFFFFFFFF : 0xFF373737);
+        graphics.fill(x + 1, y + 1, right - 1, bottom - 1, enabled ? 0xFF36B54A : 0xFF565656);
+        int handleLeft = enabled ? right - 10 : x + 2;
+        graphics.fill(handleLeft, y + 2, handleLeft + 8, bottom - 2, 0xFFFFFFFF);
+        graphics.fill(handleLeft + 1, y + 3, handleLeft + 7, bottom - 3, 0xFFC6C6C6);
     }
 
     private void drawCompactControl(
@@ -653,6 +719,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         );
 
         drawDropPanel(graphics);
+        drawAutomationPanel(graphics);
 
         for (int slot = 0; slot < HOTBAR_SLOT_COUNT; slot++) {
             int x = leftPos + HOTBAR_SELECTOR_LEFT + slot * HOTBAR_SLOT_SPACING;
@@ -720,6 +787,42 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             graphics.text(font, Component.translatable("gui.fakeplayer.drop_panel_title"), left + 22, top + 8,
                 0xFF404040, false);
             graphics.text(font, Component.translatable("gui.fakeplayer.drop_amount"), left + 6, top + 31,
+                0xFF404040, false);
+        }
+    }
+
+    /** 自动化设置使用紧凑的开关轨道。 */
+    private final class AutomationSwitch extends Button {
+        private final int index;
+
+        private AutomationSwitch(int x, int y, int width, int height, int index, OnPress onPress) {
+            super(x, y, width, height, Component.empty(), onPress, DEFAULT_NARRATION);
+            this.index = index;
+            setTooltip(Tooltip.create(Component.translatable(
+                "gui.fakeplayer.automation." + AUTOMATION_KEYS[index])));
+        }
+
+        @Override
+        protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+            Component label = Component.translatable("gui.fakeplayer.automation." + AUTOMATION_KEYS[index]);
+            String visibleLabel = font.plainSubstrByWidth(label.getString(), getWidth() - 34);
+            graphics.text(font, Component.literal(visibleLabel), getX(),
+                getY() + (getHeight() - 8) / 2, 0xFF404040, false);
+            int switchX = getX() + getWidth() - 24;
+            int switchY = getY() + (getHeight() - 12) / 2;
+            drawAutomationSwitch(graphics, switchX, switchY, menu.automationEnabled(index), isMouseOver(mouseX, mouseY));
+        }
+    }
+
+    private void drawAutomationPanel(GuiGraphicsExtractor graphics) {
+        int left = leftPos + imageWidth;
+        int top = topPos + AUTOMATION_PANEL_TOP;
+        int width = automationPanelOpen ? AUTOMATION_PANEL_WIDTH : DROP_TAB_WIDTH;
+        int height = automationPanelOpen ? AUTOMATION_PANEL_HEIGHT : DROP_TAB_HEIGHT;
+        drawTabBackground(graphics, left, top, width, height);
+        if (automationPanelOpen) {
+            // 标签图标仍覆盖在面板左侧，因此标题从图标右侧开始绘制。
+            graphics.text(font, Component.translatable("gui.fakeplayer.automation.title"), left + 22, top + 8,
                 0xFF404040, false);
         }
     }

@@ -65,6 +65,10 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     public static final int ACTION_TRANSFER_TO_TARGET_ALL_WITH_HOTBAR = ACTION_TRANSFER_TO_TARGET_MATCHING_WITH_HOTBAR + 1;
     public static final int ACTION_TRANSFER_TO_VIEWER_MATCHING_WITH_HOTBAR = ACTION_TRANSFER_TO_TARGET_ALL_WITH_HOTBAR + 1;
     public static final int ACTION_TRANSFER_TO_VIEWER_ALL_WITH_HOTBAR = ACTION_TRANSFER_TO_VIEWER_MATCHING_WITH_HOTBAR + 1;
+    public static final int ACTION_AUTO_REPLENISHMENT = ACTION_TRANSFER_TO_VIEWER_ALL_WITH_HOTBAR + 1;
+    public static final int ACTION_AUTO_REPLENISHMENT_FROM_SHULKER_BOXES = ACTION_AUTO_REPLENISHMENT + 1;
+    public static final int ACTION_AUTO_REPLACE_TOOLS = ACTION_AUTO_REPLENISHMENT_FROM_SHULKER_BOXES + 1;
+    public static final int ACTION_AUTO_FISHING = ACTION_AUTO_REPLACE_TOOLS + 1;
     private static final EquipmentSlot[] ARMOR_SLOTS = {
         EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET
     };
@@ -82,6 +86,8 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     private final ResultContainer resultSlots = new ResultContainer();
     private int selectedHotbarSlotSnapshot;
     private final DataSlot selectedHotbarSlot;
+    private int automationMaskSnapshot;
+    private final DataSlot automationMask;
 
     public FakePlayerInventoryMenu(int containerId, Inventory inventory, RegistryFriendlyByteBuf data) {
         this(
@@ -92,7 +98,8 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             View.fromNetwork(data.readVarInt()),
             data.readVarInt(),
             data.readBoolean(),
-            data.readBoolean()
+            data.readBoolean(),
+            data.readVarInt()
         );
     }
 
@@ -105,7 +112,7 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
         boolean targetOccupied
     ) {
         this(containerId, inventory, target, target.getGameProfile().name(), view, target.getId(),
-            possessedByViewer, targetOccupied);
+            possessedByViewer, targetOccupied, automationMask(target));
     }
 
     private FakePlayerInventoryMenu(
@@ -116,7 +123,8 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
         View view,
         int targetEntityId,
         boolean possessedByViewer,
-        boolean targetOccupied
+        boolean targetOccupied,
+        int automationMask
     ) {
         super(ModMenus.FAKE_PLAYER_INVENTORY.get(), containerId);
         this.target = target;
@@ -125,6 +133,7 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
         this.targetEntityId = targetEntityId;
         this.possessedByViewer = possessedByViewer;
         this.targetOccupied = targetOccupied;
+        this.automationMaskSnapshot = automationMask;
         this.viewer = viewerInventory.player;
         this.craftingOwner = target == null ? viewer : target;
         this.targetSlotCount = switch (view) {
@@ -141,6 +150,17 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             @Override
             public void set(int value) {
                 selectedHotbarSlotSnapshot = value;
+            }
+        });
+        this.automationMask = addDataSlot(new DataSlot() {
+            @Override
+            public int get() {
+                return target == null ? automationMaskSnapshot : automationMask(target);
+            }
+
+            @Override
+            public void set(int value) {
+                automationMaskSnapshot = value;
             }
         });
 
@@ -265,6 +285,15 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             case ACTION_TRANSFER_TO_TARGET_ALL_WITH_HOTBAR -> transferItems(player, true, false, true);
             case ACTION_TRANSFER_TO_VIEWER_MATCHING_WITH_HOTBAR -> transferItems(player, false, true, true);
             case ACTION_TRANSFER_TO_VIEWER_ALL_WITH_HOTBAR -> transferItems(player, false, false, true);
+            case ACTION_AUTO_REPLENISHMENT,
+                ACTION_AUTO_REPLENISHMENT_FROM_SHULKER_BOXES,
+                ACTION_AUTO_REPLACE_TOOLS,
+                ACTION_AUTO_FISHING -> {
+                int index = actionId - ACTION_AUTO_REPLENISHMENT;
+                target.automation().toggleSetting(index);
+                // 只同步数据槽，保留客户端展开状态。
+                broadcastChanges();
+            }
             default -> {
                 return false;
             }
@@ -495,6 +524,28 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
 
     public boolean targetOccupied() {
         return targetOccupied;
+    }
+
+    public boolean automationEnabled(int index) {
+        return (automationMask.get() & (1 << index)) != 0;
+    }
+
+    public static int automationMask(FakeServerPlayer fake) {
+        var settings = fake.automation().settings();
+        int mask = 0;
+        if (settings.autoReplenishment()) {
+            mask |= 1;
+        }
+        if (settings.autoReplenishmentFromShulkerBoxes()) {
+            mask |= 1 << 1;
+        }
+        if (settings.autoReplaceTools()) {
+            mask |= 1 << 2;
+        }
+        if (settings.autoFishing()) {
+            mask |= 1 << 3;
+        }
+        return mask;
     }
 
     public int screenWidth() {

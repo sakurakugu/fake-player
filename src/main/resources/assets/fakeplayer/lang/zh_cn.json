@@ -23,6 +23,7 @@
   "commands.fakeplayer.not_possessing": "你当前没有附身假人",
   "commands.fakeplayer.not_possessing_target": "你当前没有附身假人 %s",
   "commands.fakeplayer.settings_reset": "已将假人 %s 的设置恢复为默认值",
+  "commands.fakeplayer.automation_set": "已将假人 %1$s 的自动化设置 %2$s 切换为 %3$s",
   "commands.fakeplayer.no_mount": "附近没有可骑乘的实体",
   "commands.fakeplayer.shadowed": "已踢出玩家 %s 并在原位置生成同名假人",
   "commands.fakeplayer.shadow_kicked": "你已被同名假人替换",
