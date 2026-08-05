@@ -154,6 +154,18 @@
   "gui.fakeplayer.look.title": "View & Facing",
   "gui.fakeplayer.look.view": "View",
   "gui.fakeplayer.look.direction": "Facing",
+  "gui.fakeplayer.look.body_follows_head": "Body follows head",
+  "gui.fakeplayer.look.body_follows_head_tooltip": "When the view reaches the left or right border, continuing to turn rotates the body",
+  "gui.fakeplayer.look.view_tooltip": "Pitch: %1$s°\nYaw: %2$s°",
+  "gui.fakeplayer.look.direction_tooltip": "Body yaw: %1$s°\nView offset: %2$s°\nBearing: %3$s",
+  "gui.fakeplayer.look.bearing.north": "North",
+  "gui.fakeplayer.look.bearing.east": "East",
+  "gui.fakeplayer.look.bearing.south": "South",
+  "gui.fakeplayer.look.bearing.west": "West",
+  "gui.fakeplayer.look.bearing.east_north": "%1$s° north of east",
+  "gui.fakeplayer.look.bearing.east_south": "%1$s° south of east",
+  "gui.fakeplayer.look.bearing.west_north": "%1$s° north of west",
+  "gui.fakeplayer.look.bearing.west_south": "%1$s° south of west",
   "gui.fakeplayer.look_pitch": "Pitch",
   "gui.fakeplayer.look_yaw": "Yaw"
 }

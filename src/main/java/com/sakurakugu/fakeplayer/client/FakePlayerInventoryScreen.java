@@ -82,7 +82,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private static final int CONTINUOUS_PANEL_WIDTH = 94;
     private static final int CONTINUOUS_PANEL_HEIGHT = 219;
     private static final int AIM_PANEL_WIDTH = 94;
-    private static final int AIM_PANEL_HEIGHT = 216;
+    private static final int AIM_PANEL_HEIGHT = 234;
     private static final int AIM_PAD_SIZE = 62;
     private static final float MAX_HEAD_YAW_OFFSET = 50.0F;
     private static final int CONTINUOUS_BUTTON_HEIGHT = 16;
@@ -124,6 +124,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private AimPad directionPad;
     private EditBox pitchInput;
     private EditBox yawInput;
+    private ToggleSwitchButton bodyFollowsHeadButton;
     private boolean syncingAimInputs;
 
     public FakePlayerInventoryScreen(FakePlayerInventoryMenu menu, Inventory inventory, Component title) {
@@ -360,11 +361,19 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private void addAimPanel() {
         int x = leftPos + imageWidth;
         int y = topPos + AIM_PANEL_TOP;
-        aimPad = addRenderableWidget(new AimPad(x + 16, y + 32, AIM_PAD_SIZE, false));
-        directionPad = addRenderableWidget(new AimPad(x + 16, y + 106, AIM_PAD_SIZE, true));
-        pitchInput = addRenderableWidget(new EditBox(font, x + 36, y + 174, 52, 16,
+        bodyFollowsHeadButton = addRenderableWidget(new ToggleSwitchButton(
+            x + 6, y + 20, AIM_PANEL_WIDTH - 12, 16,
+            Component.translatable("gui.fakeplayer.look.body_follows_head"),
+            menu::bodyFollowsHead,
+            button -> sendAction(FakePlayerInventoryMenu.ACTION_TOGGLE_BODY_FOLLOWS_HEAD)
+        ));
+        bodyFollowsHeadButton.setTooltip(Tooltip.create(
+            Component.translatable("gui.fakeplayer.look.body_follows_head_tooltip")));
+        aimPad = addRenderableWidget(new AimPad(x + 16, y + 50, AIM_PAD_SIZE, false));
+        directionPad = addRenderableWidget(new AimPad(x + 16, y + 124, AIM_PAD_SIZE, true));
+        pitchInput = addRenderableWidget(new EditBox(font, x + 36, y + 192, 52, 16,
             Component.translatable("gui.fakeplayer.look_pitch")));
-        yawInput = addRenderableWidget(new EditBox(font, x + 36, y + 194, 52, 16,
+        yawInput = addRenderableWidget(new EditBox(font, x + 36, y + 212, 52, 16,
             Component.translatable("gui.fakeplayer.look_yaw")));
         pitchInput.setValue(Integer.toString(menu.pitch()));
         yawInput.setValue(Integer.toString(menu.yaw()));
@@ -372,18 +381,34 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         yawInput.setFilter(value -> value.matches("-?\\d{0,3}"));
         pitchInput.setResponder(value -> {
             if (syncingAimInputs) return;
-            try { sendAction(FakePlayerInventoryMenu.pitchAction(Integer.parseInt(value))); }
-            catch (NumberFormatException ignored) { }
+            submitAngleInput(pitchInput, value, -90, 90, true);
         });
         yawInput.setResponder(value -> {
             if (syncingAimInputs) return;
-            try { sendAction(FakePlayerInventoryMenu.yawAction(Integer.parseInt(value))); }
-            catch (NumberFormatException ignored) { }
+            submitAngleInput(yawInput, value, -180, 179, false);
         });
         Button tab = addRenderableWidget(new IconTabButton(x, y, DROP_TAB_WIDTH, DROP_TAB_HEIGHT, new ItemStack(Items.COMPASS),
             Component.translatable("gui.fakeplayer.look.title"), button -> aimPanel.toggle()));
         tab.setTooltip(Tooltip.create(Component.translatable("gui.fakeplayer.look.title")));
-        aimPanel.bind(tab, aimPad, directionPad, pitchInput, yawInput);
+        aimPanel.bind(tab, bodyFollowsHeadButton, aimPad, directionPad, pitchInput, yawInput);
+    }
+
+    /** 修正超出范围的角度输入，并把最终值发送到服务端。 */
+    private void submitAngleInput(EditBox input, String value, int minimum, int maximum, boolean pitch) {
+        try {
+            int angle = Integer.parseInt(value);
+            int clamped = Math.clamp(angle, minimum, maximum);
+            if (angle != clamped) {
+                syncingAimInputs = true;
+                input.setValue(Integer.toString(clamped));
+                syncingAimInputs = false;
+            }
+            sendAction(pitch
+                ? FakePlayerInventoryMenu.pitchAction(clamped)
+                : FakePlayerInventoryMenu.yawAction(clamped));
+        } catch (NumberFormatException ignored) {
+            // 空输入和单独的负号是编辑过程中的合法中间状态。
+        }
     }
 
     private void addControlButton(int column, int row, String label, int actionId) {
@@ -841,13 +866,13 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         }
         graphics.text(font, Component.translatable("gui.fakeplayer.look.title"), x + 22, y + 8,
             0xFF404040, false);
-        graphics.text(font, Component.translatable("gui.fakeplayer.look.view"), x + 16, y + 23,
+        graphics.text(font, Component.translatable("gui.fakeplayer.look.view"), x + 16, y + 41,
             0xFF606060, false);
-        graphics.text(font, Component.translatable("gui.fakeplayer.look.direction"), x + 16, y + 97,
+        graphics.text(font, Component.translatable("gui.fakeplayer.look.direction"), x + 16, y + 115,
             0xFF606060, false);
-        graphics.text(font, Component.translatable("gui.fakeplayer.look_pitch"), x + 6, y + 179,
+        graphics.text(font, Component.translatable("gui.fakeplayer.look_pitch"), x + 6, y + 197,
             0xFF404040, false);
-        graphics.text(font, Component.translatable("gui.fakeplayer.look_yaw"), x + 6, y + 199,
+        graphics.text(font, Component.translatable("gui.fakeplayer.look_yaw"), x + 6, y + 217,
             0xFF404040, false);
     }
 
@@ -861,20 +886,46 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         graphics.fill(leftPos + imageWidth - 1, top, leftPos + imageWidth, bottom, 0xFF000000);
     }
 
-    /** 圆形视角/身体朝向控制器；视角盘为自由二维输入，朝向盘沿圆周连续旋转。 */
+    /** 视角/身体朝向控制器；方形视角盘为自由二维输入，圆形朝向盘沿圆周连续旋转。 */
     private final class AimPad extends Button {
         private final boolean cardinal;
         private boolean dragging;
+        private boolean draggingOutsideHorizontally;
+        private float dragStartBodyYaw;
+        private float dragYawOffset;
         AimPad(int x, int y, int size, boolean cardinal) {
             super(x, y, size, size, Component.empty(), button -> { }, DEFAULT_NARRATION);
             this.cardinal = cardinal;
         }
         @Override protected void extractContents(GuiGraphicsExtractor g, int mx, int my, float pt) {
+            if (cardinal) {
+                setTooltip(Tooltip.create(Component.translatable(
+                    "gui.fakeplayer.look.direction_tooltip",
+                    menu.bodyYaw(),
+                    Math.round(wrapDegrees(menu.yaw() - menu.bodyYaw())),
+                    bodyBearing(menu.bodyYaw())
+                )));
+            } else {
+                setTooltip(Tooltip.create(Component.translatable(
+                    "gui.fakeplayer.look.view_tooltip", menu.pitch(), menu.yaw()
+                )));
+            }
             int cx = getX() + getWidth() / 2, cy = getY() + getHeight() / 2, r = getWidth() / 2 - 2;
-            for (int a = 0; a < 360; a += 3) {
-                int px = cx + Math.round((float) Math.cos(Math.toRadians(a)) * r);
-                int py = cy + Math.round((float) Math.sin(Math.toRadians(a)) * r);
-                g.fill(px, py, px + 2, py + 2, 0xFF555555);
+            if (cardinal) {
+                for (int a = 0; a < 360; a += 3) {
+                    int px = cx + Math.round((float) Math.cos(Math.toRadians(a)) * r);
+                    int py = cy + Math.round((float) Math.sin(Math.toRadians(a)) * r);
+                    g.fill(px, py, px + 2, py + 2, 0xFF555555);
+                }
+            } else {
+                int left = cx - r;
+                int top = cy - r;
+                int right = cx + r + 1;
+                int bottom = cy + r + 1;
+                g.fill(left, top, right, top + 2, 0xFF555555);
+                g.fill(left, bottom - 2, right, bottom, 0xFF555555);
+                g.fill(left, top + 2, left + 2, bottom - 2, 0xFF555555);
+                g.fill(right - 2, top + 2, right, bottom - 2, 0xFF555555);
             }
             int bx;
             int by;
@@ -883,23 +934,39 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
                 bx = cx + (int) Math.round(Math.cos(angle) * r);
                 by = cy + (int) Math.round(Math.sin(angle) * r);
             } else {
-                float headOffset = wrapDegrees(menu.yaw() - menu.bodyYaw());
+                // 联动时身体会吸收越界角度，拖动期间使用本地偏移避免网络同步造成摇杆抖动。
+                float headOffset = menu.bodyFollowsHead() && dragging
+                    ? dragYawOffset
+                    : wrapDegrees(menu.yaw() - menu.bodyYaw());
                 bx = cx + Math.round(headOffset * (r - 3) / MAX_HEAD_YAW_OFFSET);
+                if (menu.bodyFollowsHead() && draggingOutsideHorizontally) {
+                    // 只有鼠标越过左右边框时才让摇杆露出一半，表示当前正在带动身体。
+                    bx = cx + (dragYawOffset < 0.0F ? -r : r);
+                }
                 by = cy + Math.round(menu.pitch() * (r - 3) / 90.0f);
             }
-            g.fill(bx - 3, by - 3, bx + 4, by + 4, 0xFF2E9BDE);
+            g.fill(bx - 3, by - 3, bx + 4, by + 4, 0xFFFFFFFF);
+            g.fill(bx - 2, by - 2, bx + 3, by + 3, 0xFFC6C6C6);
         }
         @Override public boolean mouseClicked(MouseButtonEvent e, boolean dbl) {
             if (e.button() != 0 || !isMouseOver(e.x(), e.y())) return false;
-            dragging = true; update(e.x(), e.y()); return true;
+            dragging = true;
+            dragStartBodyYaw = menu.bodyYaw();
+            update(e.x(), e.y());
+            return true;
         }
         @Override public boolean mouseDragged(MouseButtonEvent e, double dx, double dy) {
             if (!dragging) return false; update(e.x(), e.y()); return true;
         }
-        @Override public boolean mouseReleased(MouseButtonEvent e) { dragging = false; return super.mouseReleased(e); }
+        @Override public boolean mouseReleased(MouseButtonEvent e) {
+            dragging = false;
+            draggingOutsideHorizontally = false;
+            return super.mouseReleased(e);
+        }
         private void update(double mx, double my) {
             double cx = getX() + getWidth() / 2.0, cy = getY() + getHeight() / 2.0;
             double dx = mx - cx, dy = my - cy, r = getWidth() / 2.0 - 3;
+            double rawDx = dx;
             double len = Math.sqrt(dx * dx + dy * dy);
             if (cardinal && len > 0) { dx *= r / len; dy *= r / len; }
             else if (!cardinal) { dx = Math.max(-r, Math.min(r, dx)); dy = Math.max(-r, Math.min(r, dy)); }
@@ -908,7 +975,13 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
                 sendAction(FakePlayerInventoryMenu.bodyYawAction(yaw));
                 return;
             }
-            int yaw = Math.round(menu.bodyYaw() + (float) (dx / r * MAX_HEAD_YAW_OFFSET));
+            dragYawOffset = (float) (dx / r * MAX_HEAD_YAW_OFFSET);
+            draggingOutsideHorizontally = menu.bodyFollowsHead() && Math.abs(rawDx) > r;
+            float requestedYawOffset = menu.bodyFollowsHead()
+                ? Math.clamp((float) (rawDx / r * MAX_HEAD_YAW_OFFSET), -179.0F, 179.0F)
+                : dragYawOffset;
+            float yawBase = menu.bodyFollowsHead() ? dragStartBodyYaw : menu.bodyYaw();
+            int yaw = Math.round(yawBase + requestedYawOffset);
             sendAction(FakePlayerInventoryMenu.yawAction(yaw));
             int pitch = (int) Math.round(dy / r * 90.0);
             sendAction(FakePlayerInventoryMenu.pitchAction(pitch));
@@ -920,6 +993,29 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         if (wrapped >= 180.0F) wrapped -= 360.0F;
         if (wrapped < -180.0F) wrapped += 360.0F;
         return wrapped;
+    }
+
+    /** 将 Minecraft 偏航角转换为易读的象限方位。 */
+    private static Component bodyBearing(float bodyYaw) {
+        int yaw = Math.round(wrapDegrees(bodyYaw));
+        return switch (yaw) {
+            case 0 -> Component.translatable("gui.fakeplayer.look.bearing.south");
+            case -90 -> Component.translatable("gui.fakeplayer.look.bearing.east");
+            case 90 -> Component.translatable("gui.fakeplayer.look.bearing.west");
+            case -180 -> Component.translatable("gui.fakeplayer.look.bearing.north");
+            default -> {
+                if (yaw < -90) {
+                    yield Component.translatable("gui.fakeplayer.look.bearing.east_north", -yaw - 90);
+                }
+                if (yaw < 0) {
+                    yield Component.translatable("gui.fakeplayer.look.bearing.east_south", yaw + 90);
+                }
+                if (yaw < 90) {
+                    yield Component.translatable("gui.fakeplayer.look.bearing.west_south", 90 - yaw);
+                }
+                yield Component.translatable("gui.fakeplayer.look.bearing.west_north", yaw - 90);
+            }
+        };
     }
 
     @Override

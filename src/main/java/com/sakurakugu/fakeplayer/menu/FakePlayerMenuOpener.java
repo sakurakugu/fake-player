@@ -95,6 +95,7 @@ public final class FakePlayerMenuOpener {
                 data.writeVarInt(Math.round(fake.getXRot()));
                 data.writeVarInt(Math.round(fake.getYRot()));
                 data.writeVarInt(Math.round(fake.yBodyRot));
+                data.writeBoolean(fake.actions().bodyFollowsHead());
             }
         );
     }

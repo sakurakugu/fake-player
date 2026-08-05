@@ -131,7 +131,8 @@ class FakePlayerSavedDataTest {
             -1.0F,
             java.util.Optional.of(new FakePlayerActions.DropState(4, false, false, 12)),
             true,
-            false
+            false,
+            true
         );
         return new FakePlayerSavedData.Preset(
             id,

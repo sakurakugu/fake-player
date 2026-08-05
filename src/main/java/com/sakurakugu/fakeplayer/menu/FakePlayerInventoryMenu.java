@@ -108,6 +108,7 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     private static final int ACTION_SET_YAW_BASE = ACTION_SET_PITCH_BASE + 181;
     private static final int ACTION_SET_BODY_YAW_BASE = ACTION_SET_YAW_BASE + 360;
     public static final int ACTION_SET_END = ACTION_SET_BODY_YAW_BASE + 360;
+    public static final int ACTION_TOGGLE_BODY_FOLLOWS_HEAD = ACTION_SET_END;
     public static int pitchAction(int pitch) { return ACTION_SET_PITCH_BASE + Math.max(-90, Math.min(90, pitch)) + 90; }
     public static int yawAction(int yaw) { return angleAction(ACTION_SET_YAW_BASE, yaw); }
     public static int bodyYawAction(int yaw) { return angleAction(ACTION_SET_BODY_YAW_BASE, yaw); }
@@ -146,6 +147,8 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     private DataSlot pitchData;
     private DataSlot yawData;
     private DataSlot bodyYawData;
+    private int bodyFollowsHeadSnapshot;
+    private final DataSlot bodyFollowsHead;
 
     public FakePlayerInventoryMenu(int containerId, Inventory inventory, RegistryFriendlyByteBuf data) {
         this(
@@ -164,7 +167,8 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             data.readVarInt(),
             data.readVarInt(),
             data.readVarInt(),
-            data.readVarInt()
+            data.readVarInt(),
+            data.readBoolean()
         );
     }
 
@@ -181,7 +185,8 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             target.actions().repeatInterval(FakePlayerActions.ScheduledAction.ATTACK),
             target.actions().repeatInterval(FakePlayerActions.ScheduledAction.USE),
             target.actions().repeatInterval(FakePlayerActions.ScheduledAction.JUMP),
-            Math.round(target.getXRot()), Math.round(target.getYRot()), Math.round(target.yBodyRot));
+            Math.round(target.getXRot()), Math.round(target.getYRot()), Math.round(target.yBodyRot),
+            target.actions().bodyFollowsHead());
     }
 
     private FakePlayerInventoryMenu(
@@ -200,7 +205,8 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
         int jumpInterval,
         int pitch,
         int yaw,
-        int bodyYaw
+        int bodyYaw,
+        boolean bodyFollowsHead
     ) {
         super(ModMenus.FAKE_PLAYER_INVENTORY.get(), containerId);
         this.target = target;
@@ -212,6 +218,7 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
         this.pitchSnapshot = pitch;
         this.yawSnapshot = yaw;
         this.bodyYawSnapshot = bodyYaw;
+        this.bodyFollowsHeadSnapshot = bodyFollowsHead ? 1 : 0;
         this.pitchData = addDataSlot(new DataSlot() {
             public int get() { return target == null ? pitchSnapshot : Math.round(target.getXRot()); }
             public void set(int value) { pitchSnapshot = value; }
@@ -223,6 +230,12 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
         this.bodyYawData = addDataSlot(new DataSlot() {
             public int get() { return target == null ? bodyYawSnapshot : Math.round(target.yBodyRot); }
             public void set(int value) { bodyYawSnapshot = value; }
+        });
+        this.bodyFollowsHead = addDataSlot(new DataSlot() {
+            public int get() {
+                return target == null ? bodyFollowsHeadSnapshot : target.actions().bodyFollowsHead() ? 1 : 0;
+            }
+            public void set(int value) { bodyFollowsHeadSnapshot = value; }
         });
         this.automationMaskSnapshot = automationMask;
         this.continuousControlMaskSnapshot = continuousControlMask;
@@ -463,6 +476,10 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             case ACTION_TURN_LEFT -> target.actions().turn(-1.0F);
             case ACTION_TURN_RIGHT -> target.actions().turn(1.0F);
             case ACTION_SNEAK -> target.actions().toggleSneak();
+            case ACTION_TOGGLE_BODY_FOLLOWS_HEAD -> {
+                target.actions().toggleBodyFollowsHead();
+                broadcastChanges();
+            }
             case ACTION_MOVE_FORWARD_HELD -> startHeldMove(FakePlayerActions.MoveDirection.FORWARD);
             case ACTION_MOVE_BACKWARD_HELD -> startHeldMove(FakePlayerActions.MoveDirection.BACKWARD);
             case ACTION_MOVE_LEFT_HELD -> startHeldMove(FakePlayerActions.MoveDirection.LEFT);
@@ -834,6 +851,7 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     public int pitch() { return pitchData.get(); }
     public int yaw() { return yawData.get(); }
     public int bodyYaw() { return bodyYawData.get(); }
+    public boolean bodyFollowsHead() { return bodyFollowsHead.get() != 0; }
 
     public boolean continuousControlEnabled(int index) {
         return (continuousControlMask.get() & (1 << index)) != 0;

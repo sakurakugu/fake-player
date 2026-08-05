@@ -68,6 +68,7 @@ public final class FakePlayerActions {
     private float heldTurn;
     private int lastJumpTick = -1000;
     private Float bodyYaw;
+    private boolean bodyFollowsHead;
 
     FakePlayerActions(FakeServerPlayer player) {
         this.player = player;
@@ -533,17 +534,32 @@ public final class FakePlayerActions {
         syncBodyRotation();
     }
 
-    /** 调整视角，不改变身体朝向。 */
+    /** 调整视角；启用头身联动时，视角越过左右边框后由超出部分带动身体。 */
     public void setViewRotation(float pitch, float yaw) {
         player.setXRot(Math.max(-90.0F, Math.min(90.0F, pitch)));
         float currentBodyYaw = bodyYaw == null ? player.yBodyRot : bodyYaw;
-        float offset = Mth.clamp(Mth.wrapDegrees(yaw - currentBodyYaw),
+        float requestedOffset = Mth.wrapDegrees(yaw - currentBodyYaw);
+        float offset = Mth.clamp(requestedOffset,
             -MAX_HEAD_YAW_OFFSET, MAX_HEAD_YAW_OFFSET);
+        if (bodyFollowsHead && requestedOffset != offset) {
+            // 头部到达转动边缘后，将剩余角度交给身体，头部继续保持在边缘。
+            currentBodyYaw = yaw - offset;
+            player.setYBodyRot(currentBodyYaw);
+            player.yBodyRotO = currentBodyYaw;
+        }
         float viewYaw = currentBodyYaw + offset;
         bodyYaw = currentBodyYaw;
         player.setYRot(viewYaw);
         player.setYHeadRot(viewYaw);
         syncBodyRotation();
+    }
+
+    public boolean bodyFollowsHead() {
+        return bodyFollowsHead;
+    }
+
+    public void toggleBodyFollowsHead() {
+        bodyFollowsHead = !bodyFollowsHead;
     }
 
     /** 旋转身体并同步平移头部，保持头部相对身体的视角偏移。 */
@@ -671,7 +687,8 @@ public final class FakePlayerActions {
             strafeInput,
             drop,
             player.isShiftKeyDown(),
-            player.isSprinting()
+            player.isSprinting(),
+            bodyFollowsHead
         );
     }
 
@@ -692,6 +709,7 @@ public final class FakePlayerActions {
         }
         setSneaking(state.sneaking());
         setSprinting(state.sprinting());
+        bodyFollowsHead = state.bodyFollowsHead();
     }
 
     private void stopTransientActions() {
@@ -812,9 +830,11 @@ public final class FakePlayerActions {
         float strafeInput,
         Optional<DropState> drop,
         boolean sneaking,
-        boolean sprinting
+        boolean sprinting,
+        boolean bodyFollowsHead
     ) {
-        public static final State EMPTY = new State(List.of(), 0.0F, 0.0F, Optional.empty(), false, false);
+        public static final State EMPTY = new State(
+            List.of(), 0.0F, 0.0F, Optional.empty(), false, false, false);
 
         public State {
             schedules = List.copyOf(schedules);

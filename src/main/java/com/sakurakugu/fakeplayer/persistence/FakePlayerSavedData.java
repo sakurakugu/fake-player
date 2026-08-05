@@ -61,7 +61,9 @@ public final class FakePlayerSavedData extends SavedData {
             Codec.FLOAT.optionalFieldOf("strafe", 0.0F).forGetter(FakePlayerActions.State::strafeInput),
             DROP_CODEC.optionalFieldOf("drop").forGetter(FakePlayerActions.State::drop),
             Codec.BOOL.optionalFieldOf("sneaking", false).forGetter(FakePlayerActions.State::sneaking),
-            Codec.BOOL.optionalFieldOf("sprinting", false).forGetter(FakePlayerActions.State::sprinting)
+            Codec.BOOL.optionalFieldOf("sprinting", false).forGetter(FakePlayerActions.State::sprinting),
+            Codec.BOOL.optionalFieldOf("body_follows_head", false)
+                .forGetter(FakePlayerActions.State::bodyFollowsHead)
         ).apply(instance, FakePlayerActions.State::new)
     );
 
