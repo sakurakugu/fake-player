@@ -12,6 +12,7 @@ import com.sakurakugu.fakeplayer.client.ui.TransferButton;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
@@ -67,18 +68,23 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private static final int DROP_PANEL_HEIGHT = 109;
     private static final int DROP_TAB_WIDTH = 21;
     private static final int DROP_TAB_HEIGHT = 24;
-    private static final int CONTINUOUS_PANEL_TOP = 8;
+    private static final int AIM_PANEL_TOP = 8;
+    private static final int CONTINUOUS_PANEL_TOP = AIM_PANEL_TOP + DROP_TAB_HEIGHT + 2;
     private static final int DROP_PANEL_TOP = CONTINUOUS_PANEL_TOP + DROP_TAB_HEIGHT + 2;
     private static final int TRANSFER_BUTTON_LEFT = 144;
     private static final int TRANSFER_BUTTON_TOP = 165;
     private static final int ENDER_CHEST_TRANSFER_BUTTON_TOP = 73;
-    // 持续控制标签位于最上方，Q 键丢弃标签和自动化标签依次排列在下方。
+    // 侧栏依次放置视觉朝向、持续控制、Q 键丢弃和自动化标签。
     private static final int AUTOMATION_PANEL_TOP = DROP_PANEL_TOP + DROP_TAB_HEIGHT + 2;
     private static final int AUTOMATION_PANEL_WIDTH = 94;
     private static final int AUTOMATION_PANEL_HEIGHT = 97;
     private static final int AUTOMATION_BUTTON_HEIGHT = 16;
     private static final int CONTINUOUS_PANEL_WIDTH = 94;
     private static final int CONTINUOUS_PANEL_HEIGHT = 219;
+    private static final int AIM_PANEL_WIDTH = 94;
+    private static final int AIM_PANEL_HEIGHT = 216;
+    private static final int AIM_PAD_SIZE = 62;
+    private static final float MAX_HEAD_YAW_OFFSET = 50.0F;
     private static final int CONTINUOUS_BUTTON_HEIGHT = 16;
     private static final int CONTINUOUS_SLIDER_HEIGHT = 14;
     private static final String[] AUTOMATION_KEYS = {
@@ -99,6 +105,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
 
     private final OverlayPanelManager panelManager = new OverlayPanelManager();
     // 按界面从上到下注册，展开的面板会遮挡并禁用其下方的标签。
+    private final OverlayPanelManager.Panel aimPanel = panelManager.addPanel();
     private final OverlayPanelManager.Panel continuousPanel = panelManager.addPanel();
     private final OverlayPanelManager.Panel dropPanel = panelManager.addPanel();
     private final OverlayPanelManager.Panel automationPanel = panelManager.addPanel();
@@ -113,6 +120,11 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private Button dropModeButton;
     private Button flyUpButton;
     private Button flyDownButton;
+    private AimPad aimPad;
+    private AimPad directionPad;
+    private EditBox pitchInput;
+    private EditBox yawInput;
+    private boolean syncingAimInputs;
 
     public FakePlayerInventoryScreen(FakePlayerInventoryMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, menu.screenWidth(), menu.screenHeight());
@@ -172,6 +184,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         );
         addTransferButtons(TRANSFER_BUTTON_TOP);
         addControlButtons();
+        addAimPanel();
 
         int panelLeft = leftPos + imageWidth;
         int automationTop = topPos + AUTOMATION_PANEL_TOP + 21;
@@ -344,6 +357,35 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         updateFlyingButtons();
     }
 
+    private void addAimPanel() {
+        int x = leftPos + imageWidth;
+        int y = topPos + AIM_PANEL_TOP;
+        aimPad = addRenderableWidget(new AimPad(x + 16, y + 32, AIM_PAD_SIZE, false));
+        directionPad = addRenderableWidget(new AimPad(x + 16, y + 106, AIM_PAD_SIZE, true));
+        pitchInput = addRenderableWidget(new EditBox(font, x + 36, y + 174, 52, 16,
+            Component.translatable("gui.fakeplayer.look_pitch")));
+        yawInput = addRenderableWidget(new EditBox(font, x + 36, y + 194, 52, 16,
+            Component.translatable("gui.fakeplayer.look_yaw")));
+        pitchInput.setValue(Integer.toString(menu.pitch()));
+        yawInput.setValue(Integer.toString(menu.yaw()));
+        pitchInput.setFilter(value -> value.matches("-?\\d{0,3}"));
+        yawInput.setFilter(value -> value.matches("-?\\d{0,3}"));
+        pitchInput.setResponder(value -> {
+            if (syncingAimInputs) return;
+            try { sendAction(FakePlayerInventoryMenu.pitchAction(Integer.parseInt(value))); }
+            catch (NumberFormatException ignored) { }
+        });
+        yawInput.setResponder(value -> {
+            if (syncingAimInputs) return;
+            try { sendAction(FakePlayerInventoryMenu.yawAction(Integer.parseInt(value))); }
+            catch (NumberFormatException ignored) { }
+        });
+        Button tab = addRenderableWidget(new IconTabButton(x, y, DROP_TAB_WIDTH, DROP_TAB_HEIGHT, new ItemStack(Items.COMPASS),
+            Component.translatable("gui.fakeplayer.look.title"), button -> aimPanel.toggle()));
+        tab.setTooltip(Tooltip.create(Component.translatable("gui.fakeplayer.look.title")));
+        aimPanel.bind(tab, aimPad, directionPad, pitchInput, yawInput);
+    }
+
     private void addControlButton(int column, int row, String label, int actionId) {
         addControlButtonAt(
             leftPos + CONTROL_LEFT + column * CONTROL_SIZE,
@@ -484,6 +526,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     protected void containerTick() {
         super.containerTick();
         updateFlyingButtons();
+        syncAimInputs();
         if (heldAction < 0) {
             return;
         }
@@ -635,9 +678,11 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             0xFFC6C6C6
         );
 
+        // 从下到上绘制，让排在前面的标签和展开面板保持在最上层。
         drawAutomationPanel(graphics);
-        drawContinuousPanel(graphics);
         drawDropPanel(graphics);
+        drawContinuousPanel(graphics);
+        drawAimPanel(graphics);
 
         for (int slot = 0; slot < HOTBAR_SLOT_COUNT; slot++) {
             int x = leftPos + HOTBAR_SELECTOR_LEFT + slot * HOTBAR_SLOT_SPACING;
@@ -761,6 +806,18 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         }
     }
 
+    private void syncAimInputs() {
+        if (pitchInput == null || yawInput == null) return;
+        syncingAimInputs = true;
+        if (!pitchInput.isFocused()) {
+            pitchInput.setValue(Integer.toString(menu.pitch()));
+        }
+        if (!yawInput.isFocused()) {
+            yawInput.setValue(Integer.toString(menu.yaw()));
+        }
+        syncingAimInputs = false;
+    }
+
     private void drawContinuousPanel(GuiGraphicsExtractor graphics) {
         int left = leftPos + imageWidth;
         int top = topPos + CONTINUOUS_PANEL_TOP;
@@ -773,6 +830,27 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         }
     }
 
+    private void drawAimPanel(GuiGraphicsExtractor graphics) {
+        int x = leftPos + imageWidth;
+        int y = topPos + AIM_PANEL_TOP;
+        PixelGui.drawTabBackground(graphics, x, y,
+            aimPanel.isOpen() ? AIM_PANEL_WIDTH : DROP_TAB_WIDTH,
+            aimPanel.isOpen() ? AIM_PANEL_HEIGHT : DROP_TAB_HEIGHT);
+        if (!aimPanel.isOpen()) {
+            return;
+        }
+        graphics.text(font, Component.translatable("gui.fakeplayer.look.title"), x + 22, y + 8,
+            0xFF404040, false);
+        graphics.text(font, Component.translatable("gui.fakeplayer.look.view"), x + 16, y + 23,
+            0xFF606060, false);
+        graphics.text(font, Component.translatable("gui.fakeplayer.look.direction"), x + 16, y + 97,
+            0xFF606060, false);
+        graphics.text(font, Component.translatable("gui.fakeplayer.look_pitch"), x + 6, y + 179,
+            0xFF404040, false);
+        graphics.text(font, Component.translatable("gui.fakeplayer.look_yaw"), x + 6, y + 199,
+            0xFF404040, false);
+    }
+
     /** 给快捷栏选择区左右两侧绘制外边框，左侧黑边内为高光，右侧黑边内为阴影。 */
     private void drawSelectorAreaSideBorders(GuiGraphicsExtractor graphics) {
         int top = topPos + TARGET_INVENTORY_HEIGHT;
@@ -781,6 +859,67 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         graphics.fill(leftPos + 1, top, leftPos + 3, bottom, 0xFFFFFFFF);
         graphics.fill(leftPos + imageWidth - 3, top, leftPos + imageWidth - 1, bottom, 0xFF555555);
         graphics.fill(leftPos + imageWidth - 1, top, leftPos + imageWidth, bottom, 0xFF000000);
+    }
+
+    /** 圆形视角/身体朝向控制器；视角盘为自由二维输入，朝向盘沿圆周连续旋转。 */
+    private final class AimPad extends Button {
+        private final boolean cardinal;
+        private boolean dragging;
+        AimPad(int x, int y, int size, boolean cardinal) {
+            super(x, y, size, size, Component.empty(), button -> { }, DEFAULT_NARRATION);
+            this.cardinal = cardinal;
+        }
+        @Override protected void extractContents(GuiGraphicsExtractor g, int mx, int my, float pt) {
+            int cx = getX() + getWidth() / 2, cy = getY() + getHeight() / 2, r = getWidth() / 2 - 2;
+            for (int a = 0; a < 360; a += 3) {
+                int px = cx + Math.round((float) Math.cos(Math.toRadians(a)) * r);
+                int py = cy + Math.round((float) Math.sin(Math.toRadians(a)) * r);
+                g.fill(px, py, px + 2, py + 2, 0xFF555555);
+            }
+            int bx;
+            int by;
+            if (cardinal) {
+                double angle = Math.toRadians(menu.bodyYaw() + 90);
+                bx = cx + (int) Math.round(Math.cos(angle) * r);
+                by = cy + (int) Math.round(Math.sin(angle) * r);
+            } else {
+                float headOffset = wrapDegrees(menu.yaw() - menu.bodyYaw());
+                bx = cx + Math.round(headOffset * (r - 3) / MAX_HEAD_YAW_OFFSET);
+                by = cy + Math.round(menu.pitch() * (r - 3) / 90.0f);
+            }
+            g.fill(bx - 3, by - 3, bx + 4, by + 4, 0xFF2E9BDE);
+        }
+        @Override public boolean mouseClicked(MouseButtonEvent e, boolean dbl) {
+            if (e.button() != 0 || !isMouseOver(e.x(), e.y())) return false;
+            dragging = true; update(e.x(), e.y()); return true;
+        }
+        @Override public boolean mouseDragged(MouseButtonEvent e, double dx, double dy) {
+            if (!dragging) return false; update(e.x(), e.y()); return true;
+        }
+        @Override public boolean mouseReleased(MouseButtonEvent e) { dragging = false; return super.mouseReleased(e); }
+        private void update(double mx, double my) {
+            double cx = getX() + getWidth() / 2.0, cy = getY() + getHeight() / 2.0;
+            double dx = mx - cx, dy = my - cy, r = getWidth() / 2.0 - 3;
+            double len = Math.sqrt(dx * dx + dy * dy);
+            if (cardinal && len > 0) { dx *= r / len; dy *= r / len; }
+            else if (!cardinal) { dx = Math.max(-r, Math.min(r, dx)); dy = Math.max(-r, Math.min(r, dy)); }
+            if (cardinal) {
+                int yaw = (int) Math.round(Math.toDegrees(Math.atan2(dy, dx)) - 90);
+                sendAction(FakePlayerInventoryMenu.bodyYawAction(yaw));
+                return;
+            }
+            int yaw = Math.round(menu.bodyYaw() + (float) (dx / r * MAX_HEAD_YAW_OFFSET));
+            sendAction(FakePlayerInventoryMenu.yawAction(yaw));
+            int pitch = (int) Math.round(dy / r * 90.0);
+            sendAction(FakePlayerInventoryMenu.pitchAction(pitch));
+        }
+    }
+
+    private static float wrapDegrees(float degrees) {
+        float wrapped = degrees % 360.0F;
+        if (wrapped >= 180.0F) wrapped -= 360.0F;
+        if (wrapped < -180.0F) wrapped += 360.0F;
+        return wrapped;
     }
 
     @Override

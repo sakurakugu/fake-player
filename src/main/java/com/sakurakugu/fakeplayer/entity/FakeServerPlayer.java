@@ -57,7 +57,8 @@ public final class FakeServerPlayer extends ServerPlayer {
     @Override
     public void tick() {
         super.tick();
-        if (!FakePlayerPossession.isPossessed(this)) {
+        boolean possessed = FakePlayerPossession.isPossessed(this);
+        if (!possessed) {
             // 附身期间该实体承载原地躯壳，必须暂停所有自动行为。
             automation.tick();
             // 先设置移动和按键输入，再让实体刻处理物理、载具和持续使用。
@@ -65,6 +66,9 @@ public final class FakeServerPlayer extends ServerPlayer {
         }
         // ServerPlayer 通常由网络监听器驱动 doTick，假连接不会替我们调用它。
         doTick();
+        if (!possessed) {
+            actions.restoreViewRotation();
+        }
         FakePlayerPossession.tickTarget(this);
 
         // 定期刷新网络位置和区块追踪，保证移动后的假玩家对观察者可见。

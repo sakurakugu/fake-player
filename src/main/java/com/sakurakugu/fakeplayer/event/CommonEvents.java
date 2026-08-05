@@ -109,6 +109,14 @@ public final class CommonEvents {
     }
 
     @SubscribeEvent
+    public static void startTrackingFakePlayer(PlayerEvent.StartTracking event) {
+        if (event.getEntity() instanceof ServerPlayer viewer
+            && event.getTarget() instanceof FakeServerPlayer fake) {
+            fake.actions().syncBodyRotation(viewer);
+        }
+    }
+
+    @SubscribeEvent
     public static void playerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer player && !(player instanceof FakeServerPlayer)) {
             // 真人退出前先恢复附身前的身体状态，确保原版保存的 playerdata 仍是真人原来的位置。

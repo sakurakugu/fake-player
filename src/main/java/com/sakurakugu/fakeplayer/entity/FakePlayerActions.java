@@ -1,5 +1,6 @@
 package com.sakurakugu.fakeplayer.entity;
 
+import com.sakurakugu.fakeplayer.network.BodyRotationPayload;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -8,6 +9,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
@@ -19,6 +22,7 @@ import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.common.CommonHooks;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 /** 封装命令和控制菜单可触发的假玩家动作。 */
 public final class FakePlayerActions {
@@ -26,6 +30,7 @@ public final class FakePlayerActions {
     private static final int BLOCK_BREAK_COOLDOWN_TICKS = 5;
     private static final int ALL_SLOTS = -1;
     private static final int ARMOR_SLOTS = -2;
+    private static final float MAX_HEAD_YAW_OFFSET = 50.0F;
 
     public enum RepeatMode {
         ONCE,
@@ -62,6 +67,7 @@ public final class FakePlayerActions {
     private int movementInputTicks;
     private float heldTurn;
     private int lastJumpTick = -1000;
+    private Float bodyYaw;
 
     FakePlayerActions(FakeServerPlayer player) {
         this.player = player;
@@ -523,6 +529,55 @@ public final class FakePlayerActions {
         player.setYRot(yaw);
         player.setYHeadRot(yaw);
         player.setYBodyRot(yaw);
+        bodyYaw = yaw;
+        syncBodyRotation();
+    }
+
+    /** 调整视角，不改变身体朝向。 */
+    public void setViewRotation(float pitch, float yaw) {
+        player.setXRot(Math.max(-90.0F, Math.min(90.0F, pitch)));
+        float currentBodyYaw = bodyYaw == null ? player.yBodyRot : bodyYaw;
+        float offset = Mth.clamp(Mth.wrapDegrees(yaw - currentBodyYaw),
+            -MAX_HEAD_YAW_OFFSET, MAX_HEAD_YAW_OFFSET);
+        float viewYaw = currentBodyYaw + offset;
+        bodyYaw = currentBodyYaw;
+        player.setYRot(viewYaw);
+        player.setYHeadRot(viewYaw);
+        syncBodyRotation();
+    }
+
+    /** 旋转身体并同步平移头部，保持头部相对身体的视角偏移。 */
+    public void setBodyRotation(float yaw) {
+        float previousBodyYaw = bodyYaw == null ? player.yBodyRot : bodyYaw;
+        // 身体转动时同步平移视角，保持头部相对身体的偏移，避免头部停留在原来的世界方向。
+        float yawDelta = Mth.wrapDegrees(yaw - previousBodyYaw);
+        bodyYaw = yaw;
+        float viewYaw = player.getYRot() + yawDelta;
+        player.setYRot(viewYaw);
+        player.setYHeadRot(viewYaw);
+        player.setYBodyRot(yaw);
+        player.yBodyRotO = yaw;
+        syncBodyRotation();
+    }
+
+    public void syncBodyRotation(ServerPlayer viewer) {
+        if (bodyYaw != null) {
+            PacketDistributor.sendToPlayer(viewer, new BodyRotationPayload(player.getId(), bodyYaw));
+        }
+    }
+
+    private void syncBodyRotation() {
+        PacketDistributor.sendToPlayersTrackingEntity(player,
+            new BodyRotationPayload(player.getId(), bodyYaw));
+    }
+
+    /** 原版玩家逻辑每刻会让身体追随视角，需要在实体刻结束后恢复独立朝向。 */
+    public void restoreViewRotation() {
+        player.setYHeadRot(player.getYRot());
+        if (bodyYaw != null) {
+            player.setYBodyRot(bodyYaw);
+            player.yBodyRotO = bodyYaw;
+        }
     }
 
     public void setSneaking(boolean sneaking) {

@@ -150,5 +150,10 @@
   "gui.fakeplayer.automation.auto_fishing": "Auto fishing",
   "gui.fakeplayer.automation.enabled": "On",
   "gui.fakeplayer.automation.disabled": "Off",
-  "gui.fakeplayer.automation.setting_value": "%1$s: %2$s"
+  "gui.fakeplayer.automation.setting_value": "%1$s: %2$s",
+  "gui.fakeplayer.look.title": "View & Facing",
+  "gui.fakeplayer.look.view": "View",
+  "gui.fakeplayer.look.direction": "Facing",
+  "gui.fakeplayer.look_pitch": "Pitch",
+  "gui.fakeplayer.look_yaw": "Yaw"
 }

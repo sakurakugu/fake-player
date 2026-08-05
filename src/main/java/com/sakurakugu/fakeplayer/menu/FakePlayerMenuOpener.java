@@ -92,6 +92,9 @@ public final class FakePlayerMenuOpener {
                     FakePlayerActions.ScheduledAction.USE));
                 data.writeVarInt(fake.actions().repeatInterval(
                     FakePlayerActions.ScheduledAction.JUMP));
+                data.writeVarInt(Math.round(fake.getXRot()));
+                data.writeVarInt(Math.round(fake.getYRot()));
+                data.writeVarInt(Math.round(fake.yBodyRot));
             }
         );
     }

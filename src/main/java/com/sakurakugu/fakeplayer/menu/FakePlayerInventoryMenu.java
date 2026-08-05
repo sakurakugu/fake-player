@@ -104,6 +104,16 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     private static final int CONTINUOUS_INTERVAL_ACTION_COUNT = 3;
     private static final int ACTION_CONTINUOUS_INTERVAL_END = ACTION_CONTINUOUS_INTERVAL_BASE
         + MAX_CONTINUOUS_INTERVAL * CONTINUOUS_INTERVAL_ACTION_COUNT;
+    private static final int ACTION_SET_PITCH_BASE = ACTION_CONTINUOUS_INTERVAL_END;
+    private static final int ACTION_SET_YAW_BASE = ACTION_SET_PITCH_BASE + 181;
+    private static final int ACTION_SET_BODY_YAW_BASE = ACTION_SET_YAW_BASE + 360;
+    public static final int ACTION_SET_END = ACTION_SET_BODY_YAW_BASE + 360;
+    public static int pitchAction(int pitch) { return ACTION_SET_PITCH_BASE + Math.max(-90, Math.min(90, pitch)) + 90; }
+    public static int yawAction(int yaw) { return angleAction(ACTION_SET_YAW_BASE, yaw); }
+    public static int bodyYawAction(int yaw) { return angleAction(ACTION_SET_BODY_YAW_BASE, yaw); }
+    private static int angleAction(int base, int yaw) {
+        return base + Math.floorMod(yaw + 180, 360);
+    }
     private static final EquipmentSlot[] ARMOR_SLOTS = {
         EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET
     };
@@ -130,6 +140,12 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     private final int[] continuousIntervals = new int[CONTINUOUS_INTERVAL_ACTION_COUNT];
     private final DataSlot[] continuousIntervalData = new DataSlot[CONTINUOUS_INTERVAL_ACTION_COUNT];
     private int heldControlAction = -1;
+    private int pitchSnapshot;
+    private int yawSnapshot;
+    private int bodyYawSnapshot;
+    private DataSlot pitchData;
+    private DataSlot yawData;
+    private DataSlot bodyYawData;
 
     public FakePlayerInventoryMenu(int containerId, Inventory inventory, RegistryFriendlyByteBuf data) {
         this(
@@ -141,6 +157,9 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             data.readVarInt(),
             data.readBoolean(),
             data.readBoolean(),
+            data.readVarInt(),
+            data.readVarInt(),
+            data.readVarInt(),
             data.readVarInt(),
             data.readVarInt(),
             data.readVarInt(),
@@ -161,7 +180,8 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             possessedByViewer, targetOccupied, automationMask(target), continuousControlMask(target),
             target.actions().repeatInterval(FakePlayerActions.ScheduledAction.ATTACK),
             target.actions().repeatInterval(FakePlayerActions.ScheduledAction.USE),
-            target.actions().repeatInterval(FakePlayerActions.ScheduledAction.JUMP));
+            target.actions().repeatInterval(FakePlayerActions.ScheduledAction.JUMP),
+            Math.round(target.getXRot()), Math.round(target.getYRot()), Math.round(target.yBodyRot));
     }
 
     private FakePlayerInventoryMenu(
@@ -177,7 +197,10 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
         int continuousControlMask,
         int attackInterval,
         int useInterval,
-        int jumpInterval
+        int jumpInterval,
+        int pitch,
+        int yaw,
+        int bodyYaw
     ) {
         super(ModMenus.FAKE_PLAYER_INVENTORY.get(), containerId);
         this.target = target;
@@ -186,6 +209,21 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
         this.targetEntityId = targetEntityId;
         this.possessedByViewer = possessedByViewer;
         this.targetOccupied = targetOccupied;
+        this.pitchSnapshot = pitch;
+        this.yawSnapshot = yaw;
+        this.bodyYawSnapshot = bodyYaw;
+        this.pitchData = addDataSlot(new DataSlot() {
+            public int get() { return target == null ? pitchSnapshot : Math.round(target.getXRot()); }
+            public void set(int value) { pitchSnapshot = value; }
+        });
+        this.yawData = addDataSlot(new DataSlot() {
+            public int get() { return target == null ? yawSnapshot : Math.round(target.getYRot()); }
+            public void set(int value) { yawSnapshot = value; }
+        });
+        this.bodyYawData = addDataSlot(new DataSlot() {
+            public int get() { return target == null ? bodyYawSnapshot : Math.round(target.yBodyRot); }
+            public void set(int value) { bodyYawSnapshot = value; }
+        });
         this.automationMaskSnapshot = automationMask;
         this.continuousControlMaskSnapshot = continuousControlMask;
         this.continuousIntervals[0] = attackInterval;
@@ -366,6 +404,21 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             int interval = encoded % MAX_CONTINUOUS_INTERVAL + 1;
             target.actions().setRepeatInterval(continuousAction(controlIndex), interval);
             continuousIntervals[controlIndex] = interval;
+            broadcastChanges();
+            return true;
+        }
+        if (actionId >= ACTION_SET_PITCH_BASE && actionId < ACTION_SET_YAW_BASE) {
+            target.actions().setViewRotation(actionId - ACTION_SET_PITCH_BASE - 90, target.getYRot());
+            broadcastChanges();
+            return true;
+        }
+        if (actionId >= ACTION_SET_YAW_BASE && actionId < ACTION_SET_BODY_YAW_BASE) {
+            target.actions().setViewRotation(target.getXRot(), actionId - ACTION_SET_YAW_BASE - 180);
+            broadcastChanges();
+            return true;
+        }
+        if (actionId >= ACTION_SET_BODY_YAW_BASE && actionId < ACTION_SET_END) {
+            target.actions().setBodyRotation(actionId - ACTION_SET_BODY_YAW_BASE - 180);
             broadcastChanges();
             return true;
         }
@@ -777,6 +830,10 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     public boolean automationEnabled(int index) {
         return (automationMask.get() & (1 << index)) != 0;
     }
+
+    public int pitch() { return pitchData.get(); }
+    public int yaw() { return yawData.get(); }
+    public int bodyYaw() { return bodyYawData.get(); }
 
     public boolean continuousControlEnabled(int index) {
         return (continuousControlMask.get() & (1 << index)) != 0;

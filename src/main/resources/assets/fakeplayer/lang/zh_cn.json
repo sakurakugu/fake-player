@@ -150,5 +150,10 @@
   "gui.fakeplayer.automation.auto_fishing": "自动钓鱼",
   "gui.fakeplayer.automation.enabled": "开",
   "gui.fakeplayer.automation.disabled": "关",
-  "gui.fakeplayer.automation.setting_value": "%1$s：%2$s"
+  "gui.fakeplayer.automation.setting_value": "%1$s：%2$s",
+  "gui.fakeplayer.look.title": "视角与朝向",
+  "gui.fakeplayer.look.view": "视角",
+  "gui.fakeplayer.look.direction": "朝向",
+  "gui.fakeplayer.look_pitch": "俯仰角",
+  "gui.fakeplayer.look_yaw": "偏航角"
 }

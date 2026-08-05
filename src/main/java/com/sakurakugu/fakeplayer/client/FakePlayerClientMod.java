@@ -7,6 +7,7 @@ import com.sakurakugu.fakeplayer.network.PossessionStatePayload;
 import com.sakurakugu.fakeplayer.network.RequestChunkMapPayload;
 import com.sakurakugu.fakeplayer.network.StopPossessionPayload;
 import com.sakurakugu.fakeplayer.network.ChunkMapSnapshotPayload;
+import com.sakurakugu.fakeplayer.network.BodyRotationPayload;
 import com.sakurakugu.fakeplayer.client.chunkloading.ClientChunkLoadingState;
 import com.sakurakugu.fakeplayer.client.chunkloading.ChunkLoadingHud;
 import com.sakurakugu.fakeplayer.client.ui.IconButton;
@@ -83,11 +84,14 @@ public final class FakePlayerClientMod {
             (payload, context) -> ClientChunkLoadingState.accept(payload));
         event.register(PossessionStatePayload.TYPE,
             (payload, context) -> ClientPossession.accept(payload));
+        event.register(BodyRotationPayload.TYPE,
+            (payload, context) -> ClientBodyRotation.accept(payload));
     }
 
     private static void clientTick(ClientTickEvent.Post event) {
         Minecraft minecraft = Minecraft.getInstance();
         ClientPossession.tick(minecraft);
+        ClientBodyRotation.tick(minecraft);
         updateCreativePossessionButton(minecraft);
         while (STOP_POSSESSION.consumeClick()) {
             if (ClientPossession.active()) {
