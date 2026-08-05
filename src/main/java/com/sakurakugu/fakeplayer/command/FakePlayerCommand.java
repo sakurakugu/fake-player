@@ -20,7 +20,6 @@ import com.sakurakugu.fakeplayer.entity.ProfileResolver;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
 import com.sakurakugu.fakeplayer.menu.FakePlayerMenuOpener;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerPersistence;
-import java.util.Comparator;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -35,7 +34,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.NameAndId;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
@@ -99,7 +97,7 @@ public final class FakePlayerCommand {
             .executes(context -> mount(context, false))
             .then(Commands.argument("anything", StringArgumentType.word())
                 .executes(context -> mount(context, true))));
-        target.then(simpleAction("dismount", Entity::stopRiding));
+        target.then(simpleAction("dismount", fake -> fake.actions().dismount()));
         target.then(lookCommand());
         target.then(moveCommand());
         target.then(repeatingCommand("jump", (fake, mode, interval) -> fake.actions().jump(mode, interval)));
@@ -389,15 +387,8 @@ public final class FakePlayerCommand {
             context.getSource().sendFailure(Component.translatable("gui.fakeplayer.possess_locked"));
             return 0;
         }
-        AABB area = fake.getBoundingBox().inflate(3.0);
-        var targets = fake.level().getEntities(fake, area, entity -> !entity.isPassenger())
-            .stream()
-            .sorted(Comparator.comparingDouble(fake::distanceToSqr))
-            .toList();
-        for (Entity target : targets) {
-            if (fake.startRiding(target, anything, true)) {
-                return success(context);
-            }
+        if (fake.actions().mountNearest(anything)) {
+            return success(context);
         }
         context.getSource().sendFailure(Component.translatable("commands.fakeplayer.no_mount"));
         return 0;

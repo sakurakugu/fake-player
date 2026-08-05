@@ -74,11 +74,15 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private static final int TRANSFER_BUTTON_LEFT = 144;
     private static final int TRANSFER_BUTTON_TOP = 165;
     private static final int ENDER_CHEST_TRANSFER_BUTTON_TOP = 73;
-    // 侧栏依次放置视觉朝向、持续控制、Q 键丢弃和自动化标签。
+    // 侧栏依次放置视觉朝向、持续控制、Q 键丢弃、自动化和骑乘标签。
     private static final int AUTOMATION_PANEL_TOP = DROP_PANEL_TOP + DROP_TAB_HEIGHT + 2;
     private static final int AUTOMATION_PANEL_WIDTH = 94;
     private static final int AUTOMATION_PANEL_HEIGHT = 97;
     private static final int AUTOMATION_BUTTON_HEIGHT = 16;
+    private static final int MOUNT_PANEL_TOP = AUTOMATION_PANEL_TOP + DROP_TAB_HEIGHT + 2;
+    private static final int MOUNT_PANEL_WIDTH = 94;
+    private static final int MOUNT_PANEL_HEIGHT = 83;
+    private static final int MOUNT_BUTTON_HEIGHT = 16;
     private static final int CONTINUOUS_PANEL_WIDTH = 94;
     private static final int CONTINUOUS_PANEL_HEIGHT = 219;
     private static final int AIM_PANEL_WIDTH = 94;
@@ -109,6 +113,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private final OverlayPanelManager.Panel continuousPanel = panelManager.addPanel();
     private final OverlayPanelManager.Panel dropPanel = panelManager.addPanel();
     private final OverlayPanelManager.Panel automationPanel = panelManager.addPanel();
+    private final OverlayPanelManager.Panel mountPanel = panelManager.addPanel();
     private boolean continuousDrop;
     private boolean percentageDrop;
     private int dropAmount = 1;
@@ -214,6 +219,31 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         ));
         automationTabButton.setTooltip(Tooltip.create(Component.translatable("gui.fakeplayer.automation.title")));
         automationPanel.bind(automationTabButton, automationButtons);
+
+        int mountTop = topPos + MOUNT_PANEL_TOP;
+        Button mountButton = addRenderableWidget(new CompactButton(
+            panelLeft + 6, mountTop + 21, MOUNT_PANEL_WIDTH - 12, MOUNT_BUTTON_HEIGHT,
+            Component.translatable("gui.fakeplayer.mount.mount"),
+            button -> sendAction(FakePlayerInventoryMenu.ACTION_MOUNT)
+        ));
+        Button mountAnythingButton = addRenderableWidget(new CompactButton(
+            panelLeft + 6, mountTop + 39, MOUNT_PANEL_WIDTH - 12, MOUNT_BUTTON_HEIGHT,
+            Component.translatable("gui.fakeplayer.mount.mount_anything"),
+            button -> sendAction(FakePlayerInventoryMenu.ACTION_MOUNT_ANYTHING)
+        ));
+        Button dismountButton = addRenderableWidget(new CompactButton(
+            panelLeft + 6, mountTop + 57, MOUNT_PANEL_WIDTH - 12, MOUNT_BUTTON_HEIGHT,
+            Component.translatable("gui.fakeplayer.mount.dismount"),
+            button -> sendAction(FakePlayerInventoryMenu.ACTION_DISMOUNT)
+        ));
+        Button mountTabButton = addRenderableWidget(new IconTabButton(
+            panelLeft, mountTop, DROP_TAB_WIDTH, DROP_TAB_HEIGHT,
+            new ItemStack(Items.SADDLE),
+            Component.translatable("gui.fakeplayer.mount.title"),
+            button -> mountPanel.toggle()
+        ));
+        mountTabButton.setTooltip(Tooltip.create(Component.translatable("gui.fakeplayer.mount.title")));
+        mountPanel.bind(mountTabButton, mountButton, mountAnythingButton, dismountButton);
 
         ContinuousPanelOverlay continuousPanelOverlay = addRenderableWidget(
             new ContinuousPanelOverlay(panelLeft, topPos + CONTINUOUS_PANEL_TOP)
@@ -704,6 +734,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         );
 
         // 从下到上绘制，让排在前面的标签和展开面板保持在最上层。
+        drawMountPanel(graphics);
         drawAutomationPanel(graphics);
         drawDropPanel(graphics);
         drawContinuousPanel(graphics);
@@ -993,6 +1024,18 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         if (wrapped >= 180.0F) wrapped -= 360.0F;
         if (wrapped < -180.0F) wrapped += 360.0F;
         return wrapped;
+    }
+
+    private void drawMountPanel(GuiGraphicsExtractor graphics) {
+        int left = leftPos + imageWidth;
+        int top = topPos + MOUNT_PANEL_TOP;
+        int width = mountPanel.isOpen() ? MOUNT_PANEL_WIDTH : DROP_TAB_WIDTH;
+        int height = mountPanel.isOpen() ? MOUNT_PANEL_HEIGHT : DROP_TAB_HEIGHT;
+        PixelGui.drawTabBackground(graphics, left, top, width, height);
+        if (mountPanel.isOpen()) {
+            graphics.text(font, Component.translatable("gui.fakeplayer.mount.title"), left + 22, top + 8,
+                0xFF404040, false);
+        }
     }
 
     /** 将 Minecraft 偏航角转换为易读的象限方位。 */

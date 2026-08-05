@@ -69,7 +69,10 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     public static final int ACTION_AUTO_REPLENISHMENT_FROM_SHULKER_BOXES = ACTION_AUTO_REPLENISHMENT + 1;
     public static final int ACTION_AUTO_REPLACE_TOOLS = ACTION_AUTO_REPLENISHMENT_FROM_SHULKER_BOXES + 1;
     public static final int ACTION_AUTO_FISHING = ACTION_AUTO_REPLACE_TOOLS + 1;
-    public static final int ACTION_MOVE_FORWARD = ACTION_AUTO_FISHING + 1;
+    public static final int ACTION_MOUNT = ACTION_AUTO_FISHING + 1;
+    public static final int ACTION_MOUNT_ANYTHING = ACTION_MOUNT + 1;
+    public static final int ACTION_DISMOUNT = ACTION_MOUNT_ANYTHING + 1;
+    public static final int ACTION_MOVE_FORWARD = ACTION_DISMOUNT + 1;
     public static final int ACTION_MOVE_BACKWARD = ACTION_MOVE_FORWARD + 1;
     public static final int ACTION_MOVE_LEFT = ACTION_MOVE_BACKWARD + 1;
     public static final int ACTION_MOVE_RIGHT = ACTION_MOVE_LEFT + 1;
@@ -466,6 +469,9 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
                 // 只同步数据槽，保留客户端展开状态。
                 broadcastChanges();
             }
+            case ACTION_MOUNT -> target.actions().mountNearest(false);
+            case ACTION_MOUNT_ANYTHING -> target.actions().mountNearest(true);
+            case ACTION_DISMOUNT -> target.actions().dismount();
             case ACTION_MOVE_FORWARD -> target.actions().moveOnce(FakePlayerActions.MoveDirection.FORWARD);
             case ACTION_MOVE_BACKWARD -> target.actions().moveOnce(FakePlayerActions.MoveDirection.BACKWARD);
             case ACTION_MOVE_LEFT -> target.actions().moveOnce(FakePlayerActions.MoveDirection.LEFT);

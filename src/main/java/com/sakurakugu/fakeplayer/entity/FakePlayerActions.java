@@ -1,6 +1,7 @@
 package com.sakurakugu.fakeplayer.entity;
 
 import com.sakurakugu.fakeplayer.network.BodyRotationPayload;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +18,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.projectile.ProjectileUtil;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
@@ -72,6 +74,25 @@ public final class FakePlayerActions {
 
     FakePlayerActions(FakeServerPlayer player) {
         this.player = player;
+    }
+
+    /** 骑乘三格内最近的有效目标；anything 为 true 时强制尝试任意实体。 */
+    public boolean mountNearest(boolean anything) {
+        AABB area = player.getBoundingBox().inflate(3.0);
+        var targets = player.level().getEntities(player, area, entity -> !entity.isPassenger())
+            .stream()
+            .sorted(Comparator.comparingDouble(player::distanceToSqr))
+            .toList();
+        for (Entity target : targets) {
+            if (player.startRiding(target, anything, true)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void dismount() {
+        player.stopRiding();
     }
 
     public void tick() {
