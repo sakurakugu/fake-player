@@ -2,11 +2,14 @@ package com.sakurakugu.fakeplayer.client;
 
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.menu.GlobalFakePlayerMenu;
+import com.sakurakugu.fakeplayer.network.SpawnFakePlayerPayload;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 /** 显示全局设置，并允许切换到假人列表。 */
 public final class GlobalFakePlayerScreen extends AbstractContainerScreen<GlobalFakePlayerMenu> {
@@ -20,11 +23,13 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
     };
 
     private int page;
-    private boolean showingList;
+    private Page currentPage;
+    private EditBox nameInput;
+    private Button spawnButton;
 
     public GlobalFakePlayerScreen(GlobalFakePlayerMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, PANEL_WIDTH, PANEL_HEIGHT);
-        showingList = menu.openListInitially();
+        currentPage = menu.openListInitially() ? Page.LIST : Page.SETTINGS;
         ClientGlobalSettings.setContainerTransferButtons(
             menu.settingEnabled(FakePlayerConfig.GlobalSetting.CONTAINER_TRANSFER_BUTTONS.ordinal()));
     }
@@ -37,7 +42,9 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
 
     private void rebuildButtons() {
         clearWidgets();
-        if (!showingList) {
+        nameInput = null;
+        spawnButton = null;
+        if (currentPage == Page.SETTINGS) {
             int settingWidth = 130;
             for (int index = 0; index < FakePlayerConfig.GlobalSetting.values().length; index++) {
                 int column = index % 2;
@@ -50,6 +57,11 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
                 );
             }
             addRenderableWidget(
+                Button.builder(Component.translatable("gui.fakeplayer.global.open_spawn"), button -> showSpawn())
+                    .bounds(leftPos + 50, topPos + 120, PANEL_WIDTH - 100, BUTTON_HEIGHT)
+                    .build()
+            );
+            addRenderableWidget(
                 Button.builder(Component.translatable("gui.fakeplayer.global.open_list"), button -> showList())
                     .bounds(leftPos + 50, topPos + 150, PANEL_WIDTH - 100, BUTTON_HEIGHT)
                     .build()
@@ -60,6 +72,29 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
                     .bounds(leftPos + 50, topPos + 180, PANEL_WIDTH - 100, BUTTON_HEIGHT)
                     .build()
             );
+            return;
+        }
+
+        if (currentPage == Page.SPAWN) {
+            nameInput = addRenderableWidget(new EditBox(
+                font, leftPos + 50, topPos + 86, PANEL_WIDTH - 100, 22,
+                Component.translatable("gui.fakeplayer.global.spawn_name")
+            ));
+            nameInput.setMaxLength(16);
+            nameInput.setHint(Component.translatable("gui.fakeplayer.global.spawn_name"));
+            nameInput.setResponder(value -> updateSpawnButton());
+            spawnButton = addRenderableWidget(
+                Button.builder(Component.translatable("gui.fakeplayer.global.spawn"), button -> submitSpawn())
+                    .bounds(leftPos + 50, topPos + 120, PANEL_WIDTH - 100, BUTTON_HEIGHT)
+                    .build()
+            );
+            updateSpawnButton();
+            addRenderableWidget(
+                Button.builder(Component.translatable("gui.fakeplayer.global.settings"), button -> showSettings())
+                    .bounds(leftPos + 50, topPos + 180, PANEL_WIDTH - 100, BUTTON_HEIGHT)
+                    .build()
+            );
+            setInitialFocus(nameInput);
             return;
         }
 
@@ -102,14 +137,32 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
     }
 
     private void showList() {
-        showingList = true;
+        currentPage = Page.LIST;
         page = 0;
         rebuildButtons();
     }
 
     private void showSettings() {
-        showingList = false;
+        currentPage = Page.SETTINGS;
         rebuildButtons();
+    }
+
+    private void showSpawn() {
+        currentPage = Page.SPAWN;
+        rebuildButtons();
+    }
+
+    private void updateSpawnButton() {
+        if (spawnButton != null && nameInput != null) {
+            spawnButton.active = nameInput.getValue().matches("[A-Za-z0-9_-]{1,16}");
+        }
+    }
+
+    private void submitSpawn() {
+        if (spawnButton != null && spawnButton.active && nameInput != null) {
+            ClientPacketDistributor.sendToServer(new SpawnFakePlayerPayload(menu.containerId, nameInput.getValue()));
+            spawnButton.active = false;
+        }
     }
 
     private void changePage(int offset) {
@@ -146,11 +199,13 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
 
     @Override
     protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
-        Component pageTitle = showingList
-            ? Component.translatable("gui.fakeplayer.global.list_title")
-            : title;
+        Component pageTitle = switch (currentPage) {
+            case LIST -> Component.translatable("gui.fakeplayer.global.list_title");
+            case SPAWN -> Component.translatable("gui.fakeplayer.global.spawn_title");
+            case SETTINGS -> title;
+        };
         graphics.centeredText(font, pageTitle, PANEL_WIDTH / 2, 12, 0xFFFFFFFF);
-        if (!showingList) {
+        if (currentPage != Page.LIST) {
             return;
         }
         if (menu.playerNames().isEmpty()) {
@@ -163,5 +218,11 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
             27,
             0xFFB8D8C5
         );
+    }
+
+    private enum Page {
+        SETTINGS,
+        LIST,
+        SPAWN
     }
 }

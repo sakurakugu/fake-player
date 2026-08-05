@@ -452,10 +452,6 @@ public final class FakePlayerCommand {
     }
 
     private static int spawn(CommandContext<CommandSourceStack> context, String name) throws CommandSyntaxException {
-        if (!name.matches("[A-Za-z0-9_-]{1,16}")) {
-            context.getSource().sendFailure(Component.translatable("commands.fakeplayer.invalid_name"));
-            return 0;
-        }
         CommandSourceStack source = context.getSource();
         Vec3 position = argumentOrDefault(() -> Vec3Argument.getVec3(context, "position"), source.getPosition());
         Vec2 rotation = argumentOrDefault(
@@ -473,6 +469,35 @@ public final class FakePlayerCommand {
             flying = false;
         }
 
+        return requestSpawn(source, name, level, position, rotation, gameType, flying);
+    }
+
+    /** 使用菜单查看者当前的位置、朝向与游戏模式生成假人。 */
+    public static void spawnFromMenu(ServerPlayer player, String name) {
+        CommandSourceStack source = player.createCommandSourceStack();
+        GameType gameType = player.gameMode.getGameModeForPlayer();
+        boolean flying = player.getAbilities().flying;
+        if (gameType == GameType.SPECTATOR) {
+            flying = true;
+        } else if (gameType.isSurvival()) {
+            flying = false;
+        }
+        requestSpawn(source, name, source.getLevel(), source.getPosition(), source.getRotation(), gameType, flying);
+    }
+
+    private static int requestSpawn(
+        CommandSourceStack source,
+        String name,
+        ServerLevel level,
+        Vec3 position,
+        Vec2 rotation,
+        GameType gameType,
+        boolean flying
+    ) {
+        if (!name.matches("[A-Za-z0-9_-]{1,16}")) {
+            source.sendFailure(Component.translatable("commands.fakeplayer.invalid_name"));
+            return 0;
+        }
         if (!validateSpawnPosition(source, level, position)) {
             return 0;
         }
