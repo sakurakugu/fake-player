@@ -5,7 +5,7 @@ import java.util.Arrays;
 import java.util.List;
 import net.minecraft.client.gui.components.AbstractWidget;
 
-/** 按注册顺序管理重叠面板；后注册的面板位于更上层。 */
+/** 按界面从上到下的注册顺序管理重叠面板。 */
 public final class OverlayPanelManager {
     private final List<Panel> panels = new ArrayList<>();
 
@@ -17,8 +17,7 @@ public final class OverlayPanelManager {
 
     private void refresh() {
         boolean blocked = false;
-        for (int index = panels.size() - 1; index >= 0; index--) {
-            Panel panel = panels.get(index);
+        for (Panel panel : panels) {
             panel.applyState(blocked);
             if (panel.open) {
                 blocked = true;
@@ -30,8 +29,6 @@ public final class OverlayPanelManager {
         private final List<AbstractWidget> contents = new ArrayList<>();
         private AbstractWidget tab;
         private boolean open;
-        // 上层面板展开时暂时阻止本面板绘制展开内容和接收输入。
-        private boolean blocked;
 
         private Panel() {
         }
@@ -44,7 +41,7 @@ public final class OverlayPanelManager {
         }
 
         public boolean isOpen() {
-            return open && !blocked;
+            return open;
         }
 
         public void toggle() {
@@ -52,13 +49,22 @@ public final class OverlayPanelManager {
         }
 
         public void setOpen(boolean open) {
+            if (open) {
+                // 面板互斥：打开当前面板时立即收起其他面板。
+                for (Panel panel : panels) {
+                    if (panel != this) {
+                        panel.open = false;
+                    }
+                }
+            }
             this.open = open;
             refresh();
         }
 
         private void applyState(boolean blocked) {
-            this.blocked = blocked;
             if (tab != null) {
+                // 展开的上方面板会遮住后续标签，隐藏的同时必须禁用点击。
+                tab.visible = !blocked;
                 tab.active = !blocked;
             }
             boolean contentEnabled = open && !blocked;

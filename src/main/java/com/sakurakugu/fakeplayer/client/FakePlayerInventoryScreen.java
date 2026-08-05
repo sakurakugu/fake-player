@@ -63,17 +63,17 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private static final int ACTION_BUTTON_WIDTH = 18;
     private static final int ACTION_BUTTON_HEIGHT = 18;
     private static final int ACTION_BUTTON_GAP = 0;
-    private static final int DROP_PANEL_TOP = 8;
     private static final int DROP_PANEL_WIDTH = 94;
     private static final int DROP_PANEL_HEIGHT = 109;
     private static final int DROP_TAB_WIDTH = 21;
     private static final int DROP_TAB_HEIGHT = 24;
+    private static final int CONTINUOUS_PANEL_TOP = 8;
+    private static final int DROP_PANEL_TOP = CONTINUOUS_PANEL_TOP + DROP_TAB_HEIGHT + 2;
     private static final int TRANSFER_BUTTON_LEFT = 144;
     private static final int TRANSFER_BUTTON_TOP = 165;
     private static final int ENDER_CHEST_TRANSFER_BUTTON_TOP = 73;
-    // 持续控制标签放在 Q 键丢弃标签按钮下方，自动化标签紧随其后。
-    private static final int CONTINUOUS_PANEL_TOP = DROP_PANEL_TOP + DROP_TAB_HEIGHT + 2;
-    private static final int AUTOMATION_PANEL_TOP = CONTINUOUS_PANEL_TOP + DROP_TAB_HEIGHT + 2;
+    // 持续控制标签位于最上方，Q 键丢弃标签和自动化标签依次排列在下方。
+    private static final int AUTOMATION_PANEL_TOP = DROP_PANEL_TOP + DROP_TAB_HEIGHT + 2;
     private static final int AUTOMATION_PANEL_WIDTH = 94;
     private static final int AUTOMATION_PANEL_HEIGHT = 97;
     private static final int AUTOMATION_BUTTON_HEIGHT = 16;
@@ -98,9 +98,10 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     };
 
     private final OverlayPanelManager panelManager = new OverlayPanelManager();
-    private final OverlayPanelManager.Panel automationPanel = panelManager.addPanel();
+    // 按界面从上到下注册，展开的面板会遮挡并禁用其下方的标签。
     private final OverlayPanelManager.Panel continuousPanel = panelManager.addPanel();
     private final OverlayPanelManager.Panel dropPanel = panelManager.addPanel();
+    private final OverlayPanelManager.Panel automationPanel = panelManager.addPanel();
     private boolean continuousDrop;
     private boolean percentageDrop;
     private int dropAmount = 1;
@@ -454,10 +455,8 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
 
         @Override
         public boolean isMouseOver(double mouseX, double mouseY) {
-            // 左上角由丢弃标签按钮处理，覆盖层不能抢先吞掉它的点击。
-            boolean overTab = mouseX >= getX() && mouseX < getX() + DROP_TAB_WIDTH
-                && mouseY >= getY() && mouseY < getY() + DROP_TAB_HEIGHT;
-            return !overTab && super.isMouseOver(mouseX, mouseY);
+            // 覆盖层只负责绘制背景，不能参与鼠标命中，否则会拦截面板内按钮。
+            return false;
         }
     }
 
@@ -476,9 +475,8 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
 
         @Override
         public boolean isMouseOver(double mouseX, double mouseY) {
-            boolean overTab = mouseX >= getX() && mouseX < getX() + DROP_TAB_WIDTH
-                && mouseY >= getY() && mouseY < getY() + DROP_TAB_HEIGHT;
-            return !overTab && super.isMouseOver(mouseX, mouseY);
+            // 覆盖层只负责绘制背景，不能参与鼠标命中，否则会拦截面板内按钮。
+            return false;
         }
     }
 
