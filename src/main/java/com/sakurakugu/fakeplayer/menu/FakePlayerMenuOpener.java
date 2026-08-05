@@ -1,6 +1,7 @@
 package com.sakurakugu.fakeplayer.menu;
 
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
+import com.sakurakugu.fakeplayer.chunkloading.ChunkLoaderManager;
 import com.sakurakugu.fakeplayer.entity.FakePlayerActions;
 import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
 import com.sakurakugu.fakeplayer.entity.FakePlayerPossession;
@@ -68,6 +69,38 @@ public final class FakePlayerMenuOpener {
                 writeStrings(data, onlinePlayers);
             }
         );
+    }
+
+    public static void openChunkLoaders(ServerPlayer viewer) {
+        List<ChunkLoaderMenu.AnchorSummary> anchors = ChunkLoaderManager.data(viewer.level().getServer()).anchors()
+            .stream()
+            .sorted(java.util.Comparator.comparing(
+                com.sakurakugu.fakeplayer.chunkloading.ChunkLoaderSavedData.Anchor::name,
+                String.CASE_INSENSITIVE_ORDER))
+            .limit(ChunkLoaderMenu.MAX_ANCHORS)
+            .map(anchor -> new ChunkLoaderMenu.AnchorSummary(anchor.name(), anchor.dimension().toString(),
+                anchor.position().getX(), anchor.position().getY(), anchor.position().getZ(), anchor.radius(),
+                anchor.enabled(), anchor.ticking()))
+            .toList();
+        int maximumRadius = FakePlayerConfig.maxChunkLoadingRadius();
+        viewer.openMenu(new SimpleMenuProvider(
+            (containerId, inventory, player) -> new ChunkLoaderMenu(
+                containerId, inventory, maximumRadius, anchors),
+            Component.translatable("gui.fakeplayer.chunkloader.title")
+        ), data -> {
+            data.writeVarInt(maximumRadius);
+            data.writeVarInt(anchors.size());
+            anchors.forEach(anchor -> {
+                data.writeUtf(anchor.name(), 32);
+                data.writeUtf(anchor.dimension(), 256);
+                data.writeInt(anchor.x());
+                data.writeInt(anchor.y());
+                data.writeInt(anchor.z());
+                data.writeVarInt(anchor.radius());
+                data.writeBoolean(anchor.enabled());
+                data.writeBoolean(anchor.ticking());
+            });
+        });
     }
 
     private static void writeStrings(net.minecraft.network.RegistryFriendlyByteBuf data, List<String> values) {

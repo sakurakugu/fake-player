@@ -22,6 +22,11 @@ public final class ModMenus {
         () -> IMenuTypeExtension.create(BotManagementMenu::new)
     );
 
+    public static final DeferredHolder<MenuType<?>, MenuType<ChunkLoaderMenu>> CHUNK_LOADER = MENUS.register(
+        "chunk_loader",
+        () -> IMenuTypeExtension.create(ChunkLoaderMenu::new)
+    );
+
     public static final DeferredHolder<MenuType<?>, MenuType<FakePlayerInventoryMenu>> FAKE_PLAYER_INVENTORY = MENUS.register(
         "inventory",
         () -> IMenuTypeExtension.create(FakePlayerInventoryMenu::new)

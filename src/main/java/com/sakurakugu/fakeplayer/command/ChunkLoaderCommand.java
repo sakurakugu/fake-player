@@ -7,6 +7,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.sakurakugu.fakeplayer.chunkloading.ChunkLoaderManager;
 import com.sakurakugu.fakeplayer.chunkloading.ChunkLoaderSavedData.Anchor;
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
+import com.sakurakugu.fakeplayer.menu.FakePlayerMenuOpener;
 import java.util.Comparator;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -22,6 +23,7 @@ public final class ChunkLoaderCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("chunkloader")
             .requires(FakePlayerConfig::canUseCommands)
+            .executes(ChunkLoaderCommand::openGui)
             .then(Commands.literal("list").executes(ChunkLoaderCommand::list))
             .then(Commands.literal("backup").executes(ChunkLoaderCommand::backup))
             .then(Commands.literal("restore").then(Commands.literal("confirm")
@@ -43,6 +45,11 @@ public final class ChunkLoaderCommand {
                         ChunkLoaderManager.ABSOLUTE_MAX_RADIUS))
                     .executes(context -> configure(context, false))
                     .then(Commands.literal("ticking").executes(context -> configure(context, true)))))));
+    }
+
+    private static int openGui(CommandContext<CommandSourceStack> context) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        FakePlayerMenuOpener.openChunkLoaders(context.getSource().getPlayerOrException());
+        return 1;
     }
 
     private static int backup(CommandContext<CommandSourceStack> context) {
