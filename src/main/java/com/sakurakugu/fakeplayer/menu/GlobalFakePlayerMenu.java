@@ -14,6 +14,7 @@ import net.minecraft.world.item.ItemStack;
 /** 为全局设置和假人列表提供客户端快照与服务端操作通道。 */
 public final class GlobalFakePlayerMenu extends AbstractContainerMenu {
     public static final int ACTION_REFRESH = -1;
+    public static final int ACTION_OPEN_BOTS = -100;
     private static final int ACTION_SETTING_BASE = -2;
 
     private final List<String> playerNames;
@@ -52,6 +53,10 @@ public final class GlobalFakePlayerMenu extends AbstractContainerMenu {
         }
         if (actionId == ACTION_REFRESH) {
             FakePlayerMenuOpener.openList(viewer);
+            return true;
+        }
+        if (actionId == ACTION_OPEN_BOTS) {
+            FakePlayerMenuOpener.openBotManagement(viewer);
             return true;
         }
         int settingIndex = ACTION_SETTING_BASE - actionId;

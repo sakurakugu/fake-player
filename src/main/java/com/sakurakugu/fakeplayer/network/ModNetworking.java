@@ -2,6 +2,8 @@ package com.sakurakugu.fakeplayer.network;
 
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.menu.FakePlayerMenuOpener;
+import com.sakurakugu.fakeplayer.menu.BotManagementActions;
+import com.sakurakugu.fakeplayer.menu.BotManagementMenu;
 import com.sakurakugu.fakeplayer.entity.FakePlayerPossession;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
@@ -24,6 +26,18 @@ public final class ModNetworking {
                 if (context.player() instanceof ServerPlayer player
                     && FakePlayerConfig.canUseCommands(player.createCommandSourceStack())) {
                     FakePlayerMenuOpener.openGlobal(player);
+                }
+            }
+        );
+        registrar.playToServer(
+            BotActionPayload.TYPE,
+            BotActionPayload.STREAM_CODEC,
+            (payload, context) -> {
+                if (context.player() instanceof ServerPlayer player
+                    && player.containerMenu instanceof BotManagementMenu
+                    && player.containerMenu.containerId == payload.containerId()
+                    && FakePlayerConfig.canUseCommands(player.createCommandSourceStack())) {
+                    BotManagementActions.handle(player, payload);
                 }
             }
         );

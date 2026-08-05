@@ -5,6 +5,8 @@ import com.sakurakugu.fakeplayer.entity.FakePlayerActions;
 import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
 import com.sakurakugu.fakeplayer.entity.FakePlayerPossession;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
+import com.sakurakugu.fakeplayer.persistence.FakePlayerPersistence;
+import com.sakurakugu.fakeplayer.persistence.FakePlayerSavedData;
 import java.util.List;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -21,6 +23,56 @@ public final class FakePlayerMenuOpener {
 
     public static void openList(ServerPlayer viewer) {
         openGlobal(viewer, true);
+    }
+
+    public static void openBotManagement(ServerPlayer viewer) {
+        openBotManagement(viewer, false);
+    }
+
+    public static void openBotManagement(ServerPlayer viewer, boolean openGroupsInitially) {
+        FakePlayerSavedData savedData = FakePlayerPersistence.data(viewer.level().getServer());
+        List<BotManagementMenu.PresetSummary> presets = savedData.presets().stream()
+            .map(preset -> new BotManagementMenu.PresetSummary(
+                preset.id(), preset.description(), preset.player().name()))
+            .sorted(java.util.Comparator.comparing(
+                BotManagementMenu.PresetSummary::id, String.CASE_INSENSITIVE_ORDER))
+            .toList();
+        List<BotManagementMenu.GroupSummary> groups = savedData.groups().stream()
+            .map(group -> new BotManagementMenu.GroupSummary(group.id(), group.presetIds()))
+            .sorted(java.util.Comparator.comparing(
+                BotManagementMenu.GroupSummary::id, String.CASE_INSENSITIVE_ORDER))
+            .toList();
+        List<String> onlinePlayers = FakePlayerManager.all(viewer.level().getServer()).stream()
+            .map(fake -> fake.getGameProfile().name())
+            .sorted(String.CASE_INSENSITIVE_ORDER)
+            .toList();
+        viewer.openMenu(
+            new SimpleMenuProvider(
+                (containerId, inventory, player) -> new BotManagementMenu(
+                    containerId, inventory, openGroupsInitially, presets, groups, onlinePlayers),
+                Component.translatable("gui.fakeplayer.bot.title")
+            ),
+            data -> {
+                data.writeBoolean(openGroupsInitially);
+                data.writeVarInt(presets.size());
+                presets.forEach(preset -> {
+                    data.writeUtf(preset.id());
+                    data.writeUtf(preset.description());
+                    data.writeUtf(preset.playerName());
+                });
+                data.writeVarInt(groups.size());
+                groups.forEach(group -> {
+                    data.writeUtf(group.id());
+                    writeStrings(data, group.presetIds());
+                });
+                writeStrings(data, onlinePlayers);
+            }
+        );
+    }
+
+    private static void writeStrings(net.minecraft.network.RegistryFriendlyByteBuf data, List<String> values) {
+        data.writeVarInt(values.size());
+        values.forEach(data::writeUtf);
     }
 
     private static void openGlobal(ServerPlayer viewer, boolean openListInitially) {

@@ -13,12 +13,14 @@ import com.sakurakugu.fakeplayer.persistence.FakePlayerSavedData;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerSavedData.Group;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerSavedData.PlayerSnapshot;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerSavedData.Preset;
+import com.sakurakugu.fakeplayer.menu.FakePlayerMenuOpener;
 import java.util.Comparator;
 import java.util.List;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 
 /** 管理可手动加载的假人预设和预设分组。 */
 public final class BotCommand {
@@ -28,6 +30,7 @@ public final class BotCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("bot")
             .requires(FakePlayerConfig::canUseCommands)
+            .executes(BotCommand::openGui)
             .then(Commands.literal("list").executes(BotCommand::listPresets))
             .then(Commands.literal("add")
                 .then(Commands.argument("preset", StringArgumentType.word())
@@ -42,6 +45,15 @@ public final class BotCommand {
                 .then(presetArgument().executes(BotCommand::removePreset)))
             .then(groupCommand());
         dispatcher.register(root);
+    }
+
+    private static int openGui(CommandContext<CommandSourceStack> context) {
+        ServerPlayer viewer = context.getSource().getPlayer();
+        if (viewer == null) {
+            return failure(context, "commands.fakeplayer.player_only");
+        }
+        FakePlayerMenuOpener.openBotManagement(viewer);
+        return 1;
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> groupCommand() {

@@ -51,7 +51,13 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
             }
             addRenderableWidget(
                 Button.builder(Component.translatable("gui.fakeplayer.global.open_list"), button -> showList())
-                    .bounds(leftPos + 50, topPos + 166, PANEL_WIDTH - 100, BUTTON_HEIGHT)
+                    .bounds(leftPos + 50, topPos + 150, PANEL_WIDTH - 100, BUTTON_HEIGHT)
+                    .build()
+            );
+            addRenderableWidget(
+                Button.builder(Component.translatable("gui.fakeplayer.global.open_bots"),
+                        button -> sendAction(GlobalFakePlayerMenu.ACTION_OPEN_BOTS))
+                    .bounds(leftPos + 50, topPos + 180, PANEL_WIDTH - 100, BUTTON_HEIGHT)
                     .build()
             );
             return;

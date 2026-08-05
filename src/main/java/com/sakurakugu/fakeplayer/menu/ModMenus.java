@@ -17,6 +17,11 @@ public final class ModMenus {
         () -> IMenuTypeExtension.create(GlobalFakePlayerMenu::new)
     );
 
+    public static final DeferredHolder<MenuType<?>, MenuType<BotManagementMenu>> BOT_MANAGEMENT = MENUS.register(
+        "bot_management",
+        () -> IMenuTypeExtension.create(BotManagementMenu::new)
+    );
+
     public static final DeferredHolder<MenuType<?>, MenuType<FakePlayerInventoryMenu>> FAKE_PLAYER_INVENTORY = MENUS.register(
         "inventory",
         () -> IMenuTypeExtension.create(FakePlayerInventoryMenu::new)
