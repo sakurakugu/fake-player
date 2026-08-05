@@ -661,6 +661,8 @@ public final class FakePlayerActions {
         for (ScheduledAction action : ScheduledAction.values()) {
             stopAction(action);
         }
+        // 即使计划动作刚结束，也要清除原版实体上可能残留的使用、挖掘和跳跃状态。
+        stopTransientActions();
         dropRequest = null;
         forwardInput = 0.0F;
         strafeInput = 0.0F;

@@ -254,8 +254,8 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
                 + intervalSliders.length * (CONTINUOUS_BUTTON_HEIGHT + CONTINUOUS_SLIDER_HEIGHT + 4) + 2,
             CONTINUOUS_PANEL_WIDTH - 12,
             CONTINUOUS_BUTTON_HEIGHT,
-            Component.translatable("gui.fakeplayer.continuous.stop_all"),
-            button -> sendAction(FakePlayerInventoryMenu.ACTION_STOP_ALL_CONTINUOUS)
+            Component.translatable("gui.fakeplayer.stop"),
+            button -> sendAction(FakePlayerInventoryMenu.ACTION_STOP_ALL)
         ));
         Button continuousTabButton = addRenderableWidget(new IconTabButton(
             panelLeft,

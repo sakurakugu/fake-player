@@ -121,7 +121,6 @@
   "gui.fakeplayer.continuous.attack": "Attack",
   "gui.fakeplayer.continuous.use": "Use",
   "gui.fakeplayer.continuous.jump": "Jump",
-  "gui.fakeplayer.continuous.stop_all": "Stop all",
   "gui.fakeplayer.continuous.interval": "%s ticks",
   "gui.fakeplayer.continuous.interval_tooltip": "Interval between repeated actions",
   "gui.fakeplayer.transfer_to_container_matching": "Transfer Matching to Container",

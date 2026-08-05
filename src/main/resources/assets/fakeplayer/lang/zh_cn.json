@@ -121,7 +121,6 @@
   "gui.fakeplayer.continuous.attack": "持续攻击",
   "gui.fakeplayer.continuous.use": "持续使用",
   "gui.fakeplayer.continuous.jump": "持续跳跃",
-  "gui.fakeplayer.continuous.stop_all": "全部关闭",
   "gui.fakeplayer.continuous.interval": "%s tick",
   "gui.fakeplayer.continuous.interval_tooltip": "重复动作的执行间隔",
   "gui.fakeplayer.transfer_to_container_matching": "转移匹配物品到容器",
