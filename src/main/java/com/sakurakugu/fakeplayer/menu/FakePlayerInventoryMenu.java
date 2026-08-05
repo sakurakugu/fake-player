@@ -91,6 +91,18 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     public static final int ACTION_JUMP_HELD = ACTION_USE_HELD + 1;
     public static final int ACTION_FLY_UP = ACTION_JUMP_HELD + 1;
     public static final int ACTION_FLY_DOWN = ACTION_FLY_UP + 1;
+    public static final int ACTION_TOGGLE_MOVE_FORWARD = ACTION_FLY_DOWN + 1;
+    public static final int ACTION_TOGGLE_MOVE_BACKWARD = ACTION_TOGGLE_MOVE_FORWARD + 1;
+    public static final int ACTION_TOGGLE_MOVE_LEFT = ACTION_TOGGLE_MOVE_BACKWARD + 1;
+    public static final int ACTION_TOGGLE_MOVE_RIGHT = ACTION_TOGGLE_MOVE_LEFT + 1;
+    public static final int ACTION_TOGGLE_ATTACK = ACTION_TOGGLE_MOVE_RIGHT + 1;
+    public static final int ACTION_TOGGLE_USE = ACTION_TOGGLE_ATTACK + 1;
+    public static final int ACTION_TOGGLE_JUMP = ACTION_TOGGLE_USE + 1;
+    public static final int MAX_CONTINUOUS_INTERVAL = 100;
+    private static final int ACTION_CONTINUOUS_INTERVAL_BASE = ACTION_TOGGLE_JUMP + 1;
+    private static final int CONTINUOUS_INTERVAL_ACTION_COUNT = 3;
+    private static final int ACTION_CONTINUOUS_INTERVAL_END = ACTION_CONTINUOUS_INTERVAL_BASE
+        + MAX_CONTINUOUS_INTERVAL * CONTINUOUS_INTERVAL_ACTION_COUNT;
     private static final EquipmentSlot[] ARMOR_SLOTS = {
         EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET
     };
@@ -112,6 +124,10 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     private final DataSlot automationMask;
     private int flyingSnapshot;
     private final DataSlot flying;
+    private int continuousControlMaskSnapshot;
+    private final DataSlot continuousControlMask;
+    private final int[] continuousIntervals = new int[CONTINUOUS_INTERVAL_ACTION_COUNT];
+    private final DataSlot[] continuousIntervalData = new DataSlot[CONTINUOUS_INTERVAL_ACTION_COUNT];
     private int heldControlAction = -1;
 
     public FakePlayerInventoryMenu(int containerId, Inventory inventory, RegistryFriendlyByteBuf data) {
@@ -124,6 +140,10 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             data.readVarInt(),
             data.readBoolean(),
             data.readBoolean(),
+            data.readVarInt(),
+            data.readVarInt(),
+            data.readVarInt(),
+            data.readVarInt(),
             data.readVarInt()
         );
     }
@@ -137,7 +157,10 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
         boolean targetOccupied
     ) {
         this(containerId, inventory, target, target.getGameProfile().name(), view, target.getId(),
-            possessedByViewer, targetOccupied, automationMask(target));
+            possessedByViewer, targetOccupied, automationMask(target), continuousControlMask(target),
+            target.actions().repeatInterval(FakePlayerActions.ScheduledAction.ATTACK),
+            target.actions().repeatInterval(FakePlayerActions.ScheduledAction.USE),
+            target.actions().repeatInterval(FakePlayerActions.ScheduledAction.JUMP));
     }
 
     private FakePlayerInventoryMenu(
@@ -149,7 +172,11 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
         int targetEntityId,
         boolean possessedByViewer,
         boolean targetOccupied,
-        int automationMask
+        int automationMask,
+        int continuousControlMask,
+        int attackInterval,
+        int useInterval,
+        int jumpInterval
     ) {
         super(ModMenus.FAKE_PLAYER_INVENTORY.get(), containerId);
         this.target = target;
@@ -159,6 +186,10 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
         this.possessedByViewer = possessedByViewer;
         this.targetOccupied = targetOccupied;
         this.automationMaskSnapshot = automationMask;
+        this.continuousControlMaskSnapshot = continuousControlMask;
+        this.continuousIntervals[0] = attackInterval;
+        this.continuousIntervals[1] = useInterval;
+        this.continuousIntervals[2] = jumpInterval;
         this.viewer = viewerInventory.player;
         this.craftingOwner = target == null ? viewer : target;
         this.targetSlotCount = switch (view) {
@@ -199,6 +230,35 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
                 flyingSnapshot = value;
             }
         });
+        this.continuousControlMask = addDataSlot(new DataSlot() {
+            @Override
+            public int get() {
+                return target == null ? continuousControlMaskSnapshot : continuousControlMask(target);
+            }
+
+            @Override
+            public void set(int value) {
+                continuousControlMaskSnapshot = value;
+            }
+        });
+        for (int index = 0; index < continuousIntervalData.length; index++) {
+            int intervalIndex = index;
+            continuousIntervalData[index] = addDataSlot(new DataSlot() {
+                @Override
+                public int get() {
+                    if (target != null) {
+                        continuousIntervals[intervalIndex] = target.actions().repeatInterval(
+                            continuousAction(intervalIndex));
+                    }
+                    return continuousIntervals[intervalIndex];
+                }
+
+                @Override
+                public void set(int value) {
+                    continuousIntervals[intervalIndex] = value;
+                }
+            });
+        }
 
         Container targetContainer = target == null
             ? new SimpleContainer(view == View.ENDER_CHEST ? ENDER_CHEST_TARGET_SLOTS : INVENTORY_TARGET_SLOTS)
@@ -299,6 +359,15 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             }
             return true;
         }
+        if (actionId >= ACTION_CONTINUOUS_INTERVAL_BASE && actionId < ACTION_CONTINUOUS_INTERVAL_END) {
+            int encoded = actionId - ACTION_CONTINUOUS_INTERVAL_BASE;
+            int controlIndex = encoded / MAX_CONTINUOUS_INTERVAL;
+            int interval = encoded % MAX_CONTINUOUS_INTERVAL + 1;
+            target.actions().setRepeatInterval(continuousAction(controlIndex), interval);
+            continuousIntervals[controlIndex] = interval;
+            broadcastChanges();
+            return true;
+        }
         switch (actionId) {
             case ACTION_ENDER_CHEST -> FakePlayerMenuOpener.openEnderChest(viewer, target);
             case ACTION_REMOVE -> {
@@ -363,6 +432,33 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             }
             case ACTION_FLY_UP -> target.actions().flyVertical(true);
             case ACTION_FLY_DOWN -> target.actions().flyVertical(false);
+            case ACTION_TOGGLE_MOVE_FORWARD, ACTION_TOGGLE_MOVE_BACKWARD,
+                ACTION_TOGGLE_MOVE_LEFT, ACTION_TOGGLE_MOVE_RIGHT -> {
+                FakePlayerActions.MoveDirection direction = switch (actionId) {
+                    case ACTION_TOGGLE_MOVE_FORWARD -> FakePlayerActions.MoveDirection.FORWARD;
+                    case ACTION_TOGGLE_MOVE_BACKWARD -> FakePlayerActions.MoveDirection.BACKWARD;
+                    case ACTION_TOGGLE_MOVE_LEFT -> FakePlayerActions.MoveDirection.LEFT;
+                    default -> FakePlayerActions.MoveDirection.RIGHT;
+                };
+                if (target.actions().isMoving(direction)) {
+                    target.actions().stopMove();
+                } else {
+                    target.actions().startMove(direction);
+                }
+                broadcastChanges();
+            }
+            case ACTION_TOGGLE_ATTACK -> {
+                toggleContinuousAction(0);
+                broadcastChanges();
+            }
+            case ACTION_TOGGLE_USE -> {
+                toggleContinuousAction(1);
+                broadcastChanges();
+            }
+            case ACTION_TOGGLE_JUMP -> {
+                toggleContinuousAction(2);
+                broadcastChanges();
+            }
             default -> {
                 return false;
             }
@@ -377,6 +473,45 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             case BACKWARD -> ACTION_MOVE_BACKWARD_HELD;
             case LEFT -> ACTION_MOVE_LEFT_HELD;
             case RIGHT -> ACTION_MOVE_RIGHT_HELD;
+        };
+    }
+
+    private void toggleContinuousAction(int controlIndex) {
+        FakePlayerActions.ScheduledAction action = continuousAction(controlIndex);
+        boolean enabled = target.actions().isRepeating(action);
+        int interval = target.actions().repeatInterval(action);
+        switch (action) {
+            case ATTACK -> {
+                if (enabled) {
+                    target.actions().stopAttack();
+                } else {
+                    target.actions().attack(FakePlayerActions.RepeatMode.INTERVAL, interval);
+                }
+            }
+            case USE -> {
+                if (enabled) {
+                    target.actions().stopUse();
+                } else {
+                    target.actions().use(FakePlayerActions.RepeatMode.INTERVAL, interval);
+                }
+            }
+            case JUMP -> {
+                if (enabled) {
+                    target.actions().stopJump();
+                } else {
+                    target.actions().jump(FakePlayerActions.RepeatMode.INTERVAL, interval);
+                }
+            }
+            default -> throw new IllegalArgumentException("不支持切换该持续动作: " + action);
+        }
+    }
+
+    private static FakePlayerActions.ScheduledAction continuousAction(int index) {
+        return switch (index) {
+            case 0 -> FakePlayerActions.ScheduledAction.ATTACK;
+            case 1 -> FakePlayerActions.ScheduledAction.USE;
+            case 2 -> FakePlayerActions.ScheduledAction.JUMP;
+            default -> throw new IllegalArgumentException("无效的持续动作索引: " + index);
         };
     }
 
@@ -633,6 +768,42 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
 
     public boolean automationEnabled(int index) {
         return (automationMask.get() & (1 << index)) != 0;
+    }
+
+    public boolean continuousControlEnabled(int index) {
+        return (continuousControlMask.get() & (1 << index)) != 0;
+    }
+
+    public int continuousInterval(int index) {
+        return continuousIntervalData[index].get();
+    }
+
+    public static int continuousIntervalActionId(int index, int interval) {
+        if (index < 0 || index >= CONTINUOUS_INTERVAL_ACTION_COUNT) {
+            throw new IllegalArgumentException("无效的持续动作索引: " + index);
+        }
+        int value = Math.clamp(interval, 1, MAX_CONTINUOUS_INTERVAL);
+        return ACTION_CONTINUOUS_INTERVAL_BASE + index * MAX_CONTINUOUS_INTERVAL + value - 1;
+    }
+
+    public static int continuousControlMask(FakeServerPlayer fake) {
+        FakePlayerActions actions = fake.actions();
+        int mask = 0;
+        for (FakePlayerActions.MoveDirection direction : FakePlayerActions.MoveDirection.values()) {
+            if (actions.isMoving(direction)) {
+                mask |= 1 << direction.ordinal();
+            }
+        }
+        if (actions.isRepeating(FakePlayerActions.ScheduledAction.ATTACK)) {
+            mask |= 1 << 4;
+        }
+        if (actions.isRepeating(FakePlayerActions.ScheduledAction.USE)) {
+            mask |= 1 << 5;
+        }
+        if (actions.isRepeating(FakePlayerActions.ScheduledAction.JUMP)) {
+            mask |= 1 << 6;
+        }
+        return mask;
     }
 
     public static int automationMask(FakeServerPlayer fake) {

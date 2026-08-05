@@ -30,6 +30,8 @@ public final class OverlayPanelManager {
         private final List<AbstractWidget> contents = new ArrayList<>();
         private AbstractWidget tab;
         private boolean open;
+        // 上层面板展开时暂时阻止本面板绘制展开内容和接收输入。
+        private boolean blocked;
 
         private Panel() {
         }
@@ -42,7 +44,7 @@ public final class OverlayPanelManager {
         }
 
         public boolean isOpen() {
-            return open;
+            return open && !blocked;
         }
 
         public void toggle() {
@@ -55,6 +57,7 @@ public final class OverlayPanelManager {
         }
 
         private void applyState(boolean blocked) {
+            this.blocked = blocked;
             if (tab != null) {
                 tab.active = !blocked;
             }

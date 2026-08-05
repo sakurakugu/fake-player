@@ -1,6 +1,7 @@
 package com.sakurakugu.fakeplayer.menu;
 
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
+import com.sakurakugu.fakeplayer.entity.FakePlayerActions;
 import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
 import com.sakurakugu.fakeplayer.entity.FakePlayerPossession;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
@@ -84,6 +85,13 @@ public final class FakePlayerMenuOpener {
                 data.writeBoolean(possessedByViewer);
                 data.writeBoolean(targetOccupied);
                 data.writeVarInt(FakePlayerInventoryMenu.automationMask(fake));
+                data.writeVarInt(FakePlayerInventoryMenu.continuousControlMask(fake));
+                data.writeVarInt(fake.actions().repeatInterval(
+                    FakePlayerActions.ScheduledAction.ATTACK));
+                data.writeVarInt(fake.actions().repeatInterval(
+                    FakePlayerActions.ScheduledAction.USE));
+                data.writeVarInt(fake.actions().repeatInterval(
+                    FakePlayerActions.ScheduledAction.JUMP));
             }
         );
     }

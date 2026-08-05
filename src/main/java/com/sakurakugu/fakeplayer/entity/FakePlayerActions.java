@@ -50,6 +50,7 @@ public final class FakePlayerActions {
 
     private final FakeServerPlayer player;
     private final Map<ScheduledAction, Schedule> schedules = new EnumMap<>(ScheduledAction.class);
+    private final Map<ScheduledAction, Integer> repeatIntervals = new EnumMap<>(ScheduledAction.class);
     private float forwardInput;
     private float strafeInput;
     private DropRequest dropRequest;
@@ -172,6 +173,9 @@ public final class FakePlayerActions {
             return;
         }
         int ticks = mode == RepeatMode.CONTINUOUS ? 1 : Math.max(1, interval);
+        if (mode == RepeatMode.INTERVAL) {
+            repeatIntervals.put(action, ticks);
+        }
         schedules.put(action, new Schedule(mode, ticks));
     }
 
@@ -425,6 +429,36 @@ public final class FakePlayerActions {
         setMovementInput(0.0F, 0.0F);
     }
 
+    /** 判断当前是否正在按指定方向持续移动。 */
+    public boolean isMoving(MoveDirection direction) {
+        return switch (direction) {
+            case FORWARD -> forwardInput > 0.0F && strafeInput == 0.0F;
+            case BACKWARD -> forwardInput < 0.0F && strafeInput == 0.0F;
+            case LEFT -> forwardInput == 0.0F && strafeInput > 0.0F;
+            case RIGHT -> forwardInput == 0.0F && strafeInput < 0.0F;
+        };
+    }
+
+    public boolean isRepeating(ScheduledAction action) {
+        return schedules.containsKey(action);
+    }
+
+    /** 设置重复点击间隔；动作运行中时立即应用新间隔。 */
+    public void setRepeatInterval(ScheduledAction action, int interval) {
+        int ticks = Math.max(1, interval);
+        repeatIntervals.put(action, ticks);
+        if (isRepeating(action)) {
+            configure(action, RepeatMode.INTERVAL, ticks);
+        }
+    }
+
+    public int repeatInterval(ScheduledAction action) {
+        Schedule schedule = schedules.get(action);
+        return schedule != null && schedule.mode == RepeatMode.INTERVAL
+            ? schedule.interval
+            : repeatIntervals.getOrDefault(action, 1);
+    }
+
     public void startAttack() {
         attack(RepeatMode.CONTINUOUS, 1);
     }
@@ -613,7 +647,11 @@ public final class FakePlayerActions {
     }
 
     private void stopAction(ScheduledAction action) {
-        if (schedules.remove(action) != null) {
+        Schedule stopped = schedules.remove(action);
+        if (stopped != null) {
+            if (stopped.mode == RepeatMode.INTERVAL) {
+                repeatIntervals.put(action, stopped.interval);
+            }
             inactiveTick(action);
         }
     }
