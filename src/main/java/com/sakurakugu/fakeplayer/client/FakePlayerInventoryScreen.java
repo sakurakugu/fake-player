@@ -78,7 +78,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private static final int AUTOMATION_PANEL_HEIGHT = 97;
     private static final int AUTOMATION_BUTTON_HEIGHT = 16;
     private static final int CONTINUOUS_PANEL_WIDTH = 94;
-    private static final int CONTINUOUS_PANEL_HEIGHT = 199;
+    private static final int CONTINUOUS_PANEL_HEIGHT = 219;
     private static final int CONTINUOUS_BUTTON_HEIGHT = 16;
     private static final int CONTINUOUS_SLIDER_HEIGHT = 14;
     private static final String[] AUTOMATION_KEYS = {
@@ -233,6 +233,15 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
                 index
             ));
         }
+        Button stopAllContinuousButton = addRenderableWidget(new CompactButton(
+            panelLeft + 6,
+            continuousTop + 4 * (CONTINUOUS_BUTTON_HEIGHT + 2)
+                + intervalSliders.length * (CONTINUOUS_BUTTON_HEIGHT + CONTINUOUS_SLIDER_HEIGHT + 4) + 2,
+            CONTINUOUS_PANEL_WIDTH - 12,
+            CONTINUOUS_BUTTON_HEIGHT,
+            Component.translatable("gui.fakeplayer.continuous.stop_all"),
+            button -> sendAction(FakePlayerInventoryMenu.ACTION_STOP_ALL_CONTINUOUS)
+        ));
         Button continuousTabButton = addRenderableWidget(new IconTabButton(
             panelLeft,
             topPos + CONTINUOUS_PANEL_TOP,
@@ -244,11 +253,12 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         ));
         continuousTabButton.setTooltip(Tooltip.create(Component.translatable("gui.fakeplayer.continuous.title")));
         AbstractWidget[] continuousContents =
-            new AbstractWidget[continuousButtons.length + intervalSliders.length + 1];
+            new AbstractWidget[continuousButtons.length + intervalSliders.length + 2];
         continuousContents[0] = continuousPanelOverlay;
         System.arraycopy(continuousButtons, 0, continuousContents, 1, continuousButtons.length);
         System.arraycopy(intervalSliders, 0, continuousContents, continuousButtons.length + 1,
             intervalSliders.length);
+        continuousContents[continuousContents.length - 1] = stopAllContinuousButton;
         continuousPanel.bind(continuousTabButton, continuousContents);
 
         int panelTop = topPos + DROP_PANEL_TOP;

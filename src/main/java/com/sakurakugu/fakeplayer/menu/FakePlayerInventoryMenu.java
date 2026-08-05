@@ -98,8 +98,9 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     public static final int ACTION_TOGGLE_ATTACK = ACTION_TOGGLE_MOVE_RIGHT + 1;
     public static final int ACTION_TOGGLE_USE = ACTION_TOGGLE_ATTACK + 1;
     public static final int ACTION_TOGGLE_JUMP = ACTION_TOGGLE_USE + 1;
+    public static final int ACTION_STOP_ALL_CONTINUOUS = ACTION_TOGGLE_JUMP + 1;
     public static final int MAX_CONTINUOUS_INTERVAL = 100;
-    private static final int ACTION_CONTINUOUS_INTERVAL_BASE = ACTION_TOGGLE_JUMP + 1;
+    private static final int ACTION_CONTINUOUS_INTERVAL_BASE = ACTION_STOP_ALL_CONTINUOUS + 1;
     private static final int CONTINUOUS_INTERVAL_ACTION_COUNT = 3;
     private static final int ACTION_CONTINUOUS_INTERVAL_END = ACTION_CONTINUOUS_INTERVAL_BASE
         + MAX_CONTINUOUS_INTERVAL * CONTINUOUS_INTERVAL_ACTION_COUNT;
@@ -457,6 +458,13 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             }
             case ACTION_TOGGLE_JUMP -> {
                 toggleContinuousAction(2);
+                broadcastChanges();
+            }
+            case ACTION_STOP_ALL_CONTINUOUS -> {
+                target.actions().stopMove();
+                target.actions().stopAttack();
+                target.actions().stopUse();
+                target.actions().stopJump();
                 broadcastChanges();
             }
             default -> {
