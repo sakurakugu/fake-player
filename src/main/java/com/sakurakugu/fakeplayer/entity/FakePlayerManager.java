@@ -12,7 +12,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.world.level.GameType;
-import net.minecraft.world.level.gamerules.GameRules;
 import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
 
@@ -160,15 +159,7 @@ public final class FakePlayerManager {
     }
 
     public static void kill(FakeServerPlayer fake) {
-        boolean keepInventory = fake.level().getGameRules().get(GameRules.KEEP_INVENTORY);
-        if (!keepInventory && fake.gameMode.getGameModeForPlayer() == GameType.SURVIVAL) {
-            // 生存模式遵循 keepInventory；其他模式直接保存背包，便于下次同名玩家恢复。
-            for (int slot = 0; slot < fake.getInventory().getContainerSize(); slot++) {
-                if (!fake.getInventory().getItem(slot).isEmpty()) {
-                    fake.drop(fake.getInventory().removeItemNoUpdate(slot), true, false);
-                }
-            }
-        }
+        // 与 Carpet 的 player kill 一致：这里表示让假玩家退出，而不是模拟一次死亡。
         remove(fake);
     }
 
