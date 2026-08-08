@@ -25,6 +25,7 @@ public final class BotManagementScreen extends AbstractContainerScreen<BotManage
     private int selectedIndex = -1;
     private int onlinePlayerIndex;
     private int addPresetIndex;
+    private int removePresetIndex;
 
     public BotManagementScreen(BotManagementMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, PANEL_WIDTH, PANEL_HEIGHT);
@@ -119,6 +120,20 @@ public final class BotManagementScreen extends AbstractContainerScreen<BotManage
             addRenderableWidget(Button.builder(Component.translatable("gui.fakeplayer.bot.delete"), button ->
                     send(BotActionPayload.Action.REMOVE_GROUP, selected.id(), "", ""))
                 .bounds(leftPos + 288, topPos + 153, 76, 22).build());
+
+            Button member = addRenderableWidget(Button.builder(removePresetLabel(selected), button -> {
+                removePresetIndex = cycle(removePresetIndex, selected.presetIds().size());
+                button.setMessage(removePresetLabel(selected));
+            }).bounds(leftPos + 158, topPos + 187, 140, 20).build());
+            Button remove = Button.builder(Component.translatable("gui.fakeplayer.bot.remove_member"), button -> {
+                if (!selected.presetIds().isEmpty()) {
+                    send(BotActionPayload.Action.REMOVE_FROM_GROUP, selected.id(),
+                        selected.presetIds().get(Math.min(removePresetIndex, selected.presetIds().size() - 1)), "");
+                }
+            }).bounds(leftPos + 302, topPos + 187, 62, 20).build();
+            member.active = !selected.presetIds().isEmpty();
+            remove.active = !selected.presetIds().isEmpty();
+            addRenderableWidget(remove);
         }
 
         EditBox groupId = addRenderableWidget(new EditBox(font, leftPos + 16, topPos + 218, 132, 20,
@@ -163,17 +178,20 @@ public final class BotManagementScreen extends AbstractContainerScreen<BotManage
         showingGroups = groups;
         page = 0;
         selectedIndex = -1;
+        removePresetIndex = 0;
         rebuildControls();
     }
 
     private void select(int index) {
         selectedIndex = index;
+        removePresetIndex = 0;
         rebuildControls();
     }
 
     private void changePage(int offset) {
         page = Math.max(0, Math.min(page + offset, pageCount() - 1));
         selectedIndex = -1;
+        removePresetIndex = 0;
         rebuildControls();
     }
 
@@ -202,6 +220,12 @@ public final class BotManagementScreen extends AbstractContainerScreen<BotManage
         return menu.presets().isEmpty()
             ? Component.translatable("gui.fakeplayer.bot.no_presets")
             : Component.literal(menu.presets().get(Math.min(addPresetIndex, menu.presets().size() - 1)).id());
+    }
+
+    private Component removePresetLabel(GroupSummary group) {
+        return group.presetIds().isEmpty()
+            ? Component.translatable("gui.fakeplayer.bot.no_members")
+            : Component.literal(group.presetIds().get(Math.min(removePresetIndex, group.presetIds().size() - 1)));
     }
 
     private static int cycle(int current, int size) {

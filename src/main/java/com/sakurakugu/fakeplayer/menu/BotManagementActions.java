@@ -28,6 +28,7 @@ public final class BotManagementActions {
             case REMOVE_PRESET -> removePreset(viewer, payload.first());
             case CREATE_GROUP -> createGroup(viewer, payload.first());
             case ADD_TO_GROUP -> addToGroup(viewer, payload.first(), payload.second());
+            case REMOVE_FROM_GROUP -> removeFromGroup(viewer, payload.first(), payload.second());
             case LOAD_GROUP -> loadGroup(viewer, payload.first(), false);
             case UNLOAD_GROUP -> loadGroup(viewer, payload.first(), true);
             case REMOVE_GROUP -> removeGroup(viewer, payload.first());
@@ -102,6 +103,19 @@ public final class BotManagementActions {
             return;
         }
         success(viewer, "commands.fakeplayer.bot.group_member_added", presetId, groupId);
+    }
+
+    private static void removeFromGroup(ServerPlayer viewer, String groupId, String presetId) {
+        FakePlayerSavedData data = data(viewer);
+        if (data.group(groupId).isEmpty()) {
+            failure(viewer, "commands.fakeplayer.bot.group_not_found", groupId);
+            return;
+        }
+        if (!data.removeFromGroup(groupId, presetId)) {
+            failure(viewer, "commands.fakeplayer.bot.group_member_not_found", presetId, groupId);
+            return;
+        }
+        success(viewer, "commands.fakeplayer.bot.group_member_removed", presetId, groupId);
     }
 
     private static void loadGroup(ServerPlayer viewer, String id, boolean unload) {

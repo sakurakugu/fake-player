@@ -1,6 +1,7 @@
 package com.sakurakugu.fakeplayer.command;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
@@ -16,14 +17,19 @@ import com.sakurakugu.fakeplayer.persistence.FakePlayerSavedData.Preset;
 import com.sakurakugu.fakeplayer.menu.FakePlayerMenuOpener;
 import java.util.Comparator;
 import java.util.List;
+import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.level.ServerPlayer;
 
 /** 管理可手动加载的假人预设和预设分组。 */
 public final class BotCommand {
+    private static final int PAGE_SIZE = 8;
+
     private BotCommand() {
     }
 
@@ -31,7 +37,10 @@ public final class BotCommand {
         LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("bot")
             .requires(FakePlayerConfig::canUseCommands)
             .executes(BotCommand::openGui)
-            .then(Commands.literal("list").executes(BotCommand::listPresets))
+            .then(Commands.literal("list")
+                .executes(context -> listPresets(context, 1))
+                .then(Commands.argument("page", IntegerArgumentType.integer(1))
+                    .executes(context -> listPresets(context, IntegerArgumentType.getInteger(context, "page")))))
             .then(Commands.literal("add")
                 .then(Commands.argument("preset", StringArgumentType.word())
                     .then(fakeArgument()
@@ -60,9 +69,14 @@ public final class BotCommand {
         return Commands.literal("group")
             .then(Commands.literal("create")
                 .then(Commands.argument("group", StringArgumentType.word()).executes(BotCommand::createGroup)))
-            .then(Commands.literal("list").executes(BotCommand::listGroups))
+            .then(Commands.literal("list")
+                .executes(context -> listGroups(context, 1))
+                .then(Commands.argument("page", IntegerArgumentType.integer(1))
+                    .executes(context -> listGroups(context, IntegerArgumentType.getInteger(context, "page")))))
             .then(Commands.literal("remove")
-                .then(groupArgument().executes(BotCommand::removeGroup)))
+                .then(groupArgument()
+                    .executes(BotCommand::removeGroup)
+                    .then(presetArgument().executes(BotCommand::removeFromGroup))))
             .then(Commands.literal("add")
                 .then(groupArgument().then(presetArgument().executes(BotCommand::addToGroup))))
             .then(Commands.literal("load")
@@ -70,7 +84,10 @@ public final class BotCommand {
             .then(Commands.literal("unload")
                 .then(groupArgument().executes(context -> loadGroup(context, true))))
             .then(Commands.literal("info")
-                .then(groupArgument().executes(BotCommand::groupInfo)));
+                .then(groupArgument()
+                    .executes(context -> groupInfo(context, 1))
+                    .then(Commands.argument("page", IntegerArgumentType.integer(1))
+                        .executes(context -> groupInfo(context, IntegerArgumentType.getInteger(context, "page"))))));
     }
 
     private static int addPreset(CommandContext<CommandSourceStack> context, String description) {
@@ -90,17 +107,36 @@ public final class BotCommand {
         return 1;
     }
 
-    private static int listPresets(CommandContext<CommandSourceStack> context) {
-        String values = data(context).presets().stream()
+    private static int listPresets(CommandContext<CommandSourceStack> context, int page) {
+        List<Preset> presets = data(context).presets().stream()
             .sorted(Comparator.comparing(Preset::id, String.CASE_INSENSITIVE_ORDER))
-            .map(preset -> preset.description().isBlank()
-                ? preset.id()
-                : preset.id() + " (" + preset.description() + ")")
-            .reduce((left, right) -> left + ", " + right)
-            .orElse(Component.translatable("commands.fakeplayer.none").getString());
+            .toList();
+        int pageCount = pageCount(presets.size());
+        if (!validPage(context, page, pageCount)) {
+            return 0;
+        }
         context.getSource().sendSuccess(
-            () -> Component.translatable("commands.fakeplayer.bot.preset_list", values), false);
+            () -> Component.translatable("commands.fakeplayer.bot.preset_page", page, pageCount, presets.size())
+                .withStyle(ChatFormatting.GOLD), false);
+        if (presets.isEmpty()) {
+            context.getSource().sendSuccess(() -> Component.translatable("commands.fakeplayer.none"), false);
+        }
+        int start = (page - 1) * PAGE_SIZE;
+        for (Preset preset : presets.subList(start, Math.min(start + PAGE_SIZE, presets.size()))) {
+            context.getSource().sendSuccess(() -> presetEntry(preset), false);
+        }
+        sendNavigation(context, page, pageCount, "/bot list ");
         return 1;
+    }
+
+    private static Component presetEntry(Preset preset) {
+        MutableComponent entry = Component.literal("▶ " + preset.id()).withStyle(ChatFormatting.AQUA);
+        if (!preset.description().isBlank()) {
+            entry.append(Component.literal(" — " + preset.description()).withStyle(ChatFormatting.GRAY));
+        }
+        return entry
+            .append(actionButton(" ↑", ChatFormatting.GREEN, new ClickEvent.RunCommand("/bot load " + preset.id())))
+            .append(actionButton(" ×", ChatFormatting.RED, new ClickEvent.SuggestCommand("/bot remove " + preset.id())));
     }
 
     private static int loadPreset(CommandContext<CommandSourceStack> context) {
@@ -138,15 +174,39 @@ public final class BotCommand {
         return 1;
     }
 
-    private static int listGroups(CommandContext<CommandSourceStack> context) {
-        String values = data(context).groups().stream()
+    private static int listGroups(CommandContext<CommandSourceStack> context, int page) {
+        List<Group> groups = data(context).groups().stream()
             .sorted(Comparator.comparing(Group::id, String.CASE_INSENSITIVE_ORDER))
-            .map(group -> group.id() + " [" + group.presetIds().size() + "]")
-            .reduce((left, right) -> left + ", " + right)
-            .orElse(Component.translatable("commands.fakeplayer.none").getString());
+            .toList();
+        int pageCount = pageCount(groups.size());
+        if (!validPage(context, page, pageCount)) {
+            return 0;
+        }
         context.getSource().sendSuccess(
-            () -> Component.translatable("commands.fakeplayer.bot.group_list", values), false);
+            () -> Component.translatable("commands.fakeplayer.bot.group_page", page, pageCount, groups.size())
+                .withStyle(ChatFormatting.GOLD), false);
+        if (groups.isEmpty()) {
+            context.getSource().sendSuccess(() -> Component.translatable("commands.fakeplayer.none"), false);
+        }
+        int start = (page - 1) * PAGE_SIZE;
+        for (Group group : groups.subList(start, Math.min(start + PAGE_SIZE, groups.size()))) {
+            context.getSource().sendSuccess(() -> groupEntry(group), false);
+        }
+        sendNavigation(context, page, pageCount, "/bot group list ");
         return 1;
+    }
+
+    private static Component groupEntry(Group group) {
+        return Component.literal("▶ " + group.id() + " [" + group.presetIds().size() + "]")
+            .withStyle(ChatFormatting.AQUA)
+            .append(actionButton(" ↑", ChatFormatting.GREEN,
+                new ClickEvent.RunCommand("/bot group load " + group.id())))
+            .append(actionButton(" ↓", ChatFormatting.YELLOW,
+                new ClickEvent.RunCommand("/bot group unload " + group.id())))
+            .append(actionButton(" i", ChatFormatting.WHITE,
+                new ClickEvent.RunCommand("/bot group info " + group.id())))
+            .append(actionButton(" ×", ChatFormatting.RED,
+                new ClickEvent.SuggestCommand("/bot group remove " + group.id())));
     }
 
     private static int removeGroup(CommandContext<CommandSourceStack> context) {
@@ -174,6 +234,21 @@ public final class BotCommand {
         }
         context.getSource().sendSuccess(
             () -> Component.translatable("commands.fakeplayer.bot.group_member_added", preset, group), true);
+        return 1;
+    }
+
+    private static int removeFromGroup(CommandContext<CommandSourceStack> context) {
+        String group = StringArgumentType.getString(context, "group");
+        String preset = StringArgumentType.getString(context, "preset");
+        FakePlayerSavedData data = data(context);
+        if (data.group(group).isEmpty()) {
+            return failure(context, "commands.fakeplayer.bot.group_not_found", group);
+        }
+        if (!data.removeFromGroup(group, preset)) {
+            return failure(context, "commands.fakeplayer.bot.group_member_not_found", preset, group);
+        }
+        context.getSource().sendSuccess(
+            () -> Component.translatable("commands.fakeplayer.bot.group_member_removed", preset, group), true);
         return 1;
     }
 
@@ -213,18 +288,70 @@ public final class BotCommand {
         return succeeded;
     }
 
-    private static int groupInfo(CommandContext<CommandSourceStack> context) {
+    private static int groupInfo(CommandContext<CommandSourceStack> context, int page) {
         String id = StringArgumentType.getString(context, "group");
         Group group = data(context).group(id).orElse(null);
         if (group == null) {
             return failure(context, "commands.fakeplayer.bot.group_not_found", id);
         }
-        String members = group.presetIds().isEmpty()
-            ? Component.translatable("commands.fakeplayer.none").getString()
-            : String.join(", ", group.presetIds());
+        int pageCount = pageCount(group.presetIds().size());
+        if (!validPage(context, page, pageCount)) {
+            return 0;
+        }
         context.getSource().sendSuccess(
-            () -> Component.translatable("commands.fakeplayer.bot.group_info", group.id(), members), false);
+            () -> Component.translatable("commands.fakeplayer.bot.group_info_page",
+                group.id(), page, pageCount, group.presetIds().size()).withStyle(ChatFormatting.GOLD), false);
+        if (group.presetIds().isEmpty()) {
+            context.getSource().sendSuccess(() -> Component.translatable("commands.fakeplayer.none"), false);
+        }
+        int start = (page - 1) * PAGE_SIZE;
+        for (String preset : group.presetIds().subList(start, Math.min(start + PAGE_SIZE, group.presetIds().size()))) {
+            context.getSource().sendSuccess(() -> Component.literal("▶ " + preset).withStyle(ChatFormatting.AQUA)
+                .append(actionButton(" ↑", ChatFormatting.GREEN,
+                    new ClickEvent.RunCommand("/bot load " + preset)))
+                .append(actionButton(" −", ChatFormatting.RED,
+                    new ClickEvent.RunCommand("/bot group remove " + group.id() + " " + preset))), false);
+        }
+        sendNavigation(context, page, pageCount, "/bot group info " + group.id() + " ");
         return 1;
+    }
+
+    private static MutableComponent actionButton(String label, ChatFormatting color, ClickEvent clickEvent) {
+        return Component.literal(label).withStyle(color).withStyle(style -> style.withClickEvent(clickEvent));
+    }
+
+    private static void sendNavigation(
+        CommandContext<CommandSourceStack> context,
+        int page,
+        int pageCount,
+        String commandPrefix
+    ) {
+        if (pageCount <= 1) {
+            return;
+        }
+        MutableComponent navigation = Component.empty();
+        if (page > 1) {
+            navigation.append(actionButton("« ", ChatFormatting.GRAY,
+                new ClickEvent.RunCommand(commandPrefix + (page - 1))));
+        }
+        navigation.append(Component.translatable("commands.fakeplayer.bot.page_navigation", page, pageCount));
+        if (page < pageCount) {
+            navigation.append(actionButton(" »", ChatFormatting.GRAY,
+                new ClickEvent.RunCommand(commandPrefix + (page + 1))));
+        }
+        context.getSource().sendSuccess(() -> navigation, false);
+    }
+
+    private static int pageCount(int size) {
+        return Math.max(1, (size + PAGE_SIZE - 1) / PAGE_SIZE);
+    }
+
+    private static boolean validPage(CommandContext<CommandSourceStack> context, int page, int pageCount) {
+        if (page <= pageCount) {
+            return true;
+        }
+        failure(context, "commands.fakeplayer.bot.page_not_found", page, pageCount);
+        return false;
     }
 
     private static FakePlayerSavedData data(CommandContext<CommandSourceStack> context) {

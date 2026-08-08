@@ -39,6 +39,7 @@ public record BotActionPayload(int containerId, Action action, String first, Str
         REMOVE_PRESET,
         CREATE_GROUP,
         ADD_TO_GROUP,
+        REMOVE_FROM_GROUP,
         LOAD_GROUP,
         UNLOAD_GROUP,
         REMOVE_GROUP

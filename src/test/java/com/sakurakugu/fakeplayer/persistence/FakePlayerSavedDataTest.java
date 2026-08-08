@@ -92,6 +92,19 @@ class FakePlayerSavedDataTest {
     }
 
     @Test
+    void groupMemberCanBeRemovedCaseInsensitively() {
+        FakePlayerSavedData data = new FakePlayerSavedData();
+        data.putPreset(preset("Miner"));
+        data.createGroup("Workers");
+        data.addToGroup("Workers", "Miner");
+
+        assertTrue(data.removeFromGroup("workers", "mINER"));
+        assertTrue(data.group("Workers").orElseThrow().presetIds().isEmpty());
+        assertFalse(data.removeFromGroup("Workers", "Miner"));
+        assertFalse(data.removeFromGroup("Missing", "Miner"));
+    }
+
+    @Test
     void groupMembersAreDefensivelyCopied() {
         java.util.ArrayList<String> members = new java.util.ArrayList<>(List.of("Miner"));
         FakePlayerSavedData.Group group = new FakePlayerSavedData.Group("Workers", members);

@@ -216,6 +216,19 @@ public final class FakePlayerSavedData extends SavedData {
         return true;
     }
 
+    public boolean removeFromGroup(String groupId, String presetId) {
+        String normalizedPreset = key(presetId);
+        Group group = groups.get(key(groupId));
+        if (group == null || group.presetIds().stream().noneMatch(value -> key(value).equals(normalizedPreset))) {
+            return false;
+        }
+        groups.put(key(groupId), new Group(group.id(), group.presetIds().stream()
+            .filter(value -> !key(value).equals(normalizedPreset))
+            .toList()));
+        setDirty();
+        return true;
+    }
+
     private static String key(String value) {
         return value.toLowerCase(java.util.Locale.ROOT);
     }

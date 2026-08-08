@@ -10,6 +10,7 @@ import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.level.portal.TeleportTransition;
 
 /** 没有真实客户端连接、但参与原版服务端玩家逻辑的假玩家实体。 */
 public final class FakeServerPlayer extends ServerPlayer {
@@ -52,6 +53,23 @@ public final class FakeServerPlayer extends ServerPlayer {
     public void showAllSkinLayers() {
         // 该位掩码对应披风、外套、袖子、裤腿和帽子等全部皮肤附加层。
         getEntityData().set(DATA_PLAYER_MODE_CUSTOMISATION, (byte) 0x7f);
+    }
+
+    @Override
+    public void showEndCredits() {
+        // 假玩家没有客户端处理末地字幕和重生请求，直接保留当前实体返回重生点。
+        seenCredits = true;
+        teleport(findRespawnPositionAndUseSpawnBlock(false, TeleportTransition.DO_NOTHING));
+    }
+
+    @Override
+    public ServerPlayer teleport(TeleportTransition transition) {
+        ServerPlayer result = super.teleport(transition);
+        if (result != null && result.isChangingDimension()) {
+            // 真客户端会在接受传送后确认维度切换；假连接需要在服务端立即完成确认。
+            result.hasChangedDimension();
+        }
+        return result;
     }
 
     @Override
