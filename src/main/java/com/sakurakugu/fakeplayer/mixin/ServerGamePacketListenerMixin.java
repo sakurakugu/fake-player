@@ -36,6 +36,10 @@ public abstract class ServerGamePacketListenerMixin {
         }
         player.teleportSetPosition(destination, relatives);
         resetPosition();
+        if (player.level().getPlayerByUUID(player.getUUID()) != null) {
+            // 首次登录传送发生在玩家加入世界列表之前，此时不能访问尚未建立的距离管理记录。
+            player.level().getChunkSource().move(player);
+        }
         callbackInfo.cancel();
     }
 }

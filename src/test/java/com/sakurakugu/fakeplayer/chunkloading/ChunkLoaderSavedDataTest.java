@@ -79,6 +79,16 @@ class ChunkLoaderSavedDataTest {
         assertEquals(original.anchors(), decoded.anchors());
     }
 
+    @Test
+    void codecRejectsUnsafeRadius() {
+        ChunkLoaderSavedData data = new ChunkLoaderSavedData();
+        data.add(anchor("unsafe", 2, true, false));
+        var json = ChunkLoaderSavedData.CODEC.encodeStart(JsonOps.INSTANCE, data).getOrThrow();
+        json.getAsJsonObject().getAsJsonArray("anchors").get(0).getAsJsonObject().addProperty("radius", 33);
+
+        assertTrue(ChunkLoaderSavedData.CODEC.parse(JsonOps.INSTANCE, json).error().isPresent());
+    }
+
     private static ChunkLoaderSavedData.Anchor anchor(
         String name,
         int radius,

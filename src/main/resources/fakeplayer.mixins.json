@@ -9,7 +9,8 @@
     "PlayerKnockbackMixin",
     "PlayerEnderChestMixin",
     "PlayerListInvoker",
-    "ServerGamePacketListenerMixin"
+    "ServerGamePacketListenerMixin",
+    "TickRateManagerMixin"
   ],
   "client": [
     "AbstractClientPlayerMixin",

@@ -13,6 +13,8 @@ public final class FakePlayerConfig {
     private static final ModConfigSpec.EnumValue<ProfileStrategy> PROFILE_STRATEGY;
     private static final ModConfigSpec.BooleanValue RESTORE_FAKE_PLAYERS;
     private static final ModConfigSpec.IntValue MAX_CHUNK_LOADING_RADIUS;
+    private static final ModConfigSpec.IntValue MAX_FORCED_CHUNKS;
+    private static final ModConfigSpec.IntValue MAX_TICKING_CHUNKS;
     private static final ModConfigSpec.BooleanValue ENABLE_CONTAINER_TRANSFER_BUTTONS;
 
     static {
@@ -42,6 +44,12 @@ public final class FakePlayerConfig {
         MAX_CHUNK_LOADING_RADIUS = builder
             .comment("单个区块加载点允许的最大半径，0 表示仅中心区块，范围 0-32。")
             .defineInRange("maxRadius", 8, 0, 32);
+        MAX_FORCED_CHUNKS = builder
+            .comment("所有启用加载点允许强加载的区块总数，防止批量同步加载拖垮服务器。")
+            .defineInRange("maxForcedChunks", 2048, 1, 65536);
+        MAX_TICKING_CHUNKS = builder
+            .comment("所有 ticking 加载点允许完整刻处理的区块总数。")
+            .defineInRange("maxTickingChunks", 512, 1, 16384);
         builder.pop();
         builder.push("ui");
         ENABLE_CONTAINER_TRANSFER_BUTTONS = builder
@@ -78,6 +86,14 @@ public final class FakePlayerConfig {
 
     public static int maxChunkLoadingRadius() {
         return MAX_CHUNK_LOADING_RADIUS.get();
+    }
+
+    public static int maxForcedChunks() {
+        return MAX_FORCED_CHUNKS.get();
+    }
+
+    public static int maxTickingChunks() {
+        return MAX_TICKING_CHUNKS.get();
     }
 
     public static boolean containerTransferButtons() {

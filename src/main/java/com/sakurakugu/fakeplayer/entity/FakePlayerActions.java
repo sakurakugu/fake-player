@@ -598,14 +598,17 @@ public final class FakePlayerActions {
     }
 
     public void syncBodyRotation(ServerPlayer viewer) {
-        if (bodyYaw != null) {
+        if (bodyYaw != null && viewer.connection.hasChannel(BodyRotationPayload.TYPE)) {
             PacketDistributor.sendToPlayer(viewer, new BodyRotationPayload(player.getId(), bodyYaw));
         }
     }
 
     private void syncBodyRotation() {
-        PacketDistributor.sendToPlayersTrackingEntity(player,
-            new BodyRotationPayload(player.getId(), bodyYaw));
+        // 区块追踪列表也可能包含没有真实客户端连接的假玩家，逐个检查通道后再发送。
+        for (ServerPlayer viewer : player.level().getChunkSource().chunkMap
+            .getPlayers(player.chunkPosition(), false)) {
+            syncBodyRotation(viewer);
+        }
     }
 
     /** 原版玩家逻辑每刻会让身体追随视角，需要在实体刻结束后恢复独立朝向。 */

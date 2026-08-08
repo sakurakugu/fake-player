@@ -23,7 +23,7 @@ public final class ChunkLoaderSavedData extends SavedData {
         Codec.STRING.fieldOf("name").forGetter(Anchor::name),
         Identifier.CODEC.fieldOf("dimension").forGetter(Anchor::dimension),
         BlockPos.CODEC.fieldOf("position").forGetter(Anchor::position),
-        Codec.INT.fieldOf("radius").forGetter(Anchor::radius),
+        Codec.intRange(0, ChunkLoaderManager.ABSOLUTE_MAX_RADIUS).fieldOf("radius").forGetter(Anchor::radius),
         Codec.BOOL.optionalFieldOf("enabled", true).forGetter(Anchor::enabled),
         Codec.BOOL.optionalFieldOf("ticking", false).forGetter(Anchor::ticking)
     ).apply(instance, Anchor::new));

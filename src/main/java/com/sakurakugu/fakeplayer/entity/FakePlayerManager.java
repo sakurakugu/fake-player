@@ -151,6 +151,7 @@ public final class FakePlayerManager {
         }
         FakePlayerPossession.restoreTarget(fake);
         fake.actions().stop();
+        fake.shakeOffPlayers();
         if (removeResident) {
             FakePlayerPersistence.untrack(fake);
         }

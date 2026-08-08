@@ -10,7 +10,11 @@ import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.vehicle.boat.AbstractBoat;
 import net.minecraft.world.level.portal.TeleportTransition;
+import net.minecraft.world.phys.Vec3;
 
 /** 没有真实客户端连接、但参与原版服务端玩家逻辑的假玩家实体。 */
 public final class FakeServerPlayer extends ServerPlayer {
@@ -42,6 +46,29 @@ public final class FakeServerPlayer extends ServerPlayer {
     }
 
     @Override
+    public boolean isClientAuthoritative() {
+        // 假玩家没有客户端负责物理运算，其自身和所控制载具都必须以服务端为权威。
+        return false;
+    }
+
+    @Override
+    public Vec3 getKnownMovement() {
+        return knownServerMovement();
+    }
+
+    @Override
+    public Vec3 getKnownSpeed() {
+        return knownServerMovement();
+    }
+
+    private Vec3 knownServerMovement() {
+        Entity vehicle = getVehicle();
+        return vehicle != null && vehicle.getControllingPassenger() != this
+            ? vehicle.getKnownMovement()
+            : getDeltaMovement();
+    }
+
+    @Override
     public Component getTabListDisplayName() {
         Component displayName = super.getTabListDisplayName();
         if (displayName == null) {
@@ -60,6 +87,32 @@ public final class FakeServerPlayer extends ServerPlayer {
         // 假玩家没有客户端处理末地字幕和重生请求，直接保留当前实体返回重生点。
         seenCredits = true;
         teleport(findRespawnPositionAndUseSpawnBlock(false, TeleportTransition.DO_NOTHING));
+    }
+
+    @Override
+    public boolean startRiding(Entity vehicle, boolean force, boolean sendEventAndTriggers) {
+        if (!super.startRiding(vehicle, force, sendEventAndTriggers)) {
+            return false;
+        }
+        if (vehicle instanceof AbstractBoat) {
+            // 真客户端收到乘客包时会同步船头方向，假玩家需要在服务端完成同样的初始化。
+            yRotO = vehicle.getYRot();
+            setYRot(vehicle.getYRot());
+            setYHeadRot(vehicle.getYRot());
+        }
+        return true;
+    }
+
+    /** 移除假玩家前解除其与真人之间的骑乘关系，避免留下失效乘客引用。 */
+    public void shakeOffPlayers() {
+        if (getVehicle() instanceof Player) {
+            stopRiding();
+        }
+        for (Entity passenger : getIndirectPassengers()) {
+            if (passenger instanceof Player) {
+                passenger.stopRiding();
+            }
+        }
     }
 
     @Override
@@ -112,6 +165,7 @@ public final class FakeServerPlayer extends ServerPlayer {
 
     @Override
     public void die(DamageSource source) {
+        shakeOffPlayers();
         super.die(source);
         // 延迟到服务器任务队列移除，避免在死亡处理过程中直接修改玩家列表。
         server.execute(() -> FakePlayerManager.remove(this));
