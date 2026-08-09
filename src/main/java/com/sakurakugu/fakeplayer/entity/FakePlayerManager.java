@@ -2,8 +2,11 @@ package com.sakurakugu.fakeplayer.entity;
 
 import com.mojang.authlib.GameProfile;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerPersistence;
+import com.sakurakugu.fakeplayer.persistence.FakePlayerSavedData;
+import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -11,6 +14,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
+import net.minecraft.server.players.NameAndId;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
@@ -162,6 +166,114 @@ public final class FakePlayerManager {
     public static void kill(FakeServerPlayer fake) {
         // 与 Carpet 的 player kill 一致：这里表示让假玩家退出，而不是模拟一次死亡。
         remove(fake);
+    }
+
+    /** 将全部玩家状态迁移到新身份，并重建实体以同步玩家列表。 */
+    public static RenameResult rename(FakeServerPlayer player, GameProfile profile) {
+        MinecraftServer server = player.server();
+        if (player.isPassenger() || !player.getPassengers().isEmpty()) {
+            return RenameResult.failure("commands.fakeplayer.rename_riding");
+        }
+        FakePlayerSavedData savedData = FakePlayerPersistence.data(server);
+        if (server.getPlayerList().getPlayers().stream().anyMatch(other -> other != player
+            && (other.getUUID().equals(profile.id())
+                || other.getGameProfile().name().equalsIgnoreCase(profile.name())))) {
+            return RenameResult.failure("commands.fakeplayer.duplicate");
+        }
+        if (!profile.id().equals(player.getUUID())
+            && (server.getPlayerList().loadPlayerData(new NameAndId(profile)).isPresent()
+                || FakePlayerPersistence.hasPlayerProgressData(server, profile.id()))) {
+            return RenameResult.failure("commands.fakeplayer.rename_existing_data");
+        }
+
+        String oldName = player.getGameProfile().name();
+        UUID oldUuid = player.getUUID();
+        ServerLevel level = player.level();
+        Vec3 position = player.position();
+        Vec2 rotation = player.getRotationVector();
+        GameType gameType = player.gameMode.getGameModeForPlayer();
+        boolean flying = player.getAbilities().flying;
+        FakePlayerSavedData.PlayerSnapshot snapshot = FakePlayerSavedData.PlayerSnapshot.from(player, true);
+        savedData.migratePlayer(oldUuid, profile.id(), profile.name());
+        remove(player, false);
+
+        FakeServerPlayer renamed = null;
+        boolean progressDataMoved = false;
+        try {
+            if (!oldUuid.equals(profile.id())) {
+                FakePlayerPersistence.movePlayerProgressData(server, oldUuid, profile.id());
+                progressDataMoved = true;
+            }
+            renamed = restoreSnapshot(
+                server, level, snapshot, profile, position, rotation, gameType, flying);
+            if (!oldUuid.equals(profile.id())) {
+                FakePlayerPersistence.movePlayerData(renamed, oldUuid);
+            }
+            FakePlayerPersistence.track(renamed);
+            return RenameResult.success(renamed);
+        } catch (RuntimeException | IOException exception) {
+            if (renamed != null) {
+                remove(renamed, false);
+                try {
+                    FakePlayerPersistence.deletePlayerData(server, profile.id());
+                } catch (IOException cleanupException) {
+                    exception.addSuppressed(cleanupException);
+                }
+            }
+            if (progressDataMoved) {
+                try {
+                    FakePlayerPersistence.movePlayerProgressData(server, profile.id(), oldUuid);
+                } catch (IOException rollbackException) {
+                    exception.addSuppressed(rollbackException);
+                }
+            }
+            savedData.migratePlayer(profile.id(), oldUuid, oldName);
+            try {
+                FakeServerPlayer restored = restoreSnapshot(
+                    server, level, snapshot, new GameProfile(oldUuid, oldName), position, rotation, gameType, flying);
+                if (!oldUuid.equals(profile.id())) {
+                    FakePlayerPersistence.movePlayerData(restored, profile.id());
+                }
+                FakePlayerPersistence.track(restored);
+            } catch (RuntimeException | IOException rollbackException) {
+                exception.addSuppressed(rollbackException);
+            }
+            return RenameResult.failure("commands.fakeplayer.rename_failed");
+        }
+    }
+
+    private static FakeServerPlayer restoreSnapshot(
+        MinecraftServer server,
+        ServerLevel level,
+        FakePlayerSavedData.PlayerSnapshot snapshot,
+        GameProfile profile,
+        Vec3 position,
+        Vec2 rotation,
+        GameType gameType,
+        boolean flying
+    ) {
+        CompoundTag migratedPlayerData = snapshot.playerData();
+        migratedPlayerData.remove("UUID");
+        FakeServerPlayer restored = spawnFromPlayerData(
+            server, level, profile, position, rotation, gameType, flying,
+            migratedPlayerData);
+        restored.actions().restore(snapshot.actions());
+        restored.automation().setSettings(snapshot.automation());
+        return restored;
+    }
+
+    public record RenameResult(FakeServerPlayer player, String messageKey) {
+        public static RenameResult success(FakeServerPlayer player) {
+            return new RenameResult(player, "");
+        }
+
+        public static RenameResult failure(String messageKey) {
+            return new RenameResult(null, messageKey);
+        }
+
+        public boolean successful() {
+            return player != null;
+        }
     }
 
     public static FakeServerPlayer find(MinecraftServer server, String name) {

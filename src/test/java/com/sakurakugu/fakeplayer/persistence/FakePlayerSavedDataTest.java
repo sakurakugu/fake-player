@@ -64,6 +64,36 @@ class FakePlayerSavedDataTest {
     }
 
     @Test
+    void renamingPlayerUpdatesResidentAndEveryPresetWithSameUuid() {
+        FakePlayerSavedData data = new FakePlayerSavedData();
+        FakePlayerSavedData.Preset first = preset("Miner");
+        FakePlayerSavedData.PlayerSnapshot original = first.player();
+        FakePlayerSavedData.Preset second = new FakePlayerSavedData.Preset(
+            "MinerBackup",
+            "backup",
+            new FakePlayerSavedData.PlayerSnapshot(
+                original.uuid(), original.name(), original.playerData(), original.actions(), original.automation())
+        );
+        FakePlayerSavedData.Preset unrelated = preset("Builder");
+        data.putResident(resident(original.uuid(), original.name()));
+        data.putPreset(first);
+        data.putPreset(second);
+        data.putPreset(unrelated);
+
+        UUID renamedUuid = UUID.randomUUID();
+        data.migratePlayer(original.uuid(), renamedUuid, "RenamedBot");
+
+        assertEquals("RenamedBot", data.residents().getFirst().name());
+        assertEquals(renamedUuid, data.residents().getFirst().uuid());
+        assertEquals("RenamedBot", data.preset("Miner").orElseThrow().player().name());
+        assertEquals(renamedUuid, data.preset("Miner").orElseThrow().player().uuid());
+        assertFalse(data.preset("Miner").orElseThrow().player().playerData().contains("UUID"));
+        assertEquals("RenamedBot", data.preset("MinerBackup").orElseThrow().player().name());
+        assertEquals(unrelated, data.preset("Builder").orElseThrow());
+        assertTrue(data.isDirty());
+    }
+
+    @Test
     void groupMembershipRequiresExistingGroupAndPreset() {
         FakePlayerSavedData data = new FakePlayerSavedData();
         data.putPreset(preset("Miner"));
@@ -123,6 +153,7 @@ class FakePlayerSavedDataTest {
         data.putPreset(preset);
         data.createGroup("Workers");
         data.addToGroup("Workers", "Miner");
+        data.migratePlayer(preset.player().uuid(), UUID.randomUUID(), "RenamedBot");
 
         var json = FakePlayerSavedData.CODEC.encodeStart(JsonOps.INSTANCE, data).getOrThrow();
         FakePlayerSavedData decoded = FakePlayerSavedData.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
@@ -172,6 +203,7 @@ class FakePlayerSavedDataTest {
         CompoundTag data = new CompoundTag();
         data.putString("Dimension", "minecraft:overworld");
         data.putString("marker", marker);
+        data.putString("UUID", "old identity");
         return data;
     }
 

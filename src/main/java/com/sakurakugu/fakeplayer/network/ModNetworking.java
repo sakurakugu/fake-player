@@ -8,6 +8,8 @@ import com.sakurakugu.fakeplayer.menu.BotManagementMenu;
 import com.sakurakugu.fakeplayer.menu.ChunkLoaderActions;
 import com.sakurakugu.fakeplayer.menu.ChunkLoaderMenu;
 import com.sakurakugu.fakeplayer.menu.GlobalFakePlayerMenu;
+import com.sakurakugu.fakeplayer.menu.FakePlayerInventoryMenu;
+import com.sakurakugu.fakeplayer.menu.FakePlayerManagementActions;
 import com.sakurakugu.fakeplayer.entity.FakePlayerPossession;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
@@ -54,6 +56,18 @@ public final class ModNetworking {
                     && player.containerMenu.containerId == payload.containerId()
                     && FakePlayerConfig.canUseCommands(player.createCommandSourceStack())) {
                     FakePlayerCommand.spawnFromMenu(player, payload.name());
+                }
+            }
+        );
+        registrar.playToServer(
+            RenameFakePlayerPayload.TYPE,
+            RenameFakePlayerPayload.STREAM_CODEC,
+            (payload, context) -> {
+                if (context.player() instanceof ServerPlayer player
+                    && player.containerMenu instanceof FakePlayerInventoryMenu
+                    && player.containerMenu.containerId == payload.containerId()
+                    && FakePlayerConfig.canUseCommands(player.createCommandSourceStack())) {
+                    FakePlayerManagementActions.rename(player, payload.name());
                 }
             }
         );

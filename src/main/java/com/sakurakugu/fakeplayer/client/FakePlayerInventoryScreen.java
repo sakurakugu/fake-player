@@ -1,6 +1,7 @@
 package com.sakurakugu.fakeplayer.client;
 
 import com.sakurakugu.fakeplayer.menu.FakePlayerInventoryMenu;
+import com.sakurakugu.fakeplayer.network.RenameFakePlayerPayload;
 import com.sakurakugu.fakeplayer.client.ui.CompactButton;
 import com.sakurakugu.fakeplayer.client.ui.CompactSliderButton;
 import com.sakurakugu.fakeplayer.client.ui.IconButton;
@@ -25,6 +26,9 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+
+import java.util.Locale;
 
 /** 绘制假人完整物品栏；末影箱使用原版三行容器界面。 */
 public final class FakePlayerInventoryScreen extends AbstractContainerScreen<FakePlayerInventoryMenu> {
@@ -68,7 +72,10 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private static final int DROP_PANEL_HEIGHT = 109;
     private static final int DROP_TAB_WIDTH = 21;
     private static final int DROP_TAB_HEIGHT = 24;
-    private static final int AIM_PANEL_TOP = 8;
+    private static final int INFO_PANEL_TOP = 8;
+    private static final int INFO_PANEL_WIDTH = 130;
+    private static final int INFO_PANEL_HEIGHT = 207;
+    private static final int AIM_PANEL_TOP = INFO_PANEL_TOP + DROP_TAB_HEIGHT + 2;
     private static final int CONTINUOUS_PANEL_TOP = AIM_PANEL_TOP + DROP_TAB_HEIGHT + 2;
     private static final int DROP_PANEL_TOP = CONTINUOUS_PANEL_TOP + DROP_TAB_HEIGHT + 2;
     private static final int TRANSFER_BUTTON_LEFT = 144;
@@ -109,6 +116,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
 
     private final OverlayPanelManager panelManager = new OverlayPanelManager();
     // 按界面从上到下注册，展开的面板会遮挡并禁用其下方的标签。
+    private final OverlayPanelManager.Panel infoPanel = panelManager.addPanel();
     private final OverlayPanelManager.Panel aimPanel = panelManager.addPanel();
     private final OverlayPanelManager.Panel continuousPanel = panelManager.addPanel();
     private final OverlayPanelManager.Panel dropPanel = panelManager.addPanel();
@@ -131,6 +139,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private EditBox yawInput;
     private ToggleSwitchButton bodyFollowsHeadButton;
     private boolean syncingAimInputs;
+    private EditBox nameInput;
 
     public FakePlayerInventoryScreen(FakePlayerInventoryMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, menu.screenWidth(), menu.screenHeight());
@@ -190,6 +199,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         );
         addTransferButtons(TRANSFER_BUTTON_TOP);
         addControlButtons();
+        addInfoPanel();
         addAimPanel();
 
         int panelLeft = leftPos + imageWidth;
@@ -350,6 +360,37 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         );
         dropPanel.bind(tabButton, dropPanelOverlay, dropModeButton, dropAmountSlider,
             continuousDropButton, executeDropButton);
+    }
+
+    private void addInfoPanel() {
+        int left = leftPos + imageWidth;
+        int top = topPos + INFO_PANEL_TOP;
+        InfoPanelOverlay overlay = addRenderableWidget(new InfoPanelOverlay(left, top));
+        nameInput = addRenderableWidget(new EditBox(font, left + 6, top + 28, 86, 16,
+            Component.translatable("gui.fakeplayer.info.name")));
+        nameInput.setMaxLength(16);
+        nameInput.setValue(menu.targetName());
+        nameInput.setHint(Component.translatable("gui.fakeplayer.info.name"));
+        Button renameButton = addRenderableWidget(new CompactButton(
+            left + 96, top + 28, 28, 16,
+            Component.translatable("gui.fakeplayer.info.rename"),
+            button -> submitRename()
+        ));
+        Button tab = addRenderableWidget(new IconTabButton(
+            left, top, DROP_TAB_WIDTH, DROP_TAB_HEIGHT,
+            new ItemStack(Items.NAME_TAG),
+            Component.translatable("gui.fakeplayer.info.title"),
+            button -> infoPanel.toggle()
+        ));
+        tab.setTooltip(Tooltip.create(Component.translatable("gui.fakeplayer.info.title")));
+        infoPanel.bind(tab, overlay, nameInput, renameButton);
+    }
+
+    private void submitRename() {
+        String name = nameInput.getValue().trim();
+        if (!name.equals(menu.targetName())) {
+            ClientPacketDistributor.sendToServer(new RenameFakePlayerPayload(menu.containerId, name));
+        }
     }
 
     /** 在假人物品栏的空白区域添加移动和即时动作操控杆。 */
@@ -577,6 +618,24 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         }
     }
 
+    /** 信息面板的前景背景，用于遮住下面板的控件。 */
+    private final class InfoPanelOverlay extends Button {
+        private InfoPanelOverlay(int x, int y) {
+            super(x, y, INFO_PANEL_WIDTH, INFO_PANEL_HEIGHT, Component.empty(), button -> {}, DEFAULT_NARRATION);
+            active = false;
+        }
+
+        @Override
+        protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+            drawInfoPanel(graphics);
+        }
+
+        @Override
+        public boolean isMouseOver(double mouseX, double mouseY) {
+            return false;
+        }
+    }
+
     @Override
     protected void containerTick() {
         super.containerTick();
@@ -739,6 +798,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         drawDropPanel(graphics);
         drawContinuousPanel(graphics);
         drawAimPanel(graphics);
+        drawInfoPanel(graphics);
 
         for (int slot = 0; slot < HOTBAR_SLOT_COUNT; slot++) {
             int x = leftPos + HOTBAR_SELECTOR_LEFT + slot * HOTBAR_SLOT_SPACING;
@@ -808,6 +868,58 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             graphics.text(font, Component.translatable("gui.fakeplayer.drop_amount"), left + 6, top + 31,
                 0xFF404040, false);
         }
+    }
+
+    private void drawInfoPanel(GuiGraphicsExtractor graphics) {
+        int left = leftPos + imageWidth;
+        int top = topPos + INFO_PANEL_TOP;
+        PixelGui.drawTabBackground(graphics, left, top,
+            infoPanel.isOpen() ? INFO_PANEL_WIDTH : DROP_TAB_WIDTH,
+            infoPanel.isOpen() ? INFO_PANEL_HEIGHT : DROP_TAB_HEIGHT);
+        if (!infoPanel.isOpen()) {
+            return;
+        }
+
+        graphics.text(font, Component.translatable("gui.fakeplayer.info.title"), left + 22, top + 8,
+            0xFF404040, false);
+        int textLeft = left + 7;
+        int line = top + 51;
+        drawInfoLine(graphics, "gui.fakeplayer.info.health", formatted(menu.health()), formatted(menu.maxHealth()),
+            textLeft, line);
+        drawInfoLine(graphics, "gui.fakeplayer.info.food", menu.food(), 20, textLeft, line + 15);
+        drawInfoLine(graphics, "gui.fakeplayer.info.saturation", formatted(menu.saturation()), textLeft, line + 30);
+        drawInfoLine(graphics, "gui.fakeplayer.info.armor", menu.armor(), textLeft, line + 45);
+        drawInfoLine(graphics, "gui.fakeplayer.info.experience", menu.experienceLevel(), textLeft, line + 60);
+        drawInfoLine(graphics, "gui.fakeplayer.info.game_mode", gameModeName(), textLeft, line + 75);
+        drawInfoLine(graphics, "gui.fakeplayer.info.position_x", menu.positionX(), textLeft, line + 90);
+        drawInfoLine(graphics, "gui.fakeplayer.info.position_y", menu.positionY(), textLeft, line + 105);
+        drawInfoLine(graphics, "gui.fakeplayer.info.position_z", menu.positionZ(), textLeft, line + 120);
+    }
+
+    private void drawInfoLine(
+        GuiGraphicsExtractor graphics, String key, Object value, int left, int top
+    ) {
+        graphics.text(font, Component.translatable(key, value), left, top, 0xFF404040, false);
+    }
+
+    private void drawInfoLine(
+        GuiGraphicsExtractor graphics, String key, Object first, Object second, int left, int top
+    ) {
+        graphics.text(font, Component.translatable(key, first, second), left, top, 0xFF404040, false);
+    }
+
+    private String formatted(float value) {
+        return String.format(Locale.ROOT, "%.1f", value);
+    }
+
+    private Component gameModeName() {
+        String id = switch (menu.gameMode()) {
+            case 1 -> "creative";
+            case 2 -> "adventure";
+            case 3 -> "spectator";
+            default -> "survival";
+        };
+        return Component.translatable("selectWorld.gameMode." + id);
     }
 
     private void drawAutomationPanel(GuiGraphicsExtractor graphics) {

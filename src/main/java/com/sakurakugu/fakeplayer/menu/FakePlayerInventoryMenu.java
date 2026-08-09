@@ -36,6 +36,8 @@ import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.IntConsumer;
+import java.util.function.IntSupplier;
 
 /** 编辑假人的完整物品栏或末影箱，并同时显示操作者背包。 */
 public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
@@ -152,6 +154,26 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     private DataSlot bodyYawData;
     private int bodyFollowsHeadSnapshot;
     private final DataSlot bodyFollowsHead;
+    private int healthSnapshot;
+    private int maxHealthSnapshot;
+    private int foodSnapshot;
+    private int saturationSnapshot;
+    private int armorSnapshot;
+    private int experienceLevelSnapshot;
+    private int gameModeSnapshot;
+    private int positionXSnapshot;
+    private int positionYSnapshot;
+    private int positionZSnapshot;
+    private final DataSlot health;
+    private final DataSlot maxHealth;
+    private final DataSlot food;
+    private final DataSlot saturation;
+    private final DataSlot armor;
+    private final DataSlot experienceLevel;
+    private final DataSlot gameMode;
+    private final DataSlot positionX;
+    private final DataSlot positionY;
+    private final DataSlot positionZ;
 
     public FakePlayerInventoryMenu(int containerId, Inventory inventory, RegistryFriendlyByteBuf data) {
         this(
@@ -240,6 +262,37 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             }
             public void set(int value) { bodyFollowsHeadSnapshot = value; }
         });
+        this.health = syncedValue(
+            () -> target == null ? healthSnapshot : Math.round(target.getHealth() * 100.0F),
+            value -> healthSnapshot = value);
+        this.maxHealth = syncedValue(
+            () -> target == null ? maxHealthSnapshot : Math.round(target.getMaxHealth() * 100.0F),
+            value -> maxHealthSnapshot = value);
+        this.food = syncedValue(
+            () -> target == null ? foodSnapshot : target.getFoodData().getFoodLevel(),
+            value -> foodSnapshot = value);
+        this.saturation = syncedValue(
+            () -> target == null ? saturationSnapshot
+                : Math.round(target.getFoodData().getSaturationLevel() * 100.0F),
+            value -> saturationSnapshot = value);
+        this.armor = syncedValue(
+            () -> target == null ? armorSnapshot : target.getArmorValue(),
+            value -> armorSnapshot = value);
+        this.experienceLevel = syncedValue(
+            () -> target == null ? experienceLevelSnapshot : target.experienceLevel,
+            value -> experienceLevelSnapshot = value);
+        this.gameMode = syncedValue(
+            () -> target == null ? gameModeSnapshot : target.gameMode.getGameModeForPlayer().getId(),
+            value -> gameModeSnapshot = value);
+        this.positionX = syncedValue(
+            () -> target == null ? positionXSnapshot : target.getBlockX(),
+            value -> positionXSnapshot = value);
+        this.positionY = syncedValue(
+            () -> target == null ? positionYSnapshot : target.getBlockY(),
+            value -> positionYSnapshot = value);
+        this.positionZ = syncedValue(
+            () -> target == null ? positionZSnapshot : target.getBlockZ(),
+            value -> positionZSnapshot = value);
         this.automationMaskSnapshot = automationMask;
         this.continuousControlMaskSnapshot = continuousControlMask;
         this.continuousIntervals[0] = attackInterval;
@@ -330,6 +383,20 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             addGrid(targetContainer, 0, 3, 8, 18);
             addViewerSlots(viewerInventory, 8, 85);
         }
+    }
+
+    private DataSlot syncedValue(IntSupplier getter, IntConsumer setter) {
+        return addDataSlot(new DataSlot() {
+            @Override
+            public int get() {
+                return getter.getAsInt();
+            }
+
+            @Override
+            public void set(int value) {
+                setter.accept(value);
+            }
+        });
     }
 
     private void addTargetInventorySlots(Container inventory, LivingEntity owner) {
@@ -820,6 +887,14 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
         return canAccess(player);
     }
 
+    boolean canManageTarget(Player player) {
+        return target != null && canAccess(player) && !FakePlayerPossession.isPossessed(target);
+    }
+
+    FakeServerPlayer target() {
+        return target;
+    }
+
     public String targetName() {
         return targetName;
     }
@@ -831,6 +906,17 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     public int targetEntityId() {
         return targetEntityId;
     }
+
+    public float health() { return health.get() / 100.0F; }
+    public float maxHealth() { return maxHealth.get() / 100.0F; }
+    public int food() { return food.get(); }
+    public float saturation() { return saturation.get() / 100.0F; }
+    public int armor() { return armor.get(); }
+    public int experienceLevel() { return experienceLevel.get(); }
+    public int gameMode() { return gameMode.get(); }
+    public int positionX() { return positionX.get(); }
+    public int positionY() { return positionY.get(); }
+    public int positionZ() { return positionZ.get(); }
 
     public int selectedHotbarSlot() {
         return selectedHotbarSlot.get();

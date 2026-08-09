@@ -6,13 +6,17 @@ import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.entity.FakePlayerActions;
 import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
+import com.sakurakugu.fakeplayer.mixin.PlayerListInvoker;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerSavedData.PlayerSnapshot;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerSavedData.Preset;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerSavedData.Resident;
 import java.io.IOException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.WeakHashMap;
@@ -97,6 +101,94 @@ public final class FakePlayerPersistence {
     /** 读取原版 playerdata；调用方应在玩家加入玩家列表前应用主体数据。 */
     public static Optional<CompoundTag> readPlayerData(FakeServerPlayer player) {
         return player.server().getPlayerList().loadPlayerData(player.nameAndId());
+    }
+
+    /** 检查目标 UUID 是否已有原版统计或进度数据，避免改名时覆盖其他玩家。 */
+    public static boolean hasPlayerProgressData(MinecraftServer server, UUID uuid) {
+        return Files.exists(playerDataFile(server.getWorldPath(LevelResource.PLAYER_STATS_DIR), uuid))
+            || Files.exists(playerDataFile(server.getWorldPath(LevelResource.PLAYER_ADVANCEMENTS_DIR), uuid));
+    }
+
+    /** 在新实体加入玩家列表前迁移统计和进度，使原版直接按新 UUID 加载它们。 */
+    public static void movePlayerProgressData(MinecraftServer server, UUID oldUuid, UUID newUuid) throws IOException {
+        movePlayerProgressData(
+            server.getWorldPath(LevelResource.PLAYER_STATS_DIR),
+            server.getWorldPath(LevelResource.PLAYER_ADVANCEMENTS_DIR),
+            oldUuid,
+            newUuid
+        );
+    }
+
+    static void movePlayerProgressData(
+        Path statsDirectory,
+        Path advancementsDirectory,
+        UUID oldUuid,
+        UUID newUuid
+    ) throws IOException {
+        if (oldUuid.equals(newUuid)) {
+            return;
+        }
+
+        List<PlayerDataMove> moves = List.of(
+            new PlayerDataMove(playerDataFile(statsDirectory, oldUuid), playerDataFile(statsDirectory, newUuid)),
+            new PlayerDataMove(
+                playerDataFile(advancementsDirectory, oldUuid),
+                playerDataFile(advancementsDirectory, newUuid)
+            )
+        ).stream().filter(move -> Files.exists(move.source())).toList();
+        for (PlayerDataMove move : moves) {
+            if (Files.exists(move.target())) {
+                throw new FileAlreadyExistsException(move.target().toString());
+            }
+        }
+
+        List<PlayerDataMove> completed = new ArrayList<>();
+        try {
+            for (PlayerDataMove move : moves) {
+                Files.move(move.source(), move.target());
+                completed.add(move);
+            }
+        } catch (IOException exception) {
+            // 两类文件必须一起迁移；第二个文件失败时立即恢复已经移动的文件。
+            for (int index = completed.size() - 1; index >= 0; index--) {
+                PlayerDataMove move = completed.get(index);
+                try {
+                    Files.move(move.target(), move.source());
+                } catch (IOException rollbackException) {
+                    exception.addSuppressed(rollbackException);
+                }
+            }
+            throw exception;
+        }
+    }
+
+    private static Path playerDataFile(Path directory, UUID uuid) {
+        return directory.resolve(uuid + ".json");
+    }
+
+    /** 立即保存新身份的数据，并删除改名前 UUID 对应的原版玩家存档。 */
+    public static void movePlayerData(FakeServerPlayer player, UUID oldUuid) throws IOException {
+        ((PlayerListInvoker) player.server().getPlayerList()).fakeplayer$save(player);
+        Path playerDataDirectory = player.server().getWorldPath(LevelResource.PLAYER_DATA_DIR);
+        Path newPlayerData = playerDataDirectory.resolve(player.getStringUUID() + ".dat");
+        if (!Files.isRegularFile(newPlayerData)) {
+            throw new IOException("新身份的玩家数据未成功写入：" + newPlayerData);
+        }
+        deletePlayerData(playerDataDirectory, oldUuid);
+    }
+
+    /** 删除指定 UUID 的当前存档及原版轮换备份。 */
+    public static void deletePlayerData(MinecraftServer server, UUID uuid) throws IOException {
+        deletePlayerData(server.getWorldPath(LevelResource.PLAYER_DATA_DIR), uuid);
+    }
+
+    static void deletePlayerData(Path playerDataDirectory, UUID uuid) throws IOException {
+        String fileName = uuid.toString();
+        Files.deleteIfExists(playerDataDirectory.resolve(fileName + ".dat"));
+        Files.deleteIfExists(playerDataDirectory.resolve(fileName + ".dat_old"));
+    }
+
+    private record PlayerDataMove(Path source, Path target) {
     }
 
     /** 在原版登录流程之前应用玩家主体数据，使首次同步和登录事件看到正确状态。 */

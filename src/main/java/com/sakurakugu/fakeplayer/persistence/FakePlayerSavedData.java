@@ -167,6 +167,35 @@ public final class FakePlayerSavedData extends SavedData {
         setDirty();
     }
 
+    /** 将玩家身份迁移到新 UUID，并同步驻留记录和所有关联预设。 */
+    public void migratePlayer(UUID oldUuid, UUID newUuid, String name) {
+        boolean changed = false;
+        Resident resident = residents.remove(oldUuid);
+        if (resident != null && !resident.name().equals(name)) {
+            residents.put(newUuid, new Resident(newUuid, name, resident.automation()));
+            changed = true;
+        } else if (resident != null) {
+            residents.put(newUuid, new Resident(newUuid, name, resident.automation()));
+            changed = !oldUuid.equals(newUuid);
+        }
+        for (Map.Entry<String, Preset> entry : presets.entrySet()) {
+            Preset preset = entry.getValue();
+            PlayerSnapshot player = preset.player();
+            if (!player.uuid().equals(oldUuid)) {
+                continue;
+            }
+            CompoundTag migratedData = player.playerData();
+            migratedData.remove("UUID");
+            PlayerSnapshot renamed = new PlayerSnapshot(
+                newUuid, name, migratedData, player.actions(), player.automation());
+            entry.setValue(new Preset(preset.id(), preset.description(), renamed));
+            changed = true;
+        }
+        if (changed) {
+            setDirty();
+        }
+    }
+
     public boolean removePreset(String id) {
         String normalized = key(id);
         if (presets.remove(normalized) == null) {
