@@ -8,6 +8,7 @@ import net.minecraft.network.PacketListener;
 import net.minecraft.network.ProtocolInfo;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketFlow;
+import net.neoforged.neoforge.network.registration.NetworkRegistry;
 
 /** 一个没有远程客户端、会丢弃出站数据的服务端连接。 */
 public final class FakeConnection extends Connection {
@@ -19,6 +20,8 @@ public final class FakeConnection extends Connection {
         super(PacketFlow.SERVERBOUND);
         // NeoForge 会在玩家登录期间读取连接通道的属性，内嵌通道用于提供完整的本地连接状态。
         channel = new EmbeddedChannel(this);
+        // 模拟连接接受所有已注册载荷，实际出站数据仍由 send 方法直接丢弃。
+        NetworkRegistry.configureMockConnection(this);
     }
 
     @Override

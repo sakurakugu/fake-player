@@ -72,16 +72,16 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private static final int DROP_PANEL_HEIGHT = 109;
     private static final int DROP_TAB_WIDTH = 21;
     private static final int DROP_TAB_HEIGHT = 24;
-    private static final int INFO_PANEL_TOP = 8;
     private static final int INFO_PANEL_WIDTH = 130;
     private static final int INFO_PANEL_HEIGHT = 207;
-    private static final int AIM_PANEL_TOP = INFO_PANEL_TOP + DROP_TAB_HEIGHT + 2;
+    private static final int AIM_PANEL_TOP = 8;
     private static final int CONTINUOUS_PANEL_TOP = AIM_PANEL_TOP + DROP_TAB_HEIGHT + 2;
-    private static final int DROP_PANEL_TOP = CONTINUOUS_PANEL_TOP + DROP_TAB_HEIGHT + 2;
+    private static final int INFO_PANEL_TOP = CONTINUOUS_PANEL_TOP + DROP_TAB_HEIGHT + 2;
+    private static final int DROP_PANEL_TOP = INFO_PANEL_TOP + DROP_TAB_HEIGHT + 2;
     private static final int TRANSFER_BUTTON_LEFT = 144;
     private static final int TRANSFER_BUTTON_TOP = 165;
     private static final int ENDER_CHEST_TRANSFER_BUTTON_TOP = 73;
-    // 侧栏依次放置视觉朝向、持续控制、Q 键丢弃、自动化和骑乘标签。
+    // 侧栏依次放置视觉朝向、持续控制、假人信息、Q 键丢弃、自动化和骑乘标签。
     private static final int AUTOMATION_PANEL_TOP = DROP_PANEL_TOP + DROP_TAB_HEIGHT + 2;
     private static final int AUTOMATION_PANEL_WIDTH = 94;
     private static final int AUTOMATION_PANEL_HEIGHT = 97;
@@ -116,9 +116,9 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
 
     private final OverlayPanelManager panelManager = new OverlayPanelManager();
     // 按界面从上到下注册，展开的面板会遮挡并禁用其下方的标签。
-    private final OverlayPanelManager.Panel infoPanel = panelManager.addPanel();
     private final OverlayPanelManager.Panel aimPanel = panelManager.addPanel();
     private final OverlayPanelManager.Panel continuousPanel = panelManager.addPanel();
+    private final OverlayPanelManager.Panel infoPanel = panelManager.addPanel();
     private final OverlayPanelManager.Panel dropPanel = panelManager.addPanel();
     private final OverlayPanelManager.Panel automationPanel = panelManager.addPanel();
     private final OverlayPanelManager.Panel mountPanel = panelManager.addPanel();
@@ -796,9 +796,9 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         drawMountPanel(graphics);
         drawAutomationPanel(graphics);
         drawDropPanel(graphics);
+        drawInfoPanel(graphics);
         drawContinuousPanel(graphics);
         drawAimPanel(graphics);
-        drawInfoPanel(graphics);
 
         for (int slot = 0; slot < HOTBAR_SLOT_COUNT; slot++) {
             int x = leftPos + HOTBAR_SELECTOR_LEFT + slot * HOTBAR_SLOT_SPACING;

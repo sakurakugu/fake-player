@@ -5,6 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.google.common.collect.ArrayListMultimap;
+import com.mojang.authlib.GameProfile;
+import com.mojang.authlib.properties.Property;
+import com.mojang.authlib.properties.PropertyMap;
 import com.mojang.serialization.JsonOps;
 import com.sakurakugu.fakeplayer.entity.FakePlayerActions;
 import java.util.List;
@@ -81,7 +85,7 @@ class FakePlayerSavedDataTest {
         data.putPreset(unrelated);
 
         UUID renamedUuid = UUID.randomUUID();
-        data.migratePlayer(original.uuid(), renamedUuid, "RenamedBot");
+        data.migratePlayer(original.uuid(), new GameProfile(renamedUuid, "RenamedBot"));
 
         assertEquals("RenamedBot", data.residents().getFirst().name());
         assertEquals(renamedUuid, data.residents().getFirst().uuid());
@@ -153,7 +157,7 @@ class FakePlayerSavedDataTest {
         data.putPreset(preset);
         data.createGroup("Workers");
         data.addToGroup("Workers", "Miner");
-        data.migratePlayer(preset.player().uuid(), UUID.randomUUID(), "RenamedBot");
+        data.migratePlayer(preset.player().uuid(), new GameProfile(UUID.randomUUID(), "RenamedBot"));
 
         var json = FakePlayerSavedData.CODEC.encodeStart(JsonOps.INSTANCE, data).getOrThrow();
         FakePlayerSavedData decoded = FakePlayerSavedData.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
@@ -161,6 +165,36 @@ class FakePlayerSavedDataTest {
         assertEquals(data.residents(), decoded.residents());
         assertEquals(data.presets(), decoded.presets());
         assertEquals(data.groups(), decoded.groups());
+    }
+
+    @Test
+    void codecPreservesSignedProfileProperties() {
+        UUID uuid = UUID.randomUUID();
+        ArrayListMultimap<String, Property> properties = ArrayListMultimap.create();
+        properties.put("textures", new Property("textures", "encoded skin", "signed value"));
+        GameProfile profile = new GameProfile(uuid, "SkinnedBot", new PropertyMap(properties));
+        FakePlayerSavedData data = new FakePlayerSavedData();
+        data.migratePlayer(uuid, profile);
+        FakePlayerSavedData.PlayerSnapshot snapshot = new FakePlayerSavedData.PlayerSnapshot(
+            uuid,
+            profile.name(),
+            profile.properties().values().stream()
+                .map(property -> new FakePlayerSavedData.ProfileProperty(
+                    property.name(), property.value(), property.signature()))
+                .toList(),
+            playerData("skin"),
+            FakePlayerActions.State.EMPTY,
+            com.sakurakugu.fakeplayer.automation.FakePlayerAutomation.AutomationState.DEFAULT
+        );
+        data.putPreset(new FakePlayerSavedData.Preset("Skinned", "", snapshot));
+
+        var json = FakePlayerSavedData.CODEC.encodeStart(JsonOps.INSTANCE, data).getOrThrow();
+        FakePlayerSavedData decoded = FakePlayerSavedData.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
+        Property restored = decoded.preset("Skinned").orElseThrow().player().profile()
+            .properties().get("textures").iterator().next();
+
+        assertEquals("encoded skin", restored.value());
+        assertEquals("signed value", restored.signature());
     }
 
     private static FakePlayerSavedData.Preset preset(String id) {

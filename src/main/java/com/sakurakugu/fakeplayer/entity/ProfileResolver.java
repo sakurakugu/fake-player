@@ -1,6 +1,7 @@
 package com.sakurakugu.fakeplayer.entity;
 
 import com.mojang.authlib.GameProfile;
+import com.sakurakugu.fakeplayer.FakePlayerMod;
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig.ProfileStrategy;
 import java.util.Locale;
@@ -8,6 +9,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.players.NameAndId;
@@ -15,6 +17,7 @@ import net.minecraft.util.Util;
 
 /** 按服务端策略解析假玩家身份，并阻止同名异步解析并发执行。 */
 public final class ProfileResolver {
+    private static final Pattern MOJANG_PLAYER_NAME = Pattern.compile("[A-Za-z0-9_]{1,16}");
     private static final Set<String> RESOLVING_NAMES = ConcurrentHashMap.newKeySet();
 
     private ProfileResolver() {
@@ -42,42 +45,68 @@ public final class ProfileResolver {
             return CompletableFuture.completedFuture(offline(name));
         }
 
-        Optional<NameAndId> cached = server.services().nameToIdCache().get(name);
         if (strategy == ProfileStrategy.CACHE_ONLY) {
+            Optional<NameAndId> cached = server.services().nameToIdCache().get(name);
             return CompletableFuture.completedFuture(cached
                 .map(identity -> Result.success(Status.RESOLVED_CACHE, toProfile(identity)))
                 .orElseGet(() -> fallbackOffline(name, Status.NOT_FOUND)));
         }
 
-        if (!server.usesAuthentication()) {
+        if (!MOJANG_PLAYER_NAME.matcher(name).matches()) {
             return CompletableFuture.completedFuture(fallbackOffline(name, Status.NOT_FOUND));
         }
 
-        // 在线服务器不能采用以前由离线模式写入缓存的同名 UUID。
-        if (cached.isPresent()
-            && !cached.get().id().equals(UUIDUtil.createOfflinePlayerUUID(cached.get().name()))) {
-            NameAndId identity = cached.get();
-            return CompletableFuture.completedFuture(Result.success(Status.RESOLVED_CACHE, toProfile(identity)));
-        }
-
+        // 名称缓存可能包含离线 UUID；只复用已确认的正版身份，避免缓存污染。
         return CompletableFuture
-            .supplyAsync(() -> server.services().profileResolver().fetchByName(name), Util.backgroundExecutor())
-            .handle((profile, throwable) -> {
-                if (throwable != null) {
-                    return fallbackOffline(name, Status.SERVICE_UNAVAILABLE);
-                }
-                if (profile.isEmpty()) {
-                    return fallbackOffline(name, Status.NOT_FOUND);
-                }
-                GameProfile resolved = profile.get();
-                return Result.success(Status.RESOLVED_ONLINE, resolved);
-            })
+            .supplyAsync(() -> resolveOnline(server, name), Util.nonCriticalIoPool())
             .thenApplyAsync(result -> {
                 if (result.status() == Status.RESOLVED_ONLINE) {
                     server.services().nameToIdCache().add(new NameAndId(result.profile()));
                 }
                 return result;
             }, server);
+    }
+
+    private static Result resolveOnline(MinecraftServer server, String name) {
+        Optional<NameAndId> cached;
+        try {
+            cached = server.services().nameToIdCache().get(name);
+        } catch (RuntimeException exception) {
+            return fallbackOffline(name, Status.SERVICE_UNAVAILABLE);
+        }
+
+        NameAndId identity;
+        Status status;
+        if (cached.isPresent() && isOnlineIdentity(cached.get())) {
+            identity = cached.get();
+            status = Status.RESOLVED_CACHE;
+        } else {
+            Optional<com.mojang.authlib.yggdrasil.response.NameAndId> queried;
+            try {
+                queried = server.services().profileRepository().findProfileByName(name);
+            } catch (RuntimeException exception) {
+                return fallbackOffline(name, Status.SERVICE_UNAVAILABLE);
+            }
+            if (queried.isEmpty()) {
+                return fallbackOffline(name, Status.NOT_FOUND);
+            }
+            com.mojang.authlib.yggdrasil.response.NameAndId result = queried.get();
+            identity = new NameAndId(new GameProfile(result.id(), result.name()));
+            status = Status.RESOLVED_ONLINE;
+        }
+
+        GameProfile profile = toProfile(identity);
+        try {
+            profile = server.services().profileResolver().fetchById(identity.id()).orElse(profile);
+        } catch (RuntimeException exception) {
+            // 身份已经确认时不切换 UUID；皮肤服务恢复后重新生成即可再次补全。
+            FakePlayerMod.LOGGER.warn("获取玩家 {} 的皮肤失败，将使用默认皮肤", identity.name(), exception);
+        }
+        return Result.success(status, profile);
+    }
+
+    private static boolean isOnlineIdentity(NameAndId identity) {
+        return !identity.id().equals(UUIDUtil.createOfflinePlayerUUID(identity.name()));
     }
 
     private static Result fallbackOffline(String name, Status failure) {

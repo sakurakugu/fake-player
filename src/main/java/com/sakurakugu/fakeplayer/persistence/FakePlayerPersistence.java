@@ -1,6 +1,5 @@
 package com.sakurakugu.fakeplayer.persistence;
 
-import com.mojang.authlib.GameProfile;
 import com.sakurakugu.fakeplayer.FakePlayerMod;
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.entity.FakePlayerActions;
@@ -242,7 +241,7 @@ public final class FakePlayerPersistence {
             return LoadResult.failure("原版玩家存档不存在：" + resident.uuid());
         }
         // 驻留恢复不携带持续动作，启动后由操作者重新设置；自动化设置仍随驻留记录恢复。
-        return load(server, new PlayerSnapshot(resident.uuid(), resident.name(), saved.get(),
+        return load(server, new PlayerSnapshot(resident.uuid(), resident.name(), resident.profileProperties(), saved.get(),
             FakePlayerActions.State.EMPTY, resident.automation()), false);
     }
 
@@ -277,7 +276,7 @@ public final class FakePlayerPersistence {
             fake = FakePlayerManager.spawnFromPlayerData(
                 server,
                 spawnState.level(),
-                new GameProfile(snapshot.uuid(), snapshot.name()),
+                snapshot.profile(),
                 spawnState.position(),
                 spawnState.rotation(),
                 spawnState.gameType(),

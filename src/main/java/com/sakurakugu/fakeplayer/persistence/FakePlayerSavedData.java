@@ -1,5 +1,9 @@
 package com.sakurakugu.fakeplayer.persistence;
 
+import com.google.common.collect.ArrayListMultimap;
+import com.mojang.authlib.GameProfile;
+import com.mojang.authlib.properties.Property;
+import com.mojang.authlib.properties.PropertyMap;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -36,6 +40,13 @@ public final class FakePlayerSavedData extends SavedData {
                 Codec.BOOL.fieldOf("autoFishing").forGetter(FakePlayerAutomation.AutomationState::autoFishing)
             ).apply(instance, FakePlayerAutomation.AutomationState::new)
         );
+    private static final Codec<ProfileProperty> PROFILE_PROPERTY_CODEC = RecordCodecBuilder.create(instance ->
+        instance.group(
+            Codec.STRING.fieldOf("name").forGetter(ProfileProperty::name),
+            Codec.STRING.fieldOf("value").forGetter(ProfileProperty::value),
+            Codec.STRING.optionalFieldOf("signature", "").forGetter(ProfileProperty::signature)
+        ).apply(instance, ProfileProperty::new)
+    );
 
     private static final Codec<FakePlayerActions.ScheduledState> SCHEDULE_CODEC = RecordCodecBuilder.create(instance ->
         instance.group(
@@ -71,6 +82,7 @@ public final class FakePlayerSavedData extends SavedData {
         instance.group(
             UUIDUtil.CODEC.fieldOf("uuid").forGetter(Resident::uuid),
             Codec.STRING.fieldOf("name").forGetter(Resident::name),
+            PROFILE_PROPERTY_CODEC.listOf().fieldOf("profile_properties").forGetter(Resident::profileProperties),
             AUTOMATION_CODEC.fieldOf("automation").forGetter(Resident::automation)
         ).apply(instance, Resident::new)
     );
@@ -78,6 +90,7 @@ public final class FakePlayerSavedData extends SavedData {
         instance.group(
             UUIDUtil.CODEC.fieldOf("uuid").forGetter(PlayerSnapshot::uuid),
             Codec.STRING.fieldOf("name").forGetter(PlayerSnapshot::name),
+            PROFILE_PROPERTY_CODEC.listOf().fieldOf("profile_properties").forGetter(PlayerSnapshot::profileProperties),
             CompoundTag.CODEC.fieldOf("player_data").forGetter(PlayerSnapshot::playerData),
             ACTION_STATE_CODEC.fieldOf("actions").forGetter(PlayerSnapshot::actions),
             AUTOMATION_CODEC.fieldOf("automation").forGetter(PlayerSnapshot::automation)
@@ -168,15 +181,18 @@ public final class FakePlayerSavedData extends SavedData {
     }
 
     /** 将玩家身份迁移到新 UUID，并同步驻留记录和所有关联预设。 */
-    public void migratePlayer(UUID oldUuid, UUID newUuid, String name) {
+    public void migratePlayer(UUID oldUuid, GameProfile profile) {
+        UUID newUuid = profile.id();
+        String name = profile.name();
+        List<ProfileProperty> properties = profileProperties(profile);
         boolean changed = false;
         Resident resident = residents.remove(oldUuid);
         if (resident != null && !resident.name().equals(name)) {
-            residents.put(newUuid, new Resident(newUuid, name, resident.automation()));
+            residents.put(newUuid, new Resident(newUuid, name, properties, resident.automation()));
             changed = true;
         } else if (resident != null) {
-            residents.put(newUuid, new Resident(newUuid, name, resident.automation()));
-            changed = !oldUuid.equals(newUuid);
+            residents.put(newUuid, new Resident(newUuid, name, properties, resident.automation()));
+            changed = !oldUuid.equals(newUuid) || !resident.profileProperties().equals(properties);
         }
         for (Map.Entry<String, Preset> entry : presets.entrySet()) {
             Preset preset = entry.getValue();
@@ -187,7 +203,7 @@ public final class FakePlayerSavedData extends SavedData {
             CompoundTag migratedData = player.playerData();
             migratedData.remove("UUID");
             PlayerSnapshot renamed = new PlayerSnapshot(
-                newUuid, name, migratedData, player.actions(), player.automation());
+                newUuid, name, properties, migratedData, player.actions(), player.automation());
             entry.setValue(new Preset(preset.id(), preset.description(), renamed));
             changed = true;
         }
@@ -276,22 +292,47 @@ public final class FakePlayerSavedData extends SavedData {
     public record Resident(
         UUID uuid,
         String name,
+        List<ProfileProperty> profileProperties,
         FakePlayerAutomation.AutomationState automation
     ) {
+        public Resident(UUID uuid, String name, FakePlayerAutomation.AutomationState automation) {
+            this(uuid, name, List.of(), automation);
+        }
+
+        public Resident {
+            profileProperties = List.copyOf(profileProperties);
+        }
+
         public static Resident from(FakeServerPlayer player) {
             return new Resident(player.getUUID(), player.getGameProfile().name(),
-                player.automation().settings());
+                FakePlayerSavedData.profileProperties(player.getGameProfile()), player.automation().settings());
+        }
+
+        public GameProfile profile() {
+            return gameProfile(uuid, name, profileProperties);
         }
     }
 
     public record PlayerSnapshot(
         UUID uuid,
         String name,
+        List<ProfileProperty> profileProperties,
         CompoundTag playerData,
         FakePlayerActions.State actions,
         FakePlayerAutomation.AutomationState automation
     ) {
+        public PlayerSnapshot(
+            UUID uuid,
+            String name,
+            CompoundTag playerData,
+            FakePlayerActions.State actions,
+            FakePlayerAutomation.AutomationState automation
+        ) {
+            this(uuid, name, List.of(), playerData, actions, automation);
+        }
+
         public PlayerSnapshot {
+            profileProperties = List.copyOf(profileProperties);
             playerData = playerData.copy();
         }
 
@@ -299,10 +340,15 @@ public final class FakePlayerSavedData extends SavedData {
             return new PlayerSnapshot(
                 player.getUUID(),
                 player.getGameProfile().name(),
+                FakePlayerSavedData.profileProperties(player.getGameProfile()),
                 FakePlayerPersistence.snapshot(player),
                 saveActions ? player.actions().snapshot() : FakePlayerActions.State.EMPTY,
                 player.automation().settings()
             );
+        }
+
+        public GameProfile profile() {
+            return gameProfile(uuid, name, profileProperties);
         }
     }
 
@@ -313,6 +359,27 @@ public final class FakePlayerSavedData extends SavedData {
         public Group {
             presetIds = List.copyOf(presetIds);
         }
+    }
+
+    public record ProfileProperty(String name, String value, String signature) {
+        private static ProfileProperty from(Property property) {
+            return new ProfileProperty(property.name(), property.value(),
+                property.signature() == null ? "" : property.signature());
+        }
+
+        private Property toProperty() {
+            return signature.isEmpty() ? new Property(name, value) : new Property(name, value, signature);
+        }
+    }
+
+    private static List<ProfileProperty> profileProperties(GameProfile profile) {
+        return profile.properties().values().stream().map(ProfileProperty::from).toList();
+    }
+
+    private static GameProfile gameProfile(UUID uuid, String name, List<ProfileProperty> properties) {
+        ArrayListMultimap<String, Property> values = ArrayListMultimap.create();
+        properties.stream().map(ProfileProperty::toProperty).forEach(property -> values.put(property.name(), property));
+        return new GameProfile(uuid, name, new PropertyMap(values));
     }
 
 }

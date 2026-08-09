@@ -96,10 +96,8 @@ public final class FakePlayerManager {
 
         // 通过原版登录流程接入玩家列表，让追踪、区块加载和广播行为保持一致。
         FakeConnection connection = new FakeConnection();
-        boolean joined = false;
         try {
             server.getPlayerList().placeNewPlayer(connection, fake, CommonListenerCookie.createInitial(profile, false));
-            joined = true;
             playerData.ifPresent(data -> FakePlayerPersistence.finishPlayerDataLoad(fake, data, !overrideSavedSpawnState));
             if (overrideSavedSpawnState) {
                 // 手动生成的位置由命令决定，不恢复存档中的载具关系。
@@ -112,7 +110,8 @@ public final class FakePlayerManager {
             }
             return fake;
         } catch (RuntimeException exception) {
-            if (joined) {
+            // 登录事件可能在玩家已加入列表后抛出异常，不能只依据 placeNewPlayer 是否正常返回。
+            if (server.getPlayerList().getPlayers().stream().anyMatch(player -> player == fake)) {
                 remove(fake, false);
             }
             throw exception;
@@ -194,7 +193,7 @@ public final class FakePlayerManager {
         GameType gameType = player.gameMode.getGameModeForPlayer();
         boolean flying = player.getAbilities().flying;
         FakePlayerSavedData.PlayerSnapshot snapshot = FakePlayerSavedData.PlayerSnapshot.from(player, true);
-        savedData.migratePlayer(oldUuid, profile.id(), profile.name());
+        savedData.migratePlayer(oldUuid, profile);
         remove(player, false);
 
         FakeServerPlayer renamed = null;
@@ -227,10 +226,10 @@ public final class FakePlayerManager {
                     exception.addSuppressed(rollbackException);
                 }
             }
-            savedData.migratePlayer(profile.id(), oldUuid, oldName);
+            savedData.migratePlayer(profile.id(), new GameProfile(oldUuid, oldName, snapshot.profile().properties()));
             try {
                 FakeServerPlayer restored = restoreSnapshot(
-                    server, level, snapshot, new GameProfile(oldUuid, oldName), position, rotation, gameType, flying);
+                    server, level, snapshot, snapshot.profile(), position, rotation, gameType, flying);
                 if (!oldUuid.equals(profile.id())) {
                     FakePlayerPersistence.movePlayerData(restored, profile.id());
                 }
