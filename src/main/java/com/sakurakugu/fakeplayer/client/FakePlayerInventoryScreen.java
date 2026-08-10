@@ -44,6 +44,35 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         Identifier.fromNamespaceAndPath("fakeplayer", "textures/gui/possession_enter.png");
     public static final Identifier POSSESSION_EXIT_ICON =
         Identifier.fromNamespaceAndPath("fakeplayer", "textures/gui/possession_exit.png");
+    private static final Identifier HEART_CONTAINER_SPRITE =
+        Identifier.withDefaultNamespace("hud/heart/container");
+    private static final Identifier HEART_FULL_SPRITE =
+        Identifier.withDefaultNamespace("hud/heart/full");
+    private static final Identifier HEART_HALF_SPRITE =
+        Identifier.withDefaultNamespace("hud/heart/half");
+    private static final Identifier ARMOR_EMPTY_SPRITE =
+        Identifier.withDefaultNamespace("hud/armor_empty");
+    private static final Identifier ARMOR_HALF_SPRITE =
+        Identifier.withDefaultNamespace("hud/armor_half");
+    private static final Identifier ARMOR_FULL_SPRITE =
+        Identifier.withDefaultNamespace("hud/armor_full");
+    private static final Identifier FOOD_EMPTY_SPRITE =
+        Identifier.withDefaultNamespace("hud/food_empty");
+    private static final Identifier FOOD_HALF_SPRITE =
+        Identifier.withDefaultNamespace("hud/food_half");
+    private static final Identifier FOOD_FULL_SPRITE =
+        Identifier.withDefaultNamespace("hud/food_full");
+    private static final Identifier AIR_EMPTY_SPRITE =
+        Identifier.withDefaultNamespace("hud/air_empty");
+    private static final Identifier AIR_FULL_SPRITE =
+        Identifier.withDefaultNamespace("hud/air");
+    private static final Identifier APPLESKIN_ICONS =
+        Identifier.fromNamespaceAndPath("fakeplayer", "textures/gui/appleskin_icons.png");
+    private static final Identifier EXPERIENCE_ORB_TEXTURE =
+        Identifier.withDefaultNamespace("textures/entity/experience/experience_orb.png");
+    private static final int STATUS_ICON_COUNT = 10;
+    private static final int STATUS_ICON_SIZE = 9;
+    private static final int STATUS_ICON_SPACING = 8;
     private static final int TARGET_INVENTORY_HEIGHT = 159;
     private static final int HOTBAR_SELECTOR_TOP = 159;
     private static final int HOTBAR_SELECTOR_HEIGHT = 5;
@@ -74,8 +103,8 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private static final int DROP_PANEL_HEIGHT = 109;
     private static final int DROP_TAB_WIDTH = 21;
     private static final int DROP_TAB_HEIGHT = 24;
-    private static final int INFO_PANEL_WIDTH = 130;
-    private static final int INFO_PANEL_HEIGHT = 180;
+    private static final int INFO_PANEL_WIDTH = 132;
+    private static final int INFO_PANEL_HEIGHT = 160;
     private static final int AIM_PANEL_TOP = 8;
     private static final int CONTINUOUS_PANEL_TOP = AIM_PANEL_TOP + DROP_TAB_HEIGHT + 2;
     private static final int INFO_PANEL_TOP = CONTINUOUS_PANEL_TOP + DROP_TAB_HEIGHT + 2;
@@ -385,11 +414,14 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             gameType(), this::gameModeName,
             gameType -> sendAction(FakePlayerInventoryMenu.ACTION_SET_GAME_MODE_BASE + gameType.getId())
         ));
+        ExperienceDisplay experienceDisplay = addRenderableWidget(new ExperienceDisplay(
+            left + 7, top + 122, 117, 16
+        ));
         CoordinateDisplay coordinateDisplay = addRenderableWidget(new CoordinateDisplay(
-            left + 7, top + 153, 85, 15
+            left + 7, top + 138, 85, 15
         ));
         Button copyPositionButton = addRenderableWidget(new CompactButton(
-            left + 96, top + 154, 28, 14,
+            left + 96, top + 139, 28, 14,
             Component.translatable("gui.fakeplayer.info.copy"),
             button -> copyPosition()
         ));
@@ -400,7 +432,8 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             button -> infoPanel.toggle()
         ));
         tab.setTooltip(Tooltip.create(Component.translatable("gui.fakeplayer.info.title")));
-        infoPanel.bind(tab, overlay, nameInput, renameButton, gameModeButton, coordinateDisplay, copyPositionButton);
+        infoPanel.bind(tab, overlay, nameInput, renameButton, gameModeButton, experienceDisplay,
+            coordinateDisplay, copyPositionButton);
     }
 
     private void submitRename() {
@@ -689,6 +722,30 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         }
     }
 
+    /** 显示当前等级，详细经验值通过悬停提示查看。 */
+    private final class ExperienceDisplay extends Button {
+        private ExperienceDisplay(int x, int y, int width, int height) {
+            super(x, y, width, height, Component.empty(), button -> {}, DEFAULT_NARRATION);
+        }
+
+        @Override
+        protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+            Component label = Component.translatable("gui.fakeplayer.info.experience");
+            graphics.text(font, label, getX(), getY() + 4, 0xFF404040, false);
+
+            int iconX = getX() + font.width(label) + 4;
+            // 使用原版最大经验球的图块，并补上实体渲染时使用的黄绿色着色。
+            graphics.blit(RenderPipelines.GUI_TEXTURED, EXPERIENCE_ORB_TEXTURE,
+                iconX, getY() + 4, 32.0F, 32.0F, 9, 9, 16, 16, 64, 64, 0xFF80FF20);
+            graphics.text(font, Component.translatable("gui.fakeplayer.info.experience_level",
+                menu.experienceLevel()), iconX + 13, getY() + 4, 0xFF80FF20, true);
+
+            int remaining = Math.max(0, menu.experienceNeeded() - menu.experiencePoints());
+            setTooltip(Tooltip.create(Component.translatable("gui.fakeplayer.info.experience_tooltip",
+                menu.experiencePoints(), remaining, menu.totalExperience())));
+        }
+    }
+
     @Override
     protected void containerTick() {
         super.containerTick();
@@ -935,32 +992,117 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
 
         graphics.text(font, Component.translatable("gui.fakeplayer.info.title"), left + 22, top + 8,
             0xFF404040, false);
-        int textLeft = left + 7;
-        int line = top + 70;
-        drawInfoLine(graphics, "gui.fakeplayer.info.health", formatted(menu.health()), formatted(menu.maxHealth()),
-            textLeft, line);
-        drawInfoLine(graphics, "gui.fakeplayer.info.food", menu.food(), 20, textLeft, line + 15);
-        drawInfoLine(graphics, "gui.fakeplayer.info.saturation", formatted(menu.saturation()), textLeft, line + 30);
-        drawInfoLine(graphics, "gui.fakeplayer.info.armor", menu.armor(), textLeft, line + 45);
-        drawInfoLine(graphics, "gui.fakeplayer.info.experience", menu.experienceLevel(), textLeft, line + 60);
-        graphics.text(font, Component.translatable("gui.fakeplayer.info.game_mode"), textLeft, top + 51,
+        int labelLeft = left + 7;
+        int statusLeft = labelLeft + statusLabelWidth() + 4;
+        int line = top + 66;
+        drawStatusLabel(graphics, "gui.fakeplayer.info.health", labelLeft, line);
+        drawHealth(graphics, statusLeft, line);
+        drawStatusLabel(graphics, "gui.fakeplayer.info.food", labelLeft, line + 15);
+        drawFood(graphics, statusLeft, line + 15);
+        drawSaturation(graphics, statusLeft, line + 15);
+        drawStatusLabel(graphics, "gui.fakeplayer.info.armor", labelLeft, line + 30);
+        drawArmor(graphics, statusLeft, line + 30);
+        drawStatusLabel(graphics, "gui.fakeplayer.info.air", labelLeft, line + 45);
+        drawAir(graphics, statusLeft, line + 45);
+        graphics.text(font, Component.translatable("gui.fakeplayer.info.game_mode"), labelLeft, top + 51,
             0xFF404040, false);
     }
 
-    private void drawInfoLine(
-        GuiGraphicsExtractor graphics, String key, Object value, int left, int top
-    ) {
-        graphics.text(font, Component.translatable(key, value), left, top, 0xFF404040, false);
+    private int statusLabelWidth() {
+        int width = font.width(Component.translatable("gui.fakeplayer.info.health"));
+        width = Math.max(width, font.width(Component.translatable("gui.fakeplayer.info.food")));
+        width = Math.max(width, font.width(Component.translatable("gui.fakeplayer.info.armor")));
+        return Math.max(width, font.width(Component.translatable("gui.fakeplayer.info.air")));
     }
 
-    private void drawInfoLine(
-        GuiGraphicsExtractor graphics, String key, Object first, Object second, int left, int top
-    ) {
-        graphics.text(font, Component.translatable(key, first, second), left, top, 0xFF404040, false);
+    private void drawStatusLabel(GuiGraphicsExtractor graphics, String key, int left, int top) {
+        graphics.text(font, Component.translatable(key), left, top, 0xFF404040, false);
     }
 
-    private String formatted(float value) {
-        return String.format(Locale.ROOT, "%.1f", value);
+    /** 按原版 HUD 的取整和半颗心规则绘制生命值。 */
+    private void drawHealth(GuiGraphicsExtractor graphics, int left, int top) {
+        int health = (int) Math.ceil(menu.health());
+        int containers = Math.min(STATUS_ICON_COUNT, (int) Math.ceil(menu.maxHealth() / 2.0F));
+        for (int index = 0; index < containers; index++) {
+            int x = left + index * STATUS_ICON_SPACING;
+            graphics.blitSprite(RenderPipelines.GUI_TEXTURED, HEART_CONTAINER_SPRITE,
+                x, top, STATUS_ICON_SIZE, STATUS_ICON_SIZE);
+            int halfHealth = index * 2;
+            if (halfHealth < health) {
+                Identifier sprite = halfHealth + 1 == health ? HEART_HALF_SPRITE : HEART_FULL_SPRITE;
+                graphics.blitSprite(RenderPipelines.GUI_TEXTURED, sprite,
+                    x, top, STATUS_ICON_SIZE, STATUS_ICON_SIZE);
+            }
+        }
+    }
+
+    private void drawArmor(GuiGraphicsExtractor graphics, int left, int top) {
+        drawStatusRow(graphics, left, top, menu.armor(),
+            ARMOR_EMPTY_SPRITE, ARMOR_HALF_SPRITE, ARMOR_FULL_SPRITE, false);
+    }
+
+    private void drawFood(GuiGraphicsExtractor graphics, int left, int top) {
+        int food = Math.clamp(menu.food(), 0, STATUS_ICON_COUNT * 2);
+        for (int index = 0; index < STATUS_ICON_COUNT; index++) {
+            int x = left + (STATUS_ICON_COUNT - 1 - index) * STATUS_ICON_SPACING;
+            // 原版先绘制空槽轮廓，再将完整或半格食物叠加在上面。
+            graphics.blitSprite(RenderPipelines.GUI_TEXTURED, FOOD_EMPTY_SPRITE,
+                x, top, STATUS_ICON_SIZE, STATUS_ICON_SIZE);
+            int halfFood = index * 2;
+            if (halfFood < food) {
+                Identifier sprite = halfFood + 1 == food ? FOOD_HALF_SPRITE : FOOD_FULL_SPRITE;
+                graphics.blitSprite(RenderPipelines.GUI_TEXTURED, sprite,
+                    x, top, STATUS_ICON_SIZE, STATUS_ICON_SIZE);
+            }
+        }
+    }
+
+    /** 使用 AppleSkin 的四级饱和度图标，从右向左绘制。 */
+    private void drawSaturation(GuiGraphicsExtractor graphics, int left, int top) {
+        float saturation = Math.clamp(menu.saturation(), 0.0F, STATUS_ICON_COUNT * 2.0F);
+        int iconCount = (int) Math.ceil(saturation / 2.0F);
+        for (int index = 0; index < iconCount; index++) {
+            float effectiveValue = saturation / 2.0F - index;
+            int textureX = effectiveValue >= 1.0F ? 27
+                : effectiveValue > 0.5F ? 18 : effectiveValue > 0.25F ? 9 : 0;
+            graphics.blit(RenderPipelines.GUI_TEXTURED, APPLESKIN_ICONS,
+                left + (STATUS_ICON_COUNT - 1 - index) * STATUS_ICON_SPACING,
+                top, textureX, 0.0F, STATUS_ICON_SIZE, STATUS_ICON_SIZE, 256, 256);
+        }
+    }
+
+    private void drawAir(GuiGraphicsExtractor graphics, int left, int top) {
+        int maxAir = menu.maxAirSupply();
+        int bubbles = maxAir <= 0 ? 0
+            : (int) Math.ceil((double) Math.clamp(menu.airSupply(), 0, maxAir) * STATUS_ICON_COUNT / maxAir);
+        for (int index = 0; index < STATUS_ICON_COUNT; index++) {
+            Identifier sprite = index < bubbles ? AIR_FULL_SPRITE : AIR_EMPTY_SPRITE;
+            graphics.blitSprite(RenderPipelines.GUI_TEXTURED, sprite,
+                left + (STATUS_ICON_COUNT - 1 - index) * STATUS_ICON_SPACING,
+                top, STATUS_ICON_SIZE, STATUS_ICON_SIZE);
+        }
+    }
+
+    private void drawStatusRow(
+        GuiGraphicsExtractor graphics,
+        int left,
+        int top,
+        int value,
+        Identifier emptySprite,
+        Identifier halfSprite,
+        Identifier fullSprite,
+        boolean rightToLeft
+    ) {
+        int clampedValue = Math.clamp(value, 0, STATUS_ICON_COUNT * 2);
+        for (int index = 0; index < STATUS_ICON_COUNT; index++) {
+            int halfValue = index * 2;
+            Identifier sprite = halfValue + 1 < clampedValue
+                ? fullSprite
+                : halfValue + 1 == clampedValue ? halfSprite : emptySprite;
+            int column = rightToLeft ? STATUS_ICON_COUNT - 1 - index : index;
+            graphics.blitSprite(RenderPipelines.GUI_TEXTURED, sprite,
+                left + column * STATUS_ICON_SPACING, top, STATUS_ICON_SIZE, STATUS_ICON_SIZE);
+        }
     }
 
     private GameType gameType() {

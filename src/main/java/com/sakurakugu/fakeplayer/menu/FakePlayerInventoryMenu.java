@@ -163,7 +163,12 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     private int foodSnapshot;
     private int saturationSnapshot;
     private int armorSnapshot;
+    private int airSupplySnapshot;
+    private int maxAirSupplySnapshot;
     private int experienceLevelSnapshot;
+    private int experiencePointsSnapshot;
+    private int experienceNeededSnapshot;
+    private int totalExperienceSnapshot;
     private int gameModeSnapshot;
     private int positionXSnapshot;
     private int positionYSnapshot;
@@ -173,7 +178,12 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     private final DataSlot food;
     private final DataSlot saturation;
     private final DataSlot armor;
+    private final DataSlot airSupply;
+    private final DataSlot maxAirSupply;
     private final DataSlot experienceLevel;
+    private final DataSlot experiencePoints;
+    private final DataSlot experienceNeeded;
+    private final DataSlot totalExperience;
     private final DataSlot gameMode;
     private final DataSlot positionX;
     private final DataSlot positionY;
@@ -282,9 +292,25 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
         this.armor = syncedValue(
             () -> target == null ? armorSnapshot : target.getArmorValue(),
             value -> armorSnapshot = value);
+        this.airSupply = syncedValue(
+            () -> target == null ? airSupplySnapshot : target.getAirSupply(),
+            value -> airSupplySnapshot = value);
+        this.maxAirSupply = syncedValue(
+            () -> target == null ? maxAirSupplySnapshot : target.getMaxAirSupply(),
+            value -> maxAirSupplySnapshot = value);
         this.experienceLevel = syncedValue(
             () -> target == null ? experienceLevelSnapshot : target.experienceLevel,
             value -> experienceLevelSnapshot = value);
+        this.experiencePoints = syncedValue(
+            () -> target == null ? experiencePointsSnapshot
+                : Math.round(target.experienceProgress * target.getXpNeededForNextLevel()),
+            value -> experiencePointsSnapshot = value);
+        this.experienceNeeded = syncedValue(
+            () -> target == null ? experienceNeededSnapshot : target.getXpNeededForNextLevel(),
+            value -> experienceNeededSnapshot = value);
+        this.totalExperience = syncedValue(
+            () -> target == null ? totalExperienceSnapshot : target.totalExperience,
+            value -> totalExperienceSnapshot = value);
         this.gameMode = syncedValue(
             () -> target == null ? gameModeSnapshot : target.gameMode.getGameModeForPlayer().getId(),
             value -> gameModeSnapshot = value);
@@ -924,7 +950,12 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     public int food() { return food.get(); }
     public float saturation() { return saturation.get() / 100.0F; }
     public int armor() { return armor.get(); }
+    public int airSupply() { return airSupply.get(); }
+    public int maxAirSupply() { return maxAirSupply.get(); }
     public int experienceLevel() { return experienceLevel.get(); }
+    public int experiencePoints() { return experiencePoints.get(); }
+    public int experienceNeeded() { return experienceNeeded.get(); }
+    public int totalExperience() { return totalExperience.get(); }
     public int gameMode() { return gameMode.get(); }
     public int positionX() { return positionX.get(); }
     public int positionY() { return positionY.get(); }
