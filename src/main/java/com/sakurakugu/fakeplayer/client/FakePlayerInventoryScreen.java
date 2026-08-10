@@ -73,7 +73,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private static final int DROP_TAB_WIDTH = 21;
     private static final int DROP_TAB_HEIGHT = 24;
     private static final int INFO_PANEL_WIDTH = 130;
-    private static final int INFO_PANEL_HEIGHT = 207;
+    private static final int INFO_PANEL_HEIGHT = 164;
     private static final int AIM_PANEL_TOP = 8;
     private static final int CONTINUOUS_PANEL_TOP = AIM_PANEL_TOP + DROP_TAB_HEIGHT + 2;
     private static final int INFO_PANEL_TOP = CONTINUOUS_PANEL_TOP + DROP_TAB_HEIGHT + 2;
@@ -376,6 +376,14 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             Component.translatable("gui.fakeplayer.info.rename"),
             button -> submitRename()
         ));
+        CoordinateDisplay coordinateDisplay = addRenderableWidget(new CoordinateDisplay(
+            left + 7, top + 137, 85, 15
+        ));
+        Button copyPositionButton = addRenderableWidget(new CompactButton(
+            left + 96, top + 138, 28, 14,
+            Component.translatable("gui.fakeplayer.info.copy"),
+            button -> copyPosition()
+        ));
         Button tab = addRenderableWidget(new IconTabButton(
             left, top, DROP_TAB_WIDTH, DROP_TAB_HEIGHT,
             new ItemStack(Items.NAME_TAG),
@@ -383,7 +391,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             button -> infoPanel.toggle()
         ));
         tab.setTooltip(Tooltip.create(Component.translatable("gui.fakeplayer.info.title")));
-        infoPanel.bind(tab, overlay, nameInput, renameButton);
+        infoPanel.bind(tab, overlay, nameInput, renameButton, coordinateDisplay, copyPositionButton);
     }
 
     private void submitRename() {
@@ -391,6 +399,16 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         if (!name.equals(menu.targetName())) {
             ClientPacketDistributor.sendToServer(new RenameFakePlayerPayload(menu.containerId, name));
         }
+    }
+
+    private void copyPosition() {
+        minecraft.keyboardHandler.setClipboard(String.format(Locale.ROOT, "%s %s %s",
+            menu.positionX(), menu.positionY(), menu.positionZ()));
+    }
+
+    private Component positionValue() {
+        return Component.literal(String.format(Locale.ROOT, "%s, %s, %s",
+            menu.positionX(), menu.positionY(), menu.positionZ()));
     }
 
     /** 在假人物品栏的空白区域添加移动和即时动作操控杆。 */
@@ -633,6 +651,32 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         @Override
         public boolean isMouseOver(double mouseX, double mouseY) {
             return false;
+        }
+    }
+
+    /** 标签保持固定，仅在空间不足时滚动坐标值。 */
+    private final class CoordinateDisplay extends Button {
+        private CoordinateDisplay(int x, int y, int width, int height) {
+            super(x, y, width, height, Component.translatable("gui.fakeplayer.info.position"),
+                button -> {}, DEFAULT_NARRATION);
+        }
+
+        @Override
+        protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+            Component label = getMessage();
+            Component value = positionValue();
+            int textTop = getY() + (getHeight() - 8) / 2;
+            int valueLeft = getX() + font.width(label);
+            int valueRight = getX() + getWidth();
+            graphics.text(font, label, getX(), textTop, 0xFF404040, false);
+            if (font.width(value) <= valueRight - valueLeft) {
+                graphics.text(font, value, valueLeft, textTop, 0xFF404040, false);
+            } else {
+                PixelGui.drawScrollingText(graphics, font, value,
+                    valueLeft, valueRight, getY(), getHeight(), 0xFF404040);
+            }
+            setTooltip(Tooltip.create(Component.translatable("gui.fakeplayer.info.position_tooltip",
+                menu.positionX(), menu.positionY(), menu.positionZ())));
         }
     }
 
@@ -891,9 +935,6 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         drawInfoLine(graphics, "gui.fakeplayer.info.armor", menu.armor(), textLeft, line + 45);
         drawInfoLine(graphics, "gui.fakeplayer.info.experience", menu.experienceLevel(), textLeft, line + 60);
         drawInfoLine(graphics, "gui.fakeplayer.info.game_mode", gameModeName(), textLeft, line + 75);
-        drawInfoLine(graphics, "gui.fakeplayer.info.position_x", menu.positionX(), textLeft, line + 90);
-        drawInfoLine(graphics, "gui.fakeplayer.info.position_y", menu.positionY(), textLeft, line + 105);
-        drawInfoLine(graphics, "gui.fakeplayer.info.position_z", menu.positionZ(), textLeft, line + 120);
     }
 
     private void drawInfoLine(
