@@ -109,7 +109,7 @@
   "gui.fakeplayer.info.saturation": "饱和度：%s",
   "gui.fakeplayer.info.armor": "护甲值：%s",
   "gui.fakeplayer.info.experience": "经验等级：%s",
-  "gui.fakeplayer.info.game_mode": "游戏模式：%s",
+  "gui.fakeplayer.info.game_mode": "游戏模式：",
   "gui.fakeplayer.info.position": "坐标：",
   "gui.fakeplayer.info.position_tooltip": "X：%1$s\nY：%2$s\nZ：%3$s",
   "gui.fakeplayer.info.copy": "复制",

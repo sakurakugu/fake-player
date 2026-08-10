@@ -5,6 +5,7 @@ import com.sakurakugu.fakeplayer.entity.FakePlayerActions;
 import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
 import com.sakurakugu.fakeplayer.entity.FakePlayerPossession;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
+import com.sakurakugu.fakeplayer.persistence.FakePlayerPersistence;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket;
 import net.minecraft.resources.Identifier;
@@ -30,6 +31,7 @@ import net.minecraft.world.item.crafting.CraftingInput;
 import net.minecraft.world.item.crafting.CraftingRecipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.item.enchantment.EnchantmentEffectComponents;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 
@@ -114,6 +116,8 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     private static final int ACTION_SET_BODY_YAW_BASE = ACTION_SET_YAW_BASE + 360;
     public static final int ACTION_SET_END = ACTION_SET_BODY_YAW_BASE + 360;
     public static final int ACTION_TOGGLE_BODY_FOLLOWS_HEAD = ACTION_SET_END;
+    public static final int ACTION_SET_GAME_MODE_BASE = ACTION_TOGGLE_BODY_FOLLOWS_HEAD + 1;
+    private static final int ACTION_SET_GAME_MODE_END = ACTION_SET_GAME_MODE_BASE + 4;
     public static int pitchAction(int pitch) { return ACTION_SET_PITCH_BASE + Math.max(-90, Math.min(90, pitch)) + 90; }
     public static int yawAction(int yaw) { return angleAction(ACTION_SET_YAW_BASE, yaw); }
     public static int bodyYawAction(int yaw) { return angleAction(ACTION_SET_BODY_YAW_BASE, yaw); }
@@ -502,6 +506,14 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
         }
         if (actionId >= ACTION_SET_BODY_YAW_BASE && actionId < ACTION_SET_END) {
             target.actions().setBodyRotation(actionId - ACTION_SET_BODY_YAW_BASE - 180);
+            broadcastChanges();
+            return true;
+        }
+        if (actionId >= ACTION_SET_GAME_MODE_BASE && actionId < ACTION_SET_GAME_MODE_END) {
+            GameType gameType = GameType.byId(actionId - ACTION_SET_GAME_MODE_BASE);
+            target.gameMode.changeGameModeForPlayer(gameType);
+            target.getAbilities().flying = target.getAbilities().flying && target.getAbilities().mayfly;
+            FakePlayerPersistence.track(target);
             broadcastChanges();
             return true;
         }

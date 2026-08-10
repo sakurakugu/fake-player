@@ -3,6 +3,7 @@ package com.sakurakugu.fakeplayer.client;
 import com.sakurakugu.fakeplayer.menu.FakePlayerInventoryMenu;
 import com.sakurakugu.fakeplayer.network.RenameFakePlayerPayload;
 import com.sakurakugu.fakeplayer.client.ui.CompactButton;
+import com.sakurakugu.fakeplayer.client.ui.CompactDropdownButton;
 import com.sakurakugu.fakeplayer.client.ui.CompactSliderButton;
 import com.sakurakugu.fakeplayer.client.ui.IconButton;
 import com.sakurakugu.fakeplayer.client.ui.IconTabButton;
@@ -26,6 +27,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.GameType;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 import java.util.Locale;
@@ -73,7 +75,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private static final int DROP_TAB_WIDTH = 21;
     private static final int DROP_TAB_HEIGHT = 24;
     private static final int INFO_PANEL_WIDTH = 130;
-    private static final int INFO_PANEL_HEIGHT = 164;
+    private static final int INFO_PANEL_HEIGHT = 180;
     private static final int AIM_PANEL_TOP = 8;
     private static final int CONTINUOUS_PANEL_TOP = AIM_PANEL_TOP + DROP_TAB_HEIGHT + 2;
     private static final int INFO_PANEL_TOP = CONTINUOUS_PANEL_TOP + DROP_TAB_HEIGHT + 2;
@@ -140,6 +142,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private ToggleSwitchButton bodyFollowsHeadButton;
     private boolean syncingAimInputs;
     private EditBox nameInput;
+    private CompactDropdownButton<GameType> gameModeButton;
 
     public FakePlayerInventoryScreen(FakePlayerInventoryMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, menu.screenWidth(), menu.screenHeight());
@@ -376,11 +379,17 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             Component.translatable("gui.fakeplayer.info.rename"),
             button -> submitRename()
         ));
+        gameModeButton = addRenderableWidget(new CompactDropdownButton<>(
+            left + 54, top + 47, 70, 16,
+            java.util.List.of(GameType.SURVIVAL, GameType.CREATIVE, GameType.ADVENTURE, GameType.SPECTATOR),
+            gameType(), this::gameModeName,
+            gameType -> sendAction(FakePlayerInventoryMenu.ACTION_SET_GAME_MODE_BASE + gameType.getId())
+        ));
         CoordinateDisplay coordinateDisplay = addRenderableWidget(new CoordinateDisplay(
-            left + 7, top + 137, 85, 15
+            left + 7, top + 153, 85, 15
         ));
         Button copyPositionButton = addRenderableWidget(new CompactButton(
-            left + 96, top + 138, 28, 14,
+            left + 96, top + 154, 28, 14,
             Component.translatable("gui.fakeplayer.info.copy"),
             button -> copyPosition()
         ));
@@ -391,7 +400,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             button -> infoPanel.toggle()
         ));
         tab.setTooltip(Tooltip.create(Component.translatable("gui.fakeplayer.info.title")));
-        infoPanel.bind(tab, overlay, nameInput, renameButton, coordinateDisplay, copyPositionButton);
+        infoPanel.bind(tab, overlay, nameInput, renameButton, gameModeButton, coordinateDisplay, copyPositionButton);
     }
 
     private void submitRename() {
@@ -927,14 +936,15 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         graphics.text(font, Component.translatable("gui.fakeplayer.info.title"), left + 22, top + 8,
             0xFF404040, false);
         int textLeft = left + 7;
-        int line = top + 51;
+        int line = top + 70;
         drawInfoLine(graphics, "gui.fakeplayer.info.health", formatted(menu.health()), formatted(menu.maxHealth()),
             textLeft, line);
         drawInfoLine(graphics, "gui.fakeplayer.info.food", menu.food(), 20, textLeft, line + 15);
         drawInfoLine(graphics, "gui.fakeplayer.info.saturation", formatted(menu.saturation()), textLeft, line + 30);
         drawInfoLine(graphics, "gui.fakeplayer.info.armor", menu.armor(), textLeft, line + 45);
         drawInfoLine(graphics, "gui.fakeplayer.info.experience", menu.experienceLevel(), textLeft, line + 60);
-        drawInfoLine(graphics, "gui.fakeplayer.info.game_mode", gameModeName(), textLeft, line + 75);
+        graphics.text(font, Component.translatable("gui.fakeplayer.info.game_mode"), textLeft, top + 51,
+            0xFF404040, false);
     }
 
     private void drawInfoLine(
@@ -953,12 +963,16 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         return String.format(Locale.ROOT, "%.1f", value);
     }
 
-    private Component gameModeName() {
-        String id = switch (menu.gameMode()) {
-            case 1 -> "creative";
-            case 2 -> "adventure";
-            case 3 -> "spectator";
-            default -> "survival";
+    private GameType gameType() {
+        return GameType.byId(menu.gameMode());
+    }
+
+    private Component gameModeName(GameType gameType) {
+        String id = switch (gameType) {
+            case CREATIVE -> "creative";
+            case ADVENTURE -> "adventure";
+            case SPECTATOR -> "spectator";
+            case SURVIVAL -> "survival";
         };
         return Component.translatable("selectWorld.gameMode." + id);
     }
@@ -1216,6 +1230,9 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (gameModeButton != null && gameModeButton.popupMouseClicked(event)) {
+            return true;
+        }
         if (menu.view() == FakePlayerInventoryMenu.View.INVENTORY && event.button() == 0) {
             int relativeX = (int) event.x() - leftPos;
             int relativeY = (int) event.y() - topPos;
@@ -1270,5 +1287,8 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
 
         graphics.text(font, title, 97, 6, -12566464, false);
         graphics.text(font, playerInventoryTitle, 8, 167, -12566464, false);
+        if (gameModeButton != null) {
+            gameModeButton.extractPopup(graphics, mouseX, mouseY, leftPos, topPos);
+        }
     }
 }
