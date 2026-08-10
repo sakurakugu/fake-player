@@ -82,6 +82,7 @@
   "gui.fakeplayer.chunkloader.map_title": "区块加载地图",
   "gui.fakeplayer.chunkloader.map_position": "中心区块：%1$s, %2$s · %3$s",
   "gui.fakeplayer.chunkloader.map_hover": "区块 %1$s, %2$s · 加载点：%3$s",
+  "gui.fakeplayer.chunkloader.open_management": "管理加载点",
   "gui.fakeplayer.tab_marker": " [假人]",
   "gui.fakeplayer.title": "%s - 假人控制",
   "gui.fakeplayer.inventory": "%s - 背包",

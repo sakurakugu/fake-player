@@ -82,6 +82,7 @@
   "gui.fakeplayer.chunkloader.map_title": "Chunk Loading Map",
   "gui.fakeplayer.chunkloader.map_position": "Center chunk: %1$s, %2$s · %3$s",
   "gui.fakeplayer.chunkloader.map_hover": "Chunk %1$s, %2$s · Anchors: %3$s",
+  "gui.fakeplayer.chunkloader.open_management": "Manage Loaders",
   "gui.fakeplayer.tab_marker": " [Bot]",
   "gui.fakeplayer.title": "%s - Fake Player",
   "gui.fakeplayer.inventory": "%s - Inventory",

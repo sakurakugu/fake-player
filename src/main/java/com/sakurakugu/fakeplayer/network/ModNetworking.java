@@ -36,6 +36,16 @@ public final class ModNetworking {
             }
         );
         registrar.playToServer(
+            OpenChunkLoaderMenuPayload.TYPE,
+            OpenChunkLoaderMenuPayload.STREAM_CODEC,
+            (payload, context) -> {
+                if (context.player() instanceof ServerPlayer player
+                    && FakePlayerConfig.canUseCommands(player.createCommandSourceStack())) {
+                    FakePlayerMenuOpener.openChunkLoaders(player);
+                }
+            }
+        );
+        registrar.playToServer(
             BotActionPayload.TYPE,
             BotActionPayload.STREAM_CODEC,
             (payload, context) -> {

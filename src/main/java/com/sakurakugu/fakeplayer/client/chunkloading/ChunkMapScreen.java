@@ -2,6 +2,7 @@ package com.sakurakugu.fakeplayer.client.chunkloading;
 
 import com.sakurakugu.fakeplayer.network.ChunkMapSnapshotPayload;
 import com.sakurakugu.fakeplayer.network.ChunkMapSnapshotPayload.AnchorView;
+import com.sakurakugu.fakeplayer.network.OpenChunkLoaderMenuPayload;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
@@ -10,6 +11,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.material.MapColor;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 /** 以玩家所在区块为中心显示加载点范围和区块坐标。 */
 public final class ChunkMapScreen extends Screen {
@@ -31,8 +33,12 @@ public final class ChunkMapScreen extends Screen {
 
     @Override
     protected void init() {
+        addRenderableWidget(Button.builder(
+                Component.translatable("gui.fakeplayer.chunkloader.open_management"),
+                button -> ClientPacketDistributor.sendToServer(new OpenChunkLoaderMenuPayload()))
+            .bounds(width / 2 - 104, height - 30, 100, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("gui.done"), button -> onClose())
-            .bounds(width / 2 - 45, height - 30, 90, 20).build());
+            .bounds(width / 2 + 4, height - 30, 100, 20).build());
     }
 
     @Override
