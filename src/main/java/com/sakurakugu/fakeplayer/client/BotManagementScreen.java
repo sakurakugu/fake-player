@@ -240,7 +240,7 @@ public final class BotManagementScreen extends AbstractContainerScreen<BotManage
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractBackground(graphics, mouseX, mouseY, partialTick);
         graphics.fill(leftPos, topPos, leftPos + PANEL_WIDTH, topPos + PANEL_HEIGHT, 0xF0222528);
-        graphics.fill(leftPos, topPos, leftPos + PANEL_WIDTH, topPos + 36, 0xFF2F4A3D);
+        graphics.fill(leftPos, topPos, leftPos + PANEL_WIDTH, topPos + 36, 0xFF373737);
         graphics.fill(leftPos, topPos + 36, leftPos + PANEL_WIDTH, topPos + 38, 0xFFD5A94E);
         graphics.outline(leftPos, topPos, PANEL_WIDTH, PANEL_HEIGHT, 0xFF8B8B8B);
         graphics.fill(leftPos + 156, topPos + 70, leftPos + 364, topPos + 181, 0x802C3033);
@@ -250,7 +250,7 @@ public final class BotManagementScreen extends AbstractContainerScreen<BotManage
     protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         graphics.centeredText(font, title, PANEL_WIDTH / 2, 12, 0xFFFFFFFF);
         graphics.centeredText(font, Component.translatable("gui.fakeplayer.bot.page", page + 1, pageCount()),
-            82, 192, 0xFFB8D8C5);
+            82, 192, 0xFFC6C6C6);
         if (showingGroups) {
             drawGroupDetails(graphics);
         } else {
@@ -267,7 +267,7 @@ public final class BotManagementScreen extends AbstractContainerScreen<BotManage
         }
         graphics.text(font, Component.literal(preset.id()), 166, 78, 0xFFFFFFFF, false);
         graphics.text(font, Component.translatable("gui.fakeplayer.bot.player", preset.playerName()),
-            166, 96, 0xFFB8D8C5, false);
+            166, 96, 0xFFC6C6C6, false);
         String description = preset.description().isBlank()
             ? Component.translatable("gui.fakeplayer.bot.no_description").getString()
             : preset.description();
@@ -286,7 +286,7 @@ public final class BotManagementScreen extends AbstractContainerScreen<BotManage
             return;
         }
         graphics.text(font, Component.literal(group.id()), 166, 78, 0xFFFFFFFF, false);
-        graphics.text(font, Component.translatable("gui.fakeplayer.bot.members"), 166, 96, 0xFFB8D8C5, false);
+        graphics.text(font, Component.translatable("gui.fakeplayer.bot.members"), 166, 96, 0xFFC6C6C6, false);
         String members = group.presetIds().isEmpty()
             ? Component.translatable("commands.fakeplayer.none").getString()
             : String.join(", ", group.presetIds());

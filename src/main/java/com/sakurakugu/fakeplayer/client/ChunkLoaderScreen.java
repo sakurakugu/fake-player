@@ -166,18 +166,18 @@ public final class ChunkLoaderScreen extends AbstractContainerScreen<ChunkLoader
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractBackground(graphics, mouseX, mouseY, partialTick);
         graphics.fill(leftPos, topPos, leftPos + PANEL_WIDTH, topPos + PANEL_HEIGHT, 0xF0222528);
-        graphics.fill(leftPos, topPos, leftPos + PANEL_WIDTH, topPos + 36, 0xFF2F4A3D);
+        graphics.fill(leftPos, topPos, leftPos + PANEL_WIDTH, topPos + 36, 0xFF373737);
         graphics.fill(leftPos, topPos + 36, leftPos + PANEL_WIDTH, topPos + 38, 0xFFD5A94E);
         graphics.outline(leftPos, topPos, PANEL_WIDTH, PANEL_HEIGHT, 0xFF8B8B8B);
         graphics.fill(leftPos + 174, topPos + 48, leftPos + 414, topPos + 192, 0x802C3033);
-        graphics.fill(leftPos, topPos + 240, leftPos + PANEL_WIDTH, topPos + 242, 0xFF496957);
+        graphics.fill(leftPos, topPos + 240, leftPos + PANEL_WIDTH, topPos + 242, 0xFF565656);
     }
 
     @Override
     protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         graphics.text(font, title, 16, 14, 0xFFFFFFFF, false);
         graphics.centeredText(font, Component.translatable("gui.fakeplayer.chunkloader.page",
-            page + 1, pageCount()), 88, 219, 0xFFB8D8C5);
+            page + 1, pageCount()), 88, 219, 0xFFC6C6C6);
         AnchorSummary selected = selected();
         if (selected == null) {
             graphics.centeredText(font, Component.translatable(menu.anchors().isEmpty()
@@ -185,7 +185,7 @@ public final class ChunkLoaderScreen extends AbstractContainerScreen<ChunkLoader
                 294, 107, 0xFFAAAAAA);
         } else {
             graphics.text(font, Component.literal(selected.name()), 184, 58, 0xFFFFFFFF, false);
-            graphics.text(font, Component.literal(selected.dimension()), 184, 76, 0xFFB8D8C5, false);
+            graphics.text(font, Component.literal(selected.dimension()), 184, 76, 0xFFC6C6C6, false);
             graphics.text(font, Component.translatable("gui.fakeplayer.chunkloader.position",
                 selected.x(), selected.y(), selected.z()), 184, 94, 0xFFCCCCCC, false);
             int diameter = selected.radius() * 2 + 1;
@@ -193,6 +193,6 @@ public final class ChunkLoaderScreen extends AbstractContainerScreen<ChunkLoader
                 diameter * diameter), 184, 112, 0xFFCCCCCC, false);
         }
         graphics.text(font, Component.translatable("gui.fakeplayer.chunkloader.create_here"),
-            16, 243, 0xFFB8D8C5, false);
+            16, 243, 0xFFC6C6C6, false);
     }
 }

@@ -192,7 +192,7 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractBackground(graphics, mouseX, mouseY, partialTick);
         graphics.fill(leftPos, topPos, leftPos + PANEL_WIDTH, topPos + PANEL_HEIGHT, 0xF0222528);
-        graphics.fill(leftPos, topPos, leftPos + PANEL_WIDTH, topPos + 40, 0xFF2F4A3D);
+        graphics.fill(leftPos, topPos, leftPos + PANEL_WIDTH, topPos + 40, 0xFF373737);
         graphics.fill(leftPos, topPos + 40, leftPos + PANEL_WIDTH, topPos + 42, 0xFFD5A94E);
         graphics.outline(leftPos, topPos, PANEL_WIDTH, PANEL_HEIGHT, 0xFF8B8B8B);
     }
@@ -216,7 +216,7 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
             Component.translatable("gui.fakeplayer.global.page", page + 1, pageCount(), menu.playerNames().size()),
             PANEL_WIDTH / 2,
             27,
-            0xFFB8D8C5
+            0xFFC6C6C6
         );
     }
 

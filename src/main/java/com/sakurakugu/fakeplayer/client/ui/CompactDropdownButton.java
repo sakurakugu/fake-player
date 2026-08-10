@@ -90,7 +90,7 @@ public final class CompactDropdownButton<T> extends Button {
             int absoluteOptionTop = optionTop + graphicsOriginY;
             if (mouseX >= getX() && mouseX < getX() + getWidth()
                 && mouseY >= absoluteOptionTop && mouseY < absoluteOptionTop + OPTION_HEIGHT) {
-                graphics.fill(left + 1, optionTop + 1, right - 1, optionTop + OPTION_HEIGHT - 1, 0xFF3E5F4D);
+                graphics.fill(left + 1, optionTop + 1, right - 1, optionTop + OPTION_HEIGHT - 1, 0xFF5A5A5A);
             }
             graphics.text(Minecraft.getInstance().font, labelFactory.apply(options.get(index)),
                 left + TEXT_PADDING, optionTop + (OPTION_HEIGHT - 8) / 2, 0xFFFFFFFF, false);
