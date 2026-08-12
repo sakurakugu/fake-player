@@ -94,7 +94,19 @@ public final class ModNetworking {
                     && menu.target() != null) {
                     var result = FakePlayerSimulationService.setPolicy(player.level().getServer(), menu.target().getUUID(),
                         payload.enabled(), payload.distance());
-                    if (!result.successful()) player.sendSystemMessage(Component.literal(result.reason()));
+                    if (result.successful()) menu.broadcastChanges();
+                    else player.sendSystemMessage(Component.literal(result.reason()));
+                }
+            }
+        );
+        registrar.playToServer(
+            FakePlayerViewRotationPayload.TYPE,
+            FakePlayerViewRotationPayload.STREAM_CODEC,
+            (payload, context) -> {
+                if (context.player() instanceof ServerPlayer player
+                    && player.containerMenu instanceof FakePlayerInventoryMenu menu
+                    && player.containerMenu.containerId == payload.containerId()) {
+                    menu.setViewRotation(player, payload.pitch(), payload.yaw());
                 }
             }
         );

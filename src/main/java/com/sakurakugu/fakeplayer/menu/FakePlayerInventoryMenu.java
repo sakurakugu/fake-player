@@ -1,6 +1,8 @@
 package com.sakurakugu.fakeplayer.menu;
 
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
+import com.sakurakugu.fakeplayer.chunkloading.ChunkLoaderManager;
+import com.sakurakugu.fakeplayer.chunkloading.FakePlayerLoadPolicy;
 import com.sakurakugu.fakeplayer.entity.FakePlayerActions;
 import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
 import com.sakurakugu.fakeplayer.entity.FakePlayerPossession;
@@ -111,15 +113,11 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     private static final int CONTINUOUS_INTERVAL_ACTION_COUNT = 3;
     private static final int ACTION_CONTINUOUS_INTERVAL_END = ACTION_CONTINUOUS_INTERVAL_BASE
         + MAX_CONTINUOUS_INTERVAL * CONTINUOUS_INTERVAL_ACTION_COUNT;
-    private static final int ACTION_SET_PITCH_BASE = ACTION_CONTINUOUS_INTERVAL_END;
-    private static final int ACTION_SET_YAW_BASE = ACTION_SET_PITCH_BASE + 181;
-    private static final int ACTION_SET_BODY_YAW_BASE = ACTION_SET_YAW_BASE + 360;
+    private static final int ACTION_SET_BODY_YAW_BASE = ACTION_CONTINUOUS_INTERVAL_END;
     public static final int ACTION_SET_END = ACTION_SET_BODY_YAW_BASE + 360;
     public static final int ACTION_TOGGLE_BODY_FOLLOWS_HEAD = ACTION_SET_END;
     public static final int ACTION_SET_GAME_MODE_BASE = ACTION_TOGGLE_BODY_FOLLOWS_HEAD + 1;
     private static final int ACTION_SET_GAME_MODE_END = ACTION_SET_GAME_MODE_BASE + 4;
-    public static int pitchAction(int pitch) { return ACTION_SET_PITCH_BASE + Math.max(-90, Math.min(90, pitch)) + 90; }
-    public static int yawAction(int yaw) { return angleAction(ACTION_SET_YAW_BASE, yaw); }
     public static int bodyYawAction(int yaw) { return angleAction(ACTION_SET_BODY_YAW_BASE, yaw); }
     private static int angleAction(int base, int yaw) {
         return base + Math.floorMod(yaw + 180, 360);
@@ -173,6 +171,8 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     private int positionXSnapshot;
     private int positionYSnapshot;
     private int positionZSnapshot;
+    private int simulationEnabledSnapshot;
+    private int simulationDistanceSnapshot;
     private final DataSlot health;
     private final DataSlot maxHealth;
     private final DataSlot food;
@@ -188,6 +188,8 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     private final DataSlot positionX;
     private final DataSlot positionY;
     private final DataSlot positionZ;
+    private final DataSlot simulationEnabled;
+    private final DataSlot simulationDistance;
 
     public FakePlayerInventoryMenu(int containerId, Inventory inventory, RegistryFriendlyByteBuf data) {
         this(
@@ -207,7 +209,9 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             data.readVarInt(),
             data.readVarInt(),
             data.readVarInt(),
-            data.readBoolean()
+            data.readBoolean(),
+            data.readBoolean(),
+            data.readVarInt()
         );
     }
 
@@ -225,7 +229,20 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             target.actions().repeatInterval(FakePlayerActions.ScheduledAction.USE),
             target.actions().repeatInterval(FakePlayerActions.ScheduledAction.JUMP),
             Math.round(target.getXRot()), Math.round(target.getYRot()), Math.round(target.yBodyRot),
-            target.actions().bodyFollowsHead());
+            target.actions().bodyFollowsHead(), simulationEnabled(target), simulationDistance(target));
+    }
+
+    private static boolean simulationEnabled(FakeServerPlayer target) {
+        return simulationPolicyFor(target).enabled();
+    }
+
+    private static int simulationDistance(FakeServerPlayer target) {
+        return simulationPolicyFor(target).simulationDistance();
+    }
+
+    private static FakePlayerLoadPolicy simulationPolicyFor(FakeServerPlayer target) {
+        return ChunkLoaderManager.data(target.server()).policy(target.getUUID())
+            .orElse(new FakePlayerLoadPolicy(target.getUUID(), false, 0));
     }
 
     private FakePlayerInventoryMenu(
@@ -245,7 +262,9 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
         int pitch,
         int yaw,
         int bodyYaw,
-        boolean bodyFollowsHead
+        boolean bodyFollowsHead,
+        boolean simulationEnabled,
+        int simulationDistance
     ) {
         super(ModMenus.FAKE_PLAYER_INVENTORY.get(), containerId);
         this.target = target;
@@ -258,6 +277,8 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
         this.yawSnapshot = yaw;
         this.bodyYawSnapshot = bodyYaw;
         this.bodyFollowsHeadSnapshot = bodyFollowsHead ? 1 : 0;
+        this.simulationEnabledSnapshot = simulationEnabled ? 1 : 0;
+        this.simulationDistanceSnapshot = simulationDistance;
         this.pitchData = addDataSlot(new DataSlot() {
             public int get() { return target == null ? pitchSnapshot : Math.round(target.getXRot()); }
             public void set(int value) { pitchSnapshot = value; }
@@ -323,6 +344,16 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
         this.positionZ = syncedValue(
             () -> target == null ? positionZSnapshot : target.getBlockZ(),
             value -> positionZSnapshot = value);
+        this.simulationEnabled = syncedValue(
+            () -> target == null ? simulationEnabledSnapshot
+                : ChunkLoaderManager.data(target.server()).policy(target.getUUID())
+                    .map(policy -> policy.enabled() ? 1 : 0).orElse(0),
+            value -> simulationEnabledSnapshot = value);
+        this.simulationDistance = syncedValue(
+            () -> target == null ? simulationDistanceSnapshot
+                : ChunkLoaderManager.data(target.server()).policy(target.getUUID())
+                    .map(FakePlayerLoadPolicy::simulationDistance).orElse(0),
+            value -> simulationDistanceSnapshot = value);
         this.automationMaskSnapshot = automationMask;
         this.continuousControlMaskSnapshot = continuousControlMask;
         this.continuousIntervals[0] = attackInterval;
@@ -517,16 +548,6 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
             int interval = encoded % MAX_CONTINUOUS_INTERVAL + 1;
             target.actions().setRepeatInterval(continuousAction(controlIndex), interval);
             continuousIntervals[controlIndex] = interval;
-            broadcastChanges();
-            return true;
-        }
-        if (actionId >= ACTION_SET_PITCH_BASE && actionId < ACTION_SET_YAW_BASE) {
-            target.actions().setViewRotation(actionId - ACTION_SET_PITCH_BASE - 90, target.getYRot());
-            broadcastChanges();
-            return true;
-        }
-        if (actionId >= ACTION_SET_YAW_BASE && actionId < ACTION_SET_BODY_YAW_BASE) {
-            target.actions().setViewRotation(target.getXRot(), actionId - ACTION_SET_YAW_BASE - 180);
             broadcastChanges();
             return true;
         }
@@ -933,6 +954,22 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
         return target;
     }
 
+    /** 同时更新两个视角分量，只产生一次服务端状态广播。 */
+    public boolean setViewRotation(Player player, int pitch, int yaw) {
+        if (view != View.INVENTORY || !canAccess(player) || pitch < -90 || pitch > 90
+            || yaw < -180 || yaw > 179) {
+            return false;
+        }
+        int currentPitch = Math.round(target.getXRot());
+        int currentYaw = Math.round(target.getYRot());
+        if (currentPitch == pitch && currentYaw == yaw) {
+            return true;
+        }
+        target.actions().setViewRotation(pitch, yaw);
+        broadcastChanges();
+        return true;
+    }
+
     public String targetName() {
         return targetName;
     }
@@ -960,6 +997,8 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
     public int positionX() { return positionX.get(); }
     public int positionY() { return positionY.get(); }
     public int positionZ() { return positionZ.get(); }
+    public boolean simulationEnabled() { return simulationEnabled.get() != 0; }
+    public int simulationDistance() { return simulationDistance.get(); }
 
     public int selectedHotbarSlot() {
         return selectedHotbarSlot.get();

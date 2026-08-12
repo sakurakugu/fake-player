@@ -205,7 +205,7 @@ public final class OverlayPanelManager {
 
         @Override
         protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            drawBackground(graphics);
+            // 面板背景由所属 Screen 按遮挡顺序统一绘制。
         }
 
         @Override

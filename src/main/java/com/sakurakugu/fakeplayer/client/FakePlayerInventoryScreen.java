@@ -3,6 +3,7 @@ package com.sakurakugu.fakeplayer.client;
 import com.sakurakugu.fakeplayer.menu.FakePlayerInventoryMenu;
 import com.sakurakugu.fakeplayer.network.RenameFakePlayerPayload;
 import com.sakurakugu.fakeplayer.network.FakePlayerSimulationPayload;
+import com.sakurakugu.fakeplayer.network.FakePlayerViewRotationPayload;
 import com.sakurakugu.fakeplayer.client.ui.CompactButton;
 import com.sakurakugu.fakeplayer.client.ui.CompactDropdownButton;
 import com.sakurakugu.fakeplayer.client.ui.CompactSliderButton;
@@ -177,6 +178,9 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private CompactDropdownButton<GameType> gameModeButton;
     private boolean simulationEnabled;
     private int simulationDistance;
+    private boolean simulationStateInitialized;
+    private int lastSentPitch;
+    private int lastSentYaw;
 
     private static OverlayPanelManager.Layout panelLayout(int top, int width, int height) {
         return new OverlayPanelManager.Layout(top, width, height, DROP_TAB_WIDTH, DROP_TAB_HEIGHT);
@@ -190,6 +194,8 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
 
     public FakePlayerInventoryScreen(FakePlayerInventoryMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, menu.screenWidth(), menu.screenHeight());
+        lastSentPitch = menu.pitch();
+        lastSentYaw = menu.yaw();
     }
 
     @Override
@@ -468,8 +474,11 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             SIMULATION_PANEL_ID, left, top - SIMULATION_PANEL_LAYOUT.top(),
             SIMULATION_PANEL_LAYOUT, Component.translatable("gui.fakeplayer.simulation.title"));
         addRenderableWidget(simulationPanel);
-        simulationEnabled = false;
-        simulationDistance = 0;
+        if (!simulationStateInitialized) {
+            simulationEnabled = menu.simulationEnabled();
+            simulationDistance = menu.simulationDistance();
+            simulationStateInitialized = true;
+        }
         ToggleSwitchButton enabled = addRenderableWidget(new ToggleSwitchButton(
             left + 6, top + 24, simulationPanel.contentWidth() - 12, 16,
             Component.translatable("gui.fakeplayer.simulation.enabled"), () -> simulationEnabled,
@@ -577,9 +586,10 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
                 input.setValue(Integer.toString(clamped));
                 syncingAimInputs = false;
             }
-            sendAction(pitch
-                ? FakePlayerInventoryMenu.pitchAction(clamped)
-                : FakePlayerInventoryMenu.yawAction(clamped));
+            sendViewRotation(
+                pitch ? clamped : lastSentPitch,
+                pitch ? lastSentYaw : clamped
+            );
         } catch (NumberFormatException ignored) {
             // 空输入和单独的负号是编辑过程中的合法中间状态。
         }
@@ -661,6 +671,18 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         if (minecraft.gameMode != null) {
             minecraft.gameMode.handleInventoryButtonClick(menu.containerId, actionId);
         }
+    }
+
+    private void sendViewRotation(int pitch, int yaw) {
+        int clampedPitch = Math.clamp(pitch, -90, 90);
+        int wrappedYaw = Math.floorMod(yaw + 180, 360) - 180;
+        if (clampedPitch == lastSentPitch && wrappedYaw == lastSentYaw) {
+            return;
+        }
+        lastSentPitch = clampedPitch;
+        lastSentYaw = wrappedYaw;
+        ClientPacketDistributor.sendToServer(new FakePlayerViewRotationPayload(
+            menu.containerId, clampedPitch, wrappedYaw));
     }
 
     private static int transferActionId(boolean toTarget, boolean transferAll, boolean includeHotbar) {
@@ -924,7 +946,8 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     /** 将滑块位置映射为 0-32 区块的模拟距离。 */
     private final class SimulationDistanceSlider extends CompactSliderButton {
         private SimulationDistanceSlider(int x, int y, int width, int height) {
-            super(x, y, width, height, Component.empty(), 0.0D);
+            super(x, y, width, height, Component.empty(),
+                Math.clamp(simulationDistance / 32.0D, 0.0D, 1.0D));
             updateMessage();
         }
 
@@ -1266,9 +1289,8 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
                 : dragYawOffset;
             float yawBase = menu.bodyFollowsHead() ? dragStartBodyYaw : menu.bodyYaw();
             int yaw = Math.round(yawBase + requestedYawOffset);
-            sendAction(FakePlayerInventoryMenu.yawAction(yaw));
             int pitch = (int) Math.round(dy / r * 90.0);
-            sendAction(FakePlayerInventoryMenu.pitchAction(pitch));
+            sendViewRotation(pitch, yaw);
         }
     }
 

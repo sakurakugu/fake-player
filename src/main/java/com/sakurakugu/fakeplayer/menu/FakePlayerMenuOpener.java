@@ -2,6 +2,7 @@ package com.sakurakugu.fakeplayer.menu;
 
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.chunkloading.ChunkLoaderManager;
+import com.sakurakugu.fakeplayer.chunkloading.FakePlayerLoadPolicy;
 import com.sakurakugu.fakeplayer.entity.FakePlayerActions;
 import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
 import com.sakurakugu.fakeplayer.entity.FakePlayerPossession;
@@ -160,6 +161,8 @@ public final class FakePlayerMenuOpener {
         }
         boolean possessedByViewer = FakePlayerPossession.isControlling(viewer, fake);
         boolean targetOccupied = FakePlayerPossession.isPossessed(fake);
+        FakePlayerLoadPolicy simulation = ChunkLoaderManager.data(viewer.level().getServer())
+            .policy(fake.getUUID()).orElse(new FakePlayerLoadPolicy(fake.getUUID(), false, 0));
         Component title = Component.translatable(
             view == FakePlayerInventoryMenu.View.ENDER_CHEST
                 ? "gui.fakeplayer.ender_chest"
@@ -190,6 +193,8 @@ public final class FakePlayerMenuOpener {
                 data.writeVarInt(Math.round(fake.getYRot()));
                 data.writeVarInt(Math.round(fake.yBodyRot));
                 data.writeBoolean(fake.actions().bodyFollowsHead());
+                data.writeBoolean(simulation.enabled());
+                data.writeVarInt(simulation.simulationDistance());
             }
         );
     }
