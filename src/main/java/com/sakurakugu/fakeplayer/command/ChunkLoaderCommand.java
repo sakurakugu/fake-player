@@ -5,9 +5,12 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.sakurakugu.fakeplayer.chunkloading.ChunkLoaderManager;
+import com.sakurakugu.fakeplayer.chunkloading.FakePlayerSimulationService;
 import com.sakurakugu.fakeplayer.chunkloading.ManualLoadMode;
 import com.sakurakugu.fakeplayer.chunkloading.ManualLoadRegion;
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
+import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
+import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
 import com.sakurakugu.fakeplayer.menu.FakePlayerMenuOpener;
 import java.util.Comparator;
 import net.minecraft.commands.CommandSourceStack;
@@ -42,6 +45,12 @@ public final class ChunkLoaderCommand {
                 .executes(context -> setEnabled(context, true))))
             .then(Commands.literal("disable").then(anchorArgument()
                 .executes(context -> setEnabled(context, false))))
+            .then(Commands.literal("fake").then(fakeArgument()
+                .then(Commands.literal("info").executes(ChunkLoaderCommand::fakeInfo))
+                .then(Commands.literal("disable").executes(ChunkLoaderCommand::disableFake))
+                .then(Commands.literal("set").then(Commands.argument("distance",
+                    IntegerArgumentType.integer(0, 32))
+                    .executes(ChunkLoaderCommand::setFake)))))
             .then(Commands.literal("remove").then(anchorArgument().executes(ChunkLoaderCommand::remove)))
             .then(Commands.literal("configure").then(anchorArgument()
                 .then(Commands.argument("radius", IntegerArgumentType.integer(0,
@@ -138,6 +147,39 @@ public final class ChunkLoaderCommand {
         return 1;
     }
 
+    private static int setFake(CommandContext<CommandSourceStack> context) {
+        FakeServerPlayer fake = getFake(context);
+        if (fake == null) return 0;
+        int distance = IntegerArgumentType.getInteger(context, "distance");
+        var result = FakePlayerSimulationService.setPolicy(context.getSource().getServer(), fake.getUUID(), true, distance);
+        if (!result.successful()) return failure(context, Component.literal("无法设置假人模拟距离：" + result.reason()));
+        context.getSource().sendSuccess(() -> Component.literal("已启用假人 " + fake.getName().getString()
+            + " 的模拟加载，距离 " + distance + " 区块"), true);
+        return 1;
+    }
+
+    private static int disableFake(CommandContext<CommandSourceStack> context) {
+        FakeServerPlayer fake = getFake(context);
+        if (fake == null) return 0;
+        int distance = ChunkLoaderManager.data(context.getSource().getServer()).policy(fake.getUUID())
+            .map(policy -> policy.simulationDistance()).orElse(0);
+        var result = FakePlayerSimulationService.setPolicy(context.getSource().getServer(), fake.getUUID(), false, distance);
+        if (!result.successful()) return failure(context, Component.literal("无法关闭假人模拟加载：" + result.reason()));
+        context.getSource().sendSuccess(() -> Component.literal("已关闭假人 " + fake.getName().getString() + " 的模拟加载"), true);
+        return 1;
+    }
+
+    private static int fakeInfo(CommandContext<CommandSourceStack> context) {
+        FakeServerPlayer fake = getFake(context);
+        if (fake == null) return 0;
+        var policy = ChunkLoaderManager.data(context.getSource().getServer()).policy(fake.getUUID()).orElse(null);
+        boolean enabled = policy != null && policy.enabled();
+        int distance = policy == null ? 0 : policy.simulationDistance();
+        context.getSource().sendSuccess(() -> Component.literal("假人 " + fake.getName().getString()
+            + " 的模拟加载：" + (enabled ? "已启用" : "未启用") + "，距离 " + distance + " 区块"), false);
+        return 1;
+    }
+
     private static int list(CommandContext<CommandSourceStack> context) {
         String values = ChunkLoaderManager.data(context.getSource().getServer()).regions().stream()
             .sorted(Comparator.comparing(ManualLoadRegion::name, String.CASE_INSENSITIVE_ORDER))
@@ -166,6 +208,21 @@ public final class ChunkLoaderCommand {
         return Commands.argument("anchor", StringArgumentType.word()).suggests((context, builder) ->
             SharedSuggestionProvider.suggest(ChunkLoaderManager.data(context.getSource().getServer()).regions().stream()
                 .map(ManualLoadRegion::name), builder));
+    }
+
+    private static com.mojang.brigadier.builder.RequiredArgumentBuilder<CommandSourceStack, String> fakeArgument() {
+        return Commands.argument("fake", StringArgumentType.word()).suggests((context, builder) ->
+            SharedSuggestionProvider.suggest(FakePlayerManager.all(context.getSource().getServer()).stream()
+                .map(fake -> fake.getGameProfile().name()), builder));
+    }
+
+    private static FakeServerPlayer getFake(CommandContext<CommandSourceStack> context) {
+        String name = StringArgumentType.getString(context, "fake");
+        FakeServerPlayer fake = FakePlayerManager.find(context.getSource().getServer(), name);
+        if (fake == null) {
+            context.getSource().sendFailure(Component.literal("找不到在线假人：" + name));
+        }
+        return fake;
     }
 
     private static Component mode(ManualLoadRegion region) {

@@ -61,8 +61,8 @@ public final class PixelGui {
         graphics.disableScissor();
     }
 
-    /** 左侧留出连接边，使展开页看起来是从容器边缘伸出的标签。 */
-    public static void drawTabBackground(
+    /** 左侧留出连接边，供从容器右侧展开的标签使用。 */
+    public static void drawRightTabBackground(
         GuiGraphicsExtractor graphics, int left, int top, int width, int height
     ) {
         int right = left + width;
@@ -76,5 +76,22 @@ public final class PixelGui {
         graphics.fill(left, top + 1, right - 2, top + 2, 0xFFFFFFFF);
         graphics.fill(right - 2, top + 2, right - 1, bottom - 2, 0xFF565656);
         graphics.fill(left, bottom - 2, right - 2, bottom - 1, 0xFF565656);
+    }
+
+    /** 右侧留出连接边，供从容器左侧展开的标签使用。 */
+    public static void drawLeftTabBackground(
+        GuiGraphicsExtractor graphics, int left, int top, int width, int height
+    ) {
+        int right = left + width;
+        int bottom = top + height;
+        graphics.fill(left + 2, top, right, top + 1, 0xFF000000);
+        graphics.fill(left + 1, top + 1, right, top + 2, 0xFF000000);
+        graphics.fill(left, top + 2, left + 1, bottom - 2, 0xFF000000);
+        graphics.fill(left + 1, bottom - 2, right, bottom - 1, 0xFF000000);
+        graphics.fill(left + 2, bottom - 1, right, bottom, 0xFF000000);
+        graphics.fill(left + 1, top + 2, right, bottom - 2, 0xFFC6C6C6);
+        graphics.fill(left + 2, top + 1, right, top + 2, 0xFFFFFFFF);
+        graphics.fill(left + 1, top + 2, left + 2, bottom - 2, 0xFF565656);
+        graphics.fill(left + 2, bottom - 2, right, bottom - 1, 0xFF565656);
     }
 }

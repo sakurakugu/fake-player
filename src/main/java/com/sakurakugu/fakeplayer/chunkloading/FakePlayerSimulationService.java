@@ -1,6 +1,7 @@
 package com.sakurakugu.fakeplayer.chunkloading;
 
 import com.sakurakugu.fakeplayer.FakePlayerMod;
+import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
 import java.util.HashMap;
@@ -42,15 +43,15 @@ public final class FakePlayerSimulationService {
 
     public static ChunkLoaderManager.Result setPolicy(MinecraftServer server, UUID fakePlayerId,
                                                        boolean enabled, int distance) {
-        if (distance < 0 || distance > ChunkLoaderSavedData.MAX_SIMULATION_DISTANCE) {
-            return ChunkLoaderManager.Result.failure("模拟距离必须在 0-" + ChunkLoaderSavedData.MAX_SIMULATION_DISTANCE + " 之间");
+        if (distance < 0 || distance > FakePlayerConfig.maxFakePlayerSimulationDistance()) {
+            return ChunkLoaderManager.Result.failure("模拟距离必须在 0-" + FakePlayerConfig.maxFakePlayerSimulationDistance() + " 之间");
         }
         FakePlayerLoadPolicy policy = new FakePlayerLoadPolicy(fakePlayerId, enabled, distance);
         var policies = new java.util.ArrayList<>(ChunkLoaderManager.data(server).policies());
         policies.removeIf(value -> value.fakePlayerId().equals(fakePlayerId));
         policies.add(policy);
         var usage = ChunkLoadPlanner.budget(ChunkLoaderManager.data(server).regions(), policies);
-        if (usage.player() > com.sakurakugu.fakeplayer.config.FakePlayerConfig.maxPlayerLoadingChunks()) {
+        if (usage.player() > FakePlayerConfig.maxPlayerLoadingChunks()) {
             return ChunkLoaderManager.Result.failure("玩家加载预算超限");
         }
         ChunkLoaderManager.data(server).putPolicy(policy);
@@ -69,7 +70,8 @@ public final class FakePlayerSimulationService {
 
     private static void update(FakeServerPlayer fake) {
         FakePlayerLoadPolicy policy = ChunkLoaderManager.data(fake.server()).policy(fake.getUUID()).orElse(null);
-        if (policy == null || !policy.enabled()) {
+        if (policy == null || !policy.enabled()
+            || policy.simulationDistance() > FakePlayerConfig.maxFakePlayerSimulationDistance()) {
             removeActive(fake.getUUID());
             return;
         }

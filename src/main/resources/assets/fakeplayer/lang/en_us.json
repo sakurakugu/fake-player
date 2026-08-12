@@ -255,5 +255,9 @@
   "gui.fakeplayer.chunkloader.action_success.disable": "Disabled the chunk loader",
   "gui.fakeplayer.chunkloader.action_success.remove": "Removed the chunk loader",
   "gui.fakeplayer.chunkloader.action_success.backup": "Created a chunk loader backup",
-  "gui.fakeplayer.chunkloader.action_success.restore": "Restored the chunk loader backup"
+  "gui.fakeplayer.chunkloader.action_success.restore": "Restored the chunk loader backup",
+  "gui.fakeplayer.simulation.title": "Simulation Loading",
+  "gui.fakeplayer.simulation.enabled": "Enable simulation loading",
+  "gui.fakeplayer.simulation.distance": "Distance: %s chunks",
+  "gui.fakeplayer.simulation.apply": "Apply"
 }

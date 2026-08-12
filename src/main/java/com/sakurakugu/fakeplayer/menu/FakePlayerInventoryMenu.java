@@ -929,7 +929,7 @@ public final class FakePlayerInventoryMenu extends AbstractContainerMenu {
         return target != null && canAccess(player) && !FakePlayerPossession.isPossessed(target);
     }
 
-    FakeServerPlayer target() {
+    public FakeServerPlayer target() {
         return target;
     }
 

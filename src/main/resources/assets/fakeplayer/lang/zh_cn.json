@@ -255,5 +255,9 @@
   "gui.fakeplayer.chunkloader.action_success.disable": "已禁用区块加载点",
   "gui.fakeplayer.chunkloader.action_success.remove": "已删除区块加载点",
   "gui.fakeplayer.chunkloader.action_success.backup": "已创建区块加载点备份",
-  "gui.fakeplayer.chunkloader.action_success.restore": "已恢复区块加载点备份"
+  "gui.fakeplayer.chunkloader.action_success.restore": "已恢复区块加载点备份",
+  "gui.fakeplayer.simulation.title": "模拟加载",
+  "gui.fakeplayer.simulation.enabled": "启用模拟加载",
+  "gui.fakeplayer.simulation.distance": "距离：%s 区块",
+  "gui.fakeplayer.simulation.apply": "应用"
 }

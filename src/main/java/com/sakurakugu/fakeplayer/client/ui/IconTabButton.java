@@ -11,31 +11,40 @@ import net.minecraft.world.item.ItemStack;
 public final class IconTabButton extends Button {
     private final ItemStack item;
     private final Identifier texture;
+    private final int iconOffsetX;
 
     public IconTabButton(
         int x, int y, int width, int height, ItemStack item, Component message, OnPress onPress
     ) {
-        this(x, y, width, height, item, null, message, onPress);
+        this(x, y, width, height, item, null, 0, message, onPress);
+    }
+
+    public IconTabButton(
+        int x, int y, int width, int height, ItemStack item, int iconOffsetX,
+        Component message, OnPress onPress
+    ) {
+        this(x, y, width, height, item, null, iconOffsetX, message, onPress);
     }
 
     public IconTabButton(
         int x, int y, int width, int height, Identifier texture, Component message, OnPress onPress
     ) {
-        this(x, y, width, height, null, texture, message, onPress);
+        this(x, y, width, height, null, texture, 0, message, onPress);
     }
 
     private IconTabButton(
         int x, int y, int width, int height, ItemStack item, Identifier texture,
-        Component message, OnPress onPress
+        int iconOffsetX, Component message, OnPress onPress
     ) {
         super(x, y, width, height, message, onPress, DEFAULT_NARRATION);
         this.item = item;
         this.texture = texture;
+        this.iconOffsetX = iconOffsetX;
     }
 
     @Override
     protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-        int iconX = getX() + 2;
+        int iconX = getX() + 2 + iconOffsetX;
         int iconY = getY() + (getHeight() - 16) / 2;
         if (texture != null) {
             graphics.blit(RenderPipelines.GUI_TEXTURED, texture, iconX, iconY,

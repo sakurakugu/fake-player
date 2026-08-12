@@ -2,6 +2,7 @@ package com.sakurakugu.fakeplayer.client;
 
 import com.sakurakugu.fakeplayer.menu.FakePlayerInventoryMenu;
 import com.sakurakugu.fakeplayer.network.RenameFakePlayerPayload;
+import com.sakurakugu.fakeplayer.network.FakePlayerSimulationPayload;
 import com.sakurakugu.fakeplayer.client.ui.CompactButton;
 import com.sakurakugu.fakeplayer.client.ui.CompactDropdownButton;
 import com.sakurakugu.fakeplayer.client.ui.CompactSliderButton;
@@ -172,6 +173,11 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private boolean syncingAimInputs;
     private EditBox nameInput;
     private CompactDropdownButton<GameType> gameModeButton;
+    private boolean simulationEnabled;
+    private int simulationDistance;
+    private boolean simulationPanelOpen;
+    private AbstractWidget[] simulationContents;
+    private Button simulationTab;
 
     public FakePlayerInventoryScreen(FakePlayerInventoryMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, menu.screenWidth(), menu.screenHeight());
@@ -233,6 +239,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         addControlButtons();
         addInfoPanel();
         addAimPanel();
+        addSimulationPanel();
 
         int panelLeft = leftPos + imageWidth;
         int automationTop = topPos + AUTOMATION_PANEL_TOP + 21;
@@ -440,6 +447,45 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         String name = nameInput.getValue().trim();
         if (!name.equals(menu.targetName())) {
             ClientPacketDistributor.sendToServer(new RenameFakePlayerPayload(menu.containerId, name));
+        }
+    }
+
+    private void addSimulationPanel() {
+        int left = leftPos - 100;
+        int top = topPos + 8;
+        simulationEnabled = false;
+        simulationDistance = 0;
+        ToggleSwitchButton enabled = addRenderableWidget(new ToggleSwitchButton(left + 6, top + 24, 88, 16,
+            Component.translatable("gui.fakeplayer.simulation.enabled"), () -> simulationEnabled,
+            button -> simulationEnabled = !simulationEnabled));
+        addRenderableWidget(new SimulationDistanceSlider(left + 6, top + 47, 88, 16));
+        Button apply = addRenderableWidget(new CompactButton(left + 6, top + 70, 88, 16,
+            Component.translatable("gui.fakeplayer.simulation.apply"), button -> {
+                ClientPacketDistributor.sendToServer(new FakePlayerSimulationPayload(
+                    menu.containerId, simulationEnabled, simulationDistance));
+            }));
+        simulationContents = new AbstractWidget[]{enabled, sliderForSimulation(), apply};
+        simulationTab = addRenderableWidget(new IconTabButton(left + 79, top, DROP_TAB_WIDTH, DROP_TAB_HEIGHT,
+            new ItemStack(Items.GRASS_BLOCK), 2, Component.translatable("gui.fakeplayer.simulation.title"), // 这个要偏移2像素才对的齐
+            button -> toggleSimulationPanel()));
+        simulationTab.setTooltip(Tooltip.create(Component.translatable("gui.fakeplayer.simulation.title")));
+        setSimulationPanelVisible(false);
+    }
+
+    private SimulationDistanceSlider sliderForSimulation() {
+        return (SimulationDistanceSlider) children().stream()
+            .filter(widget -> widget instanceof SimulationDistanceSlider)
+            .findFirst().orElseThrow();
+    }
+
+    private void toggleSimulationPanel() {
+        setSimulationPanelVisible(!simulationPanelOpen);
+    }
+
+    private void setSimulationPanelVisible(boolean visible) {
+        simulationPanelOpen = visible;
+        if (simulationContents != null) {
+            for (AbstractWidget widget : simulationContents) widget.visible = visible;
         }
     }
 
@@ -909,6 +955,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         drawInfoPanel(graphics);
         drawContinuousPanel(graphics);
         drawAimPanel(graphics);
+        drawSimulationPanel(graphics);
 
         for (int slot = 0; slot < HOTBAR_SLOT_COUNT; slot++) {
             int x = leftPos + HOTBAR_SELECTOR_LEFT + slot * HOTBAR_SLOT_SPACING;
@@ -932,6 +979,36 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
 
         drawTargetEntity(graphics, mouseX, mouseY);
         drawSelectorAreaSideBorders(graphics);
+    }
+
+    private void drawSimulationPanel(GuiGraphicsExtractor graphics) {
+        int left = leftPos - 100;
+        int top = topPos + 8;
+        int width = simulationPanelOpen ? 100 : DROP_TAB_WIDTH;
+        int height = simulationPanelOpen ? 92 : DROP_TAB_HEIGHT;
+        PixelGui.drawLeftTabBackground(graphics, left + (simulationPanelOpen ? 0 : 79), top, width, height);
+        if (simulationPanelOpen) {
+            graphics.text(font, Component.translatable("gui.fakeplayer.simulation.title"), left + 7, top + 7,
+                0xFF404040, false);
+        }
+    }
+
+    /** 将滑块位置映射为 0-32 区块的模拟距离。 */
+    private final class SimulationDistanceSlider extends CompactSliderButton {
+        private SimulationDistanceSlider(int x, int y, int width, int height) {
+            super(x, y, width, height, Component.empty(), 0.0D);
+            updateMessage();
+        }
+
+        @Override
+        protected void updateMessage() {
+            setMessage(Component.translatable("gui.fakeplayer.simulation.distance", simulationDistance));
+        }
+
+        @Override
+        protected void applyValue() {
+            simulationDistance = Math.max(0, Math.min(32, (int) Math.round(value * 32.0D)));
+        }
     }
 
     private void clearCraftingArea(GuiGraphicsExtractor graphics) {
@@ -970,7 +1047,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         int top = topPos + DROP_PANEL_TOP;
         int width = dropPanel.isOpen() ? DROP_PANEL_WIDTH : DROP_TAB_WIDTH;
         int height = dropPanel.isOpen() ? DROP_PANEL_HEIGHT : DROP_TAB_HEIGHT;
-        PixelGui.drawTabBackground(graphics, left, top, width, height);
+        PixelGui.drawRightTabBackground(graphics, left, top, width, height);
 
         if (dropPanel.isOpen()) {
             graphics.text(font, Component.translatable("gui.fakeplayer.drop_panel_title"), left + 22, top + 8,
@@ -983,7 +1060,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private void drawInfoPanel(GuiGraphicsExtractor graphics) {
         int left = leftPos + imageWidth;
         int top = topPos + INFO_PANEL_TOP;
-        PixelGui.drawTabBackground(graphics, left, top,
+        PixelGui.drawRightTabBackground(graphics, left, top,
             infoPanel.isOpen() ? INFO_PANEL_WIDTH : DROP_TAB_WIDTH,
             infoPanel.isOpen() ? INFO_PANEL_HEIGHT : DROP_TAB_HEIGHT);
         if (!infoPanel.isOpen()) {
@@ -1124,7 +1201,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         int top = topPos + AUTOMATION_PANEL_TOP;
         int width = automationPanel.isOpen() ? AUTOMATION_PANEL_WIDTH : DROP_TAB_WIDTH;
         int height = automationPanel.isOpen() ? AUTOMATION_PANEL_HEIGHT : DROP_TAB_HEIGHT;
-        PixelGui.drawTabBackground(graphics, left, top, width, height);
+        PixelGui.drawRightTabBackground(graphics, left, top, width, height);
         if (automationPanel.isOpen()) {
             // 标签图标仍覆盖在面板左侧，因此标题从图标右侧开始绘制。
             graphics.text(font, Component.translatable("gui.fakeplayer.automation.title"), left + 22, top + 8,
@@ -1188,7 +1265,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         int top = topPos + CONTINUOUS_PANEL_TOP;
         int width = continuousPanel.isOpen() ? CONTINUOUS_PANEL_WIDTH : DROP_TAB_WIDTH;
         int height = continuousPanel.isOpen() ? CONTINUOUS_PANEL_HEIGHT : DROP_TAB_HEIGHT;
-        PixelGui.drawTabBackground(graphics, left, top, width, height);
+        PixelGui.drawRightTabBackground(graphics, left, top, width, height);
         if (continuousPanel.isOpen()) {
             graphics.text(font, Component.translatable("gui.fakeplayer.continuous.title"), left + 22, top + 8,
                 0xFF404040, false);
@@ -1198,7 +1275,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private void drawAimPanel(GuiGraphicsExtractor graphics) {
         int x = leftPos + imageWidth;
         int y = topPos + AIM_PANEL_TOP;
-        PixelGui.drawTabBackground(graphics, x, y,
+        PixelGui.drawRightTabBackground(graphics, x, y,
             aimPanel.isOpen() ? AIM_PANEL_WIDTH : DROP_TAB_WIDTH,
             aimPanel.isOpen() ? AIM_PANEL_HEIGHT : DROP_TAB_HEIGHT);
         if (!aimPanel.isOpen()) {
@@ -1340,7 +1417,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         int top = topPos + MOUNT_PANEL_TOP;
         int width = mountPanel.isOpen() ? MOUNT_PANEL_WIDTH : DROP_TAB_WIDTH;
         int height = mountPanel.isOpen() ? MOUNT_PANEL_HEIGHT : DROP_TAB_HEIGHT;
-        PixelGui.drawTabBackground(graphics, left, top, width, height);
+        PixelGui.drawRightTabBackground(graphics, left, top, width, height);
         if (mountPanel.isOpen()) {
             graphics.text(font, Component.translatable("gui.fakeplayer.mount.title"), left + 22, top + 8,
                 0xFF404040, false);

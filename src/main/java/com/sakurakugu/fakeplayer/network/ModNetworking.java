@@ -17,6 +17,8 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import net.neoforged.neoforge.network.PacketDistributor;
 import com.sakurakugu.fakeplayer.chunkloading.ChunkLoaderManager;
 import com.sakurakugu.fakeplayer.chunkloading.ChunkLoadApplicationService;
+import com.sakurakugu.fakeplayer.chunkloading.FakePlayerSimulationService;
+import net.minecraft.network.chat.Component;
 
 /** 注册客户端与服务端之间的假人菜单请求。 */
 public final class ModNetworking {
@@ -78,6 +80,21 @@ public final class ModNetworking {
                     && player.containerMenu.containerId == payload.containerId()
                     && FakePlayerConfig.canUseCommands(player.createCommandSourceStack())) {
                     FakePlayerManagementActions.rename(player, payload.name());
+                }
+            }
+        );
+        registrar.playToServer(
+            FakePlayerSimulationPayload.TYPE,
+            FakePlayerSimulationPayload.STREAM_CODEC,
+            (payload, context) -> {
+                if (context.player() instanceof ServerPlayer player
+                    && player.containerMenu instanceof FakePlayerInventoryMenu menu
+                    && player.containerMenu.containerId == payload.containerId()
+                    && FakePlayerConfig.canUseCommands(player.createCommandSourceStack())
+                    && menu.target() != null) {
+                    var result = FakePlayerSimulationService.setPolicy(player.level().getServer(), menu.target().getUUID(),
+                        payload.enabled(), payload.distance());
+                    if (!result.successful()) player.sendSystemMessage(Component.literal(result.reason()));
                 }
             }
         );
