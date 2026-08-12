@@ -30,6 +30,7 @@ public final class ChunkLoadMapController {
     public ChunkMapEditMode mode() { return mode; }
     public void setMode(ChunkMapEditMode value) { mode = value; }
     public Map<Long, ManualLoadMode> painted() { return Map.copyOf(painted); }
+    public Set<Long> erased() { return Set.copyOf(erased); }
     public boolean dirty() { return !painted.isEmpty() || !erased.isEmpty(); }
 
     public void accept(ChunkMapSnapshotPayload value) {
