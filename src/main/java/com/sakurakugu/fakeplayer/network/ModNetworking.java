@@ -16,7 +16,7 @@ import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import net.neoforged.neoforge.network.PacketDistributor;
 import com.sakurakugu.fakeplayer.chunkloading.ChunkLoaderManager;
-import java.util.List;
+import com.sakurakugu.fakeplayer.chunkloading.ChunkLoadApplicationService;
 
 /** 注册客户端与服务端之间的假人菜单请求。 */
 public final class ModNetworking {
@@ -94,14 +94,27 @@ public final class ModNetworking {
             }
         );
         registrar.playToServer(
+            ApplyChunkLoadEditsPayload.TYPE,
+            ApplyChunkLoadEditsPayload.STREAM_CODEC,
+            (payload, context) -> {
+                if (context.player() instanceof ServerPlayer player
+                    && FakePlayerConfig.canUseCommands(player.createCommandSourceStack())) {
+                    var result = ChunkLoadApplicationService.apply(player, payload);
+                    if (!result.successful()) player.sendSystemMessage(net.minecraft.network.chat.Component.literal(result.reason()));
+                    PacketDistributor.sendToPlayer(player, ChunkMapSnapshotPayload.create(player,
+                        ChunkLoaderManager.data(player.level().getServer()), false));
+                }
+            }
+        );
+        registrar.playToServer(
             RequestChunkMapPayload.TYPE,
             RequestChunkMapPayload.STREAM_CODEC,
             (payload, context) -> {
                 if (context.player() instanceof ServerPlayer player
                     && FakePlayerConfig.canUseCommands(player.createCommandSourceStack())) {
-                    var anchors = List.copyOf(ChunkLoaderManager.data(player.level().getServer()).anchors());
+                    var data = ChunkLoaderManager.data(player.level().getServer());
                     PacketDistributor.sendToPlayer(player,
-                        ChunkMapSnapshotPayload.create(player, anchors, payload.openScreen()));
+                        ChunkMapSnapshotPayload.create(player, data, payload.openScreen()));
                 }
             }
         );

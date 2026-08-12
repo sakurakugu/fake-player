@@ -72,15 +72,24 @@ public final class FakePlayerMenuOpener {
     }
 
     public static void openChunkLoaders(ServerPlayer viewer) {
-        List<ChunkLoaderMenu.AnchorSummary> anchors = ChunkLoaderManager.data(viewer.level().getServer()).anchors()
+        List<ChunkLoaderMenu.AnchorSummary> anchors = ChunkLoaderManager.data(viewer.level().getServer()).regions()
             .stream()
             .sorted(java.util.Comparator.comparing(
-                com.sakurakugu.fakeplayer.chunkloading.ChunkLoaderSavedData.Anchor::name,
+                com.sakurakugu.fakeplayer.chunkloading.ManualLoadRegion::name,
                 String.CASE_INSENSITIVE_ORDER))
             .limit(ChunkLoaderMenu.MAX_ANCHORS)
-            .map(anchor -> new ChunkLoaderMenu.AnchorSummary(anchor.name(), anchor.dimension().toString(),
-                anchor.position().getX(), anchor.position().getY(), anchor.position().getZ(), anchor.radius(),
-                anchor.enabled(), anchor.ticking()))
+            .map(region -> {
+                long center = region.chunks().iterator().next();
+                int minX = region.chunks().stream().mapToInt(net.minecraft.world.level.ChunkPos::getX).min().orElse(0);
+                int maxX = region.chunks().stream().mapToInt(net.minecraft.world.level.ChunkPos::getX).max().orElse(0);
+                int minZ = region.chunks().stream().mapToInt(net.minecraft.world.level.ChunkPos::getZ).min().orElse(0);
+                int maxZ = region.chunks().stream().mapToInt(net.minecraft.world.level.ChunkPos::getZ).max().orElse(0);
+                int radius = Math.max(maxX - minX, maxZ - minZ) / 2;
+                return new ChunkLoaderMenu.AnchorSummary(region.name(), region.dimension().toString(),
+                    net.minecraft.world.level.ChunkPos.getX(center) << 4, 0,
+                    net.minecraft.world.level.ChunkPos.getZ(center) << 4, radius,
+                    region.enabled(), region.mode() != com.sakurakugu.fakeplayer.chunkloading.ManualLoadMode.LOADED);
+            })
             .toList();
         int maximumRadius = FakePlayerConfig.maxChunkLoadingRadius();
         viewer.openMenu(new SimpleMenuProvider(

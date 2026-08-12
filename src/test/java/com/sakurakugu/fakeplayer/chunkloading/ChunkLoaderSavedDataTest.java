@@ -2,14 +2,13 @@ package com.sakurakugu.fakeplayer.chunkloading;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.mojang.serialization.JsonOps;
-import java.util.Collection;
+import java.nio.charset.StandardCharsets;
+import java.util.Set;
 import java.util.UUID;
-import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.Test;
 
@@ -17,92 +16,73 @@ class ChunkLoaderSavedDataTest {
     private static final Identifier OVERWORLD = Identifier.withDefaultNamespace("overworld");
 
     @Test
-    void namesAreCaseInsensitiveAndKeepOriginalSpelling() {
+    void regionsUseUuidAndCaseInsensitiveUniqueNames() {
         ChunkLoaderSavedData data = new ChunkLoaderSavedData();
-        ChunkLoaderSavedData.Anchor anchor = anchor("Spawn", 2, true, false);
+        ManualLoadRegion region = region("Spawn", ManualLoadMode.TICKING);
 
-        assertTrue(data.add(anchor));
-        assertFalse(data.add(anchor("sPaWn", 3, true, true)));
-        assertEquals(anchor, data.anchor("SPAWN").orElseThrow());
-        assertTrue(data.isDirty());
+        assertTrue(data.addRegion(region));
+        assertFalse(data.addRegion(region("sPaWn", ManualLoadMode.FULL)));
+        assertEquals(region, data.region(region.id()).orElseThrow());
+        assertEquals(region, data.region("SPAWN").orElseThrow());
+        assertEquals(1, data.revision());
     }
 
     @Test
-    void putReplacesAnchorAndRemoveReturnsIt() {
-        ChunkLoaderSavedData data = new ChunkLoaderSavedData();
-        ChunkLoaderSavedData.Anchor original = anchor("Spawn", 2, true, false);
-        ChunkLoaderSavedData.Anchor replacement = original.withSettings(5, true);
-
-        data.put(original);
-        data.put(replacement);
-
-        assertEquals(replacement, data.remove("spawn").orElseThrow());
-        assertTrue(data.anchor("Spawn").isEmpty());
-        assertTrue(data.remove("missing").isEmpty());
-    }
-
-    @Test
-    void anchorsReturnsAnImmutableSnapshot() {
-        ChunkLoaderSavedData data = new ChunkLoaderSavedData();
-        data.add(anchor("one", 1, true, false));
-        Collection<ChunkLoaderSavedData.Anchor> snapshot = data.anchors();
-
-        data.add(anchor("two", 2, false, true));
-
-        assertEquals(1, snapshot.size());
-        assertThrows(UnsupportedOperationException.class, snapshot::clear);
-    }
-
-    @Test
-    void anchorCopiesChangeOnlyRequestedSettings() {
-        ChunkLoaderSavedData.Anchor anchor = anchor("Spawn", 2, true, false);
-
-        ChunkLoaderSavedData.Anchor disabled = anchor.withEnabled(false);
-        ChunkLoaderSavedData.Anchor configured = anchor.withSettings(6, true);
-
-        assertFalse(disabled.enabled());
-        assertEquals(anchor.radius(), disabled.radius());
-        assertEquals(6, configured.radius());
-        assertTrue(configured.ticking());
-        assertTrue(configured.enabled());
-        assertNotSame(anchor, disabled);
-    }
-
-    @Test
-    void codecRoundTripsAllAnchorFields() {
+    void policiesAndRegionsRoundTrip() {
         ChunkLoaderSavedData original = new ChunkLoaderSavedData();
-        original.add(anchor("Spawn", 4, false, true));
+        ManualLoadRegion region = region("Spawn", ManualLoadMode.FULL).withEnabled(false);
+        original.addRegion(region);
+        original.putPolicy(new FakePlayerLoadPolicy(UUID.randomUUID(), true, 7));
 
         var json = ChunkLoaderSavedData.CODEC.encodeStart(JsonOps.INSTANCE, original).getOrThrow();
         ChunkLoaderSavedData decoded = ChunkLoaderSavedData.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
 
-        assertEquals(original.anchors(), decoded.anchors());
+        assertEquals(original.revision(), decoded.revision());
+        assertEquals(original.regions(), decoded.regions());
+        assertEquals(original.policies(), decoded.policies());
     }
 
     @Test
-    void codecRejectsUnsafeRadius() {
-        ChunkLoaderSavedData data = new ChunkLoaderSavedData();
-        data.add(anchor("unsafe", 2, true, false));
-        var json = ChunkLoaderSavedData.CODEC.encodeStart(JsonOps.INSTANCE, data).getOrThrow();
-        json.getAsJsonObject().getAsJsonArray("anchors").get(0).getAsJsonObject().addProperty("radius", 33);
+    void codecRejectsDuplicateChunksAndUnknownMode() {
+        ChunkLoaderSavedData original = new ChunkLoaderSavedData();
+        original.addRegion(region("Spawn", ManualLoadMode.TICKING));
+        var json = ChunkLoaderSavedData.CODEC.encodeStart(JsonOps.INSTANCE, original).getOrThrow();
+        var region = json.getAsJsonObject().getAsJsonArray("manual_regions").get(0).getAsJsonObject();
+        region.getAsJsonArray("chunks").add(region.getAsJsonArray("chunks").get(0));
+        assertTrue(ChunkLoaderSavedData.CODEC.parse(JsonOps.INSTANCE, json).error().isPresent());
+
+        region.getAsJsonArray("chunks").remove(region.getAsJsonArray("chunks").size() - 1);
+        region.addProperty("mode", "MAGIC");
+        assertTrue(ChunkLoaderSavedData.CODEC.parse(JsonOps.INSTANCE, json).error().isPresent());
+    }
+
+    @Test
+    void codecRejectsDuplicateRegionUuid() {
+        ChunkLoaderSavedData original = new ChunkLoaderSavedData();
+        original.addRegion(region("Spawn", ManualLoadMode.TICKING));
+        var json = ChunkLoaderSavedData.CODEC.encodeStart(JsonOps.INSTANCE, original).getOrThrow();
+        json.getAsJsonObject().getAsJsonArray("manual_regions")
+            .add(json.getAsJsonObject().getAsJsonArray("manual_regions").get(0).deepCopy());
 
         assertTrue(ChunkLoaderSavedData.CODEC.parse(JsonOps.INSTANCE, json).error().isPresent());
     }
 
-    private static ChunkLoaderSavedData.Anchor anchor(
-        String name,
-        int radius,
-        boolean enabled,
-        boolean ticking
-    ) {
-        return new ChunkLoaderSavedData.Anchor(
-            UUID.nameUUIDFromBytes(name.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
-            name,
-            OVERWORLD,
-            new BlockPos(32, 64, -16),
-            radius,
-            enabled,
-            ticking
-        );
+    @Test
+    void snapshotsAreImmutableAndCanRestoreRevision() {
+        ChunkLoaderSavedData data = new ChunkLoaderSavedData();
+        data.addRegion(region("one", ManualLoadMode.TICKING));
+        ChunkLoaderSavedData.State state = data.snapshot();
+        data.addRegion(region("two", ManualLoadMode.FULL));
+
+        data.restore(state);
+
+        assertEquals(1, data.revision());
+        assertEquals(1, data.regions().size());
+        assertThrows(UnsupportedOperationException.class, () -> state.regions().clear());
+    }
+
+    static ManualLoadRegion region(String name, ManualLoadMode mode) {
+        return new ManualLoadRegion(UUID.nameUUIDFromBytes(name.getBytes(StandardCharsets.UTF_8)), name, OVERWORLD,
+            Set.of(ChunkKey.pack(1, 2), ChunkKey.pack(2, 2), ChunkKey.pack(2, 3)), mode, true);
     }
 }

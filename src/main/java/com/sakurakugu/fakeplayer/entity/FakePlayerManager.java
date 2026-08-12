@@ -3,6 +3,7 @@ package com.sakurakugu.fakeplayer.entity;
 import com.mojang.authlib.GameProfile;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerPersistence;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerSavedData;
+import com.sakurakugu.fakeplayer.chunkloading.FakePlayerSimulationService;
 import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
@@ -157,6 +158,7 @@ public final class FakePlayerManager {
         fake.shakeOffPlayers();
         if (removeResident) {
             FakePlayerPersistence.untrack(fake);
+            FakePlayerSimulationService.removePolicy(fake.server(), fake.getUUID());
         }
         fake.disconnect();
         fake.server().getPlayerList().remove(fake);

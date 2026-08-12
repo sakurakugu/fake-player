@@ -4,6 +4,7 @@ import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.menu.ModMenus;
 import com.sakurakugu.fakeplayer.network.ModNetworking;
 import com.sakurakugu.fakeplayer.chunkloading.ChunkLoaderManager;
+import com.sakurakugu.fakeplayer.chunkloading.FakePlayerSimulationService;
 import com.mojang.logging.LogUtils;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
@@ -23,5 +24,6 @@ public final class FakePlayerMod {
         ModMenus.register(modBus);
         modBus.addListener(ModNetworking::register);
         modBus.addListener(ChunkLoaderManager::registerTicketController);
+        modBus.addListener(FakePlayerSimulationService::register);
     }
 }

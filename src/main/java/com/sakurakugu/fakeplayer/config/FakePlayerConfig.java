@@ -15,6 +15,7 @@ public final class FakePlayerConfig {
     private static final ModConfigSpec.IntValue MAX_CHUNK_LOADING_RADIUS;
     private static final ModConfigSpec.IntValue MAX_FORCED_CHUNKS;
     private static final ModConfigSpec.IntValue MAX_TICKING_CHUNKS;
+    private static final ModConfigSpec.IntValue MAX_PLAYER_LOADING_CHUNKS;
     private static final ModConfigSpec.BooleanValue ENABLE_CONTAINER_TRANSFER_BUTTONS;
 
     static {
@@ -50,6 +51,9 @@ public final class FakePlayerConfig {
         MAX_TICKING_CHUNKS = builder
             .comment("所有 ticking 加载点允许完整刻处理的区块总数。")
             .defineInRange("maxTickingChunks", 512, 1, 16384);
+        MAX_PLAYER_LOADING_CHUNKS = builder
+            .comment("所有启用假玩家策略允许的模拟区块预算。")
+            .defineInRange("maxPlayerLoadingChunks", 2048, 1, 65536);
         builder.pop();
         builder.push("ui");
         ENABLE_CONTAINER_TRANSFER_BUTTONS = builder
@@ -94,6 +98,10 @@ public final class FakePlayerConfig {
 
     public static int maxTickingChunks() {
         return MAX_TICKING_CHUNKS.get();
+    }
+
+    public static int maxPlayerLoadingChunks() {
+        return MAX_PLAYER_LOADING_CHUNKS.get();
     }
 
     public static boolean containerTransferButtons() {

@@ -1,6 +1,7 @@
 package com.sakurakugu.fakeplayer.menu;
 
 import com.sakurakugu.fakeplayer.chunkloading.ChunkLoaderManager;
+import com.sakurakugu.fakeplayer.chunkloading.ManualLoadMode;
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.network.ChunkLoaderActionPayload;
 import net.minecraft.network.chat.Component;
@@ -37,14 +38,15 @@ public final class ChunkLoaderActions {
         ChunkLoaderManager.Result validation = validateRadius(payload.radius());
         return validation == null
             ? ChunkLoaderManager.add(server(viewer), payload.name(), viewer.level(), viewer.blockPosition(),
-                payload.radius(), payload.ticking())
+                payload.radius(), payload.ticking() ? ManualLoadMode.TICKING : ManualLoadMode.LOADED)
             : validation;
     }
 
     private static ChunkLoaderManager.Result configure(ServerPlayer viewer, ChunkLoaderActionPayload payload) {
         ChunkLoaderManager.Result validation = validateRadius(payload.radius());
         return validation == null
-            ? ChunkLoaderManager.configure(server(viewer), payload.name(), payload.radius(), payload.ticking())
+            ? ChunkLoaderManager.configure(server(viewer), payload.name(), payload.radius(),
+                payload.ticking() ? ManualLoadMode.TICKING : ManualLoadMode.LOADED)
             : validation;
     }
 

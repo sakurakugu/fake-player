@@ -5,7 +5,8 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.sakurakugu.fakeplayer.chunkloading.ChunkLoaderManager;
-import com.sakurakugu.fakeplayer.chunkloading.ChunkLoaderSavedData.Anchor;
+import com.sakurakugu.fakeplayer.chunkloading.ManualLoadMode;
+import com.sakurakugu.fakeplayer.chunkloading.ManualLoadRegion;
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.menu.FakePlayerMenuOpener;
 import java.util.Comparator;
@@ -33,8 +34,10 @@ public final class ChunkLoaderCommand {
                 .then(Commands.argument("anchor", StringArgumentType.word())
                     .then(Commands.argument("radius", IntegerArgumentType.integer(0,
                             ChunkLoaderManager.ABSOLUTE_MAX_RADIUS))
-                        .executes(context -> add(context, false))
-                        .then(Commands.literal("ticking").executes(context -> add(context, true))))))
+                        .then(Commands.argument("mode", StringArgumentType.word())
+                            .suggests((context, builder) -> SharedSuggestionProvider.suggest(
+                                java.util.Arrays.stream(ManualLoadMode.values()).map(mode -> mode.name().toLowerCase()), builder))
+                            .executes(ChunkLoaderCommand::add)))))
             .then(Commands.literal("enable").then(anchorArgument()
                 .executes(context -> setEnabled(context, true))))
             .then(Commands.literal("disable").then(anchorArgument()
@@ -43,8 +46,10 @@ public final class ChunkLoaderCommand {
             .then(Commands.literal("configure").then(anchorArgument()
                 .then(Commands.argument("radius", IntegerArgumentType.integer(0,
                         ChunkLoaderManager.ABSOLUTE_MAX_RADIUS))
-                    .executes(context -> configure(context, false))
-                    .then(Commands.literal("ticking").executes(context -> configure(context, true)))))));
+                    .then(Commands.argument("mode", StringArgumentType.word())
+                        .suggests((context, builder) -> SharedSuggestionProvider.suggest(
+                            java.util.Arrays.stream(ManualLoadMode.values()).map(mode -> mode.name().toLowerCase()), builder))
+                        .executes(ChunkLoaderCommand::configure))))));
     }
 
     private static int openGui(CommandContext<CommandSourceStack> context) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
@@ -71,22 +76,24 @@ public final class ChunkLoaderCommand {
         return 1;
     }
 
-    private static int add(CommandContext<CommandSourceStack> context, boolean ticking) {
+    private static int add(CommandContext<CommandSourceStack> context) {
         int radius = IntegerArgumentType.getInteger(context, "radius");
         if (radius > FakePlayerConfig.maxChunkLoadingRadius()) {
             return failure(context, Component.translatable("commands.fakeplayer.chunkloader.radius_limit",
                 FakePlayerConfig.maxChunkLoadingRadius()));
         }
         String name = StringArgumentType.getString(context, "anchor");
+        ManualLoadMode mode = parseMode(context);
+        if (mode == null) return failure(context, Component.literal("模式必须是 loaded、ticking 或 full"));
         BlockPos position = BlockPos.containing(context.getSource().getPosition());
         var result = ChunkLoaderManager.add(context.getSource().getServer(), name,
-            context.getSource().getLevel(), position, radius, ticking);
+            context.getSource().getLevel(), position, radius, mode);
         if (!result.successful()) {
             return failure(context, Component.translatable("commands.fakeplayer.chunkloader.failed", result.reason()));
         }
-        Anchor anchor = result.anchor().orElseThrow();
+        ManualLoadRegion anchor = result.region().orElseThrow();
         context.getSource().sendSuccess(() -> Component.translatable("commands.fakeplayer.chunkloader.added",
-            anchor.name(), anchor.position().toShortString(), anchor.dimension(), anchor.radius(), mode(anchor)), true);
+            anchor.name(), position.toShortString(), anchor.dimension(), radius, mode(anchor)), true);
         return 1;
     }
 
@@ -101,20 +108,22 @@ public final class ChunkLoaderCommand {
         return 1;
     }
 
-    private static int configure(CommandContext<CommandSourceStack> context, boolean ticking) {
+    private static int configure(CommandContext<CommandSourceStack> context) {
         int radius = IntegerArgumentType.getInteger(context, "radius");
         if (radius > FakePlayerConfig.maxChunkLoadingRadius()) {
             return failure(context, Component.translatable("commands.fakeplayer.chunkloader.radius_limit",
                 FakePlayerConfig.maxChunkLoadingRadius()));
         }
         String name = StringArgumentType.getString(context, "anchor");
-        var result = ChunkLoaderManager.configure(context.getSource().getServer(), name, radius, ticking);
+        ManualLoadMode mode = parseMode(context);
+        if (mode == null) return failure(context, Component.literal("模式必须是 loaded、ticking 或 full"));
+        var result = ChunkLoaderManager.configure(context.getSource().getServer(), name, radius, mode);
         if (!result.successful()) {
             return failure(context, Component.translatable("commands.fakeplayer.chunkloader.failed", result.reason()));
         }
-        Anchor anchor = result.anchor().orElseThrow();
+        ManualLoadRegion anchor = result.region().orElseThrow();
         context.getSource().sendSuccess(() -> Component.translatable("commands.fakeplayer.chunkloader.configured",
-            anchor.name(), anchor.radius(), mode(anchor)), true);
+            anchor.name(), anchor.chunks().size(), mode(anchor)), true);
         return 1;
     }
 
@@ -130,10 +139,10 @@ public final class ChunkLoaderCommand {
     }
 
     private static int list(CommandContext<CommandSourceStack> context) {
-        String values = ChunkLoaderManager.data(context.getSource().getServer()).anchors().stream()
-            .sorted(Comparator.comparing(Anchor::name, String.CASE_INSENSITIVE_ORDER))
+        String values = ChunkLoaderManager.data(context.getSource().getServer()).regions().stream()
+            .sorted(Comparator.comparing(ManualLoadRegion::name, String.CASE_INSENSITIVE_ORDER))
             .map(anchor -> anchor.name() + " [" + (anchor.enabled() ? "on" : "off") + ", r="
-                + anchor.radius() + ", " + mode(anchor).getString() + "]")
+                + anchor.chunks().size() + ", " + mode(anchor).getString() + "]")
             .reduce((left, right) -> left + ", " + right)
             .orElse(Component.translatable("commands.fakeplayer.none").getString());
         context.getSource().sendSuccess(
@@ -143,27 +152,32 @@ public final class ChunkLoaderCommand {
 
     private static int info(CommandContext<CommandSourceStack> context) {
         String name = StringArgumentType.getString(context, "anchor");
-        Anchor anchor = ChunkLoaderManager.data(context.getSource().getServer()).anchor(name).orElse(null);
+        ManualLoadRegion anchor = ChunkLoaderManager.data(context.getSource().getServer()).region(name).orElse(null);
         if (anchor == null) {
             return failure(context, Component.translatable("commands.fakeplayer.chunkloader.failed", "找不到加载点"));
         }
-        int diameter = anchor.radius() * 2 + 1;
         context.getSource().sendSuccess(() -> Component.translatable("commands.fakeplayer.chunkloader.info",
-            anchor.name(), anchor.enabled(), anchor.dimension(), anchor.position().toShortString(), anchor.radius(),
-            diameter * diameter, mode(anchor)), false);
+            anchor.name(), anchor.enabled(), anchor.dimension(), "-", 0,
+            anchor.chunks().size(), mode(anchor)), false);
         return 1;
     }
 
     private static com.mojang.brigadier.builder.RequiredArgumentBuilder<CommandSourceStack, String> anchorArgument() {
         return Commands.argument("anchor", StringArgumentType.word()).suggests((context, builder) ->
-            SharedSuggestionProvider.suggest(ChunkLoaderManager.data(context.getSource().getServer()).anchors().stream()
-                .map(Anchor::name), builder));
+            SharedSuggestionProvider.suggest(ChunkLoaderManager.data(context.getSource().getServer()).regions().stream()
+                .map(ManualLoadRegion::name), builder));
     }
 
-    private static Component mode(Anchor anchor) {
-        return Component.translatable(anchor.ticking()
-            ? "commands.fakeplayer.chunkloader.mode_ticking"
-            : "commands.fakeplayer.chunkloader.mode_loading");
+    private static Component mode(ManualLoadRegion region) {
+        return Component.literal(region.mode().name().toLowerCase(java.util.Locale.ROOT));
+    }
+
+    private static ManualLoadMode parseMode(CommandContext<CommandSourceStack> context) {
+        try {
+            return ManualLoadMode.valueOf(StringArgumentType.getString(context, "mode").toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
     }
 
     private static int failure(CommandContext<CommandSourceStack> context, Component message) {

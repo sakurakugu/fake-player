@@ -8,7 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.UUID;
-import net.minecraft.core.BlockPos;
+import java.util.Set;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -27,7 +27,7 @@ class ChunkLoaderBackupStoreTest {
             assertEquals(5, files.filter(path -> path.toString().endsWith(".json")).count());
         }
         assertEquals("anchor6", ChunkLoaderBackupStore.loadLatest(directory).orElseThrow()
-            .anchors().iterator().next().name());
+            .regions().iterator().next().name());
     }
 
     @Test
@@ -38,13 +38,14 @@ class ChunkLoaderBackupStoreTest {
 
         var restored = ChunkLoaderBackupStore.loadLatest(directory).orElseThrow();
 
-        assertTrue(restored.anchor("valid").isPresent());
+        assertTrue(restored.region("valid").isPresent());
     }
 
     private static ChunkLoaderSavedData data(String name) {
         ChunkLoaderSavedData data = new ChunkLoaderSavedData();
-        data.add(new ChunkLoaderSavedData.Anchor(UUID.nameUUIDFromBytes(name.getBytes(StandardCharsets.UTF_8)),
-            name, Identifier.withDefaultNamespace("overworld"), new BlockPos(0, 64, 0), 2, true, false));
+        data.addRegion(new ManualLoadRegion(UUID.nameUUIDFromBytes(name.getBytes(StandardCharsets.UTF_8)),
+            name, Identifier.withDefaultNamespace("overworld"), Set.of(ChunkKey.pack(0, 0)),
+            ManualLoadMode.TICKING, true));
         return data;
     }
 }

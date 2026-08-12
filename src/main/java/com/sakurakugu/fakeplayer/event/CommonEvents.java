@@ -5,6 +5,7 @@ import com.sakurakugu.fakeplayer.command.FakePlayerCommand;
 import com.sakurakugu.fakeplayer.command.BotCommand;
 import com.sakurakugu.fakeplayer.command.ChunkLoaderCommand;
 import com.sakurakugu.fakeplayer.chunkloading.ChunkLoaderManager;
+import com.sakurakugu.fakeplayer.chunkloading.FakePlayerSimulationService;
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
 import com.sakurakugu.fakeplayer.entity.FakePlayerPossession;
@@ -26,6 +27,7 @@ import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 /** 处理服务端通用事件，包括命令注册和假玩家交互。 */
@@ -45,6 +47,12 @@ public final class CommonEvents {
     public static void serverStarted(ServerStartedEvent event) {
         FakePlayerPersistence.restore(event.getServer());
         ChunkLoaderManager.reconcile(event.getServer());
+        FakePlayerSimulationService.reconcile(event.getServer());
+    }
+
+    @SubscribeEvent
+    public static void serverTick(ServerTickEvent.Post event) {
+        if (event.getServer().getTickCount() % 10 == 0) FakePlayerSimulationService.tick(event.getServer());
     }
 
     @SubscribeEvent
