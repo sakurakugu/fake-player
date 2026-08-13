@@ -1,28 +1,41 @@
 package com.sakurakugu.fakeplayer.client.chunkloading;
 
+import com.mojang.authlib.GameProfile;
 import com.sakurakugu.fakeplayer.chunkloading.ChunkKey;
 import com.sakurakugu.fakeplayer.chunkloading.ManualLoadMode;
+import com.sakurakugu.fakeplayer.client.ui.CompactSliderButton;
 import com.sakurakugu.fakeplayer.network.ChunkMapSnapshotPayload;
+import com.sakurakugu.fakeplayer.network.RequestChunkMapPayload;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.PlayerFaceExtractor;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.resources.DefaultPlayerSkin;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.player.PlayerSkin;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 /** 以客户端已加载地形为背景的区块加载编辑地图。 */
 public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend {
-    private static final int MAP_TOP = 50;
-    private static final int MAP_BOTTOM_MARGIN = 32;
     private static final double MIN_SCALE = 0.35D;
     private static final double MAX_SCALE = 2.5D;
     private static final int UNLOADED_A = 0xFF20262A;
     private static final int UNLOADED_B = 0xFF252C30;
+    private static final Identifier PLAYER_MARKER = Identifier.withDefaultNamespace(
+        "textures/map/decorations/player.png"
+    );
+    private static final int[] PLAYER_MARKER_COLORS = {
+        0xFF4FC3F7, 0xFFFF6B6B, 0xFF66D17A, 0xFFFFC857,
+        0xFFC77DFF, 0xFF36C9B4, 0xFFFF8A4C, 0xFFF06292
+    };
 
     private final ChunkLoadMapController controller;
     private final ChunkTerrainTileCache terrainTiles;
@@ -31,6 +44,8 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
     private double centerBlockZ;
     private double pixelsPerBlock = 0.75D;
     private boolean dragging;
+    private boolean settingsOpen;
+    private int snapshotRefreshTicks;
 
     public ChunkMapScreen(ChunkMapSnapshotPayload snapshot) {
         super(Component.translatable("gui.fakeplayer.chunkloader.map_title"));
@@ -44,9 +59,25 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
     public void update(ChunkMapSnapshotPayload value) { acceptSnapshot(value); }
 
     @Override
+    public void tick() {
+        super.tick();
+        if (minecraft.player != null && minecraft.getConnection() != null && snapshotRefreshTicks-- <= 0) {
+            ClientPacketDistributor.sendToServer(new RequestChunkMapPayload(false));
+            snapshotRefreshTicks = 10;
+        }
+    }
+
+    @Override
     protected void init() {
-        int buttonWidth = Math.max(44, Math.min(62, (width - 20) / 7));
-        int total = buttonWidth * 7;
+        if (settingsOpen) {
+            addRenderableWidget(new MarkerNameScaleSlider(width / 2 - 100, height / 2 - 10, 200, 20));
+            addRenderableWidget(Button.builder(Component.translatable("gui.back"), button -> showSettings(false))
+                .bounds(width / 2 - 50, height - 32, 100, 20).build());
+            return;
+        }
+        int modeCount = ChunkMapEditMode.values().length;
+        int buttonWidth = Math.max(44, Math.min(62, (width - 20) / modeCount));
+        int total = buttonWidth * modeCount;
         int x = (width - total) / 2;
         for (ChunkMapEditMode mode : ChunkMapEditMode.values()) {
             addRenderableWidget(Button.builder(Component.literal(label(mode)), button -> setEditMode(mode))
@@ -59,37 +90,48 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
             .bounds(width / 2 - 32, height - 26, 64, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("gui.done"), button -> onClose())
             .bounds(width / 2 + 38, height - 26, 64, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("gui.fakeplayer.chunkloader.map_settings"),
+            button -> showSettings(true)).bounds(6, height - 26, 48, 20).build());
     }
 
     @Override
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-        int bottom = mapBottom();
+        if (settingsOpen) {
+            drawSettings(graphics);
+            return;
+        }
         graphics.fill(0, 0, width, height, 0xFF111518);
-        graphics.enableScissor(0, MAP_TOP, width, bottom);
-        drawTerrain(graphics, bottom);
-        drawChunkOverlays(graphics, bottom);
-        drawFakePlayers(graphics, bottom);
-        drawPlayer(graphics, bottom);
-        drawHoveredChunk(graphics, mouseX, mouseY, bottom);
+        graphics.enableScissor(0, 0, width, height);
+        drawTerrain(graphics);
+        drawChunkOverlays(graphics);
+        drawFakePlayers(graphics);
+        drawPlayer(graphics);
+        PlayerMarker hoveredPlayer = playerMarkerAt(mouseX, mouseY);
+        drawHoveredChunk(graphics, mouseX, mouseY, hoveredPlayer);
         graphics.disableScissor();
 
-        graphics.fill(0, 0, width, MAP_TOP, 0xE8171A1D);
-        graphics.fill(0, bottom, width, height, 0xE8171A1D);
-        graphics.centeredText(font, Component.literal(title.getString() + "  [" + label(controller.mode()) + "]"),
-            width / 2, 8, 0xFFFFFFFF);
+        Component heading = Component.literal(title.getString() + "  [" + label(controller.mode()) + "]");
+        drawFloatingText(graphics, heading, width / 2, 8, 0xFFFFFFFF);
         int centerChunkX = Mth.floor(centerBlockX) >> 4;
         int centerChunkZ = Mth.floor(centerBlockZ) >> 4;
         Component status = Component.translatable("gui.fakeplayer.chunkloader.map_position",
             centerChunkX, centerChunkZ, controller.snapshot().dimension()).copy()
             .append("  ").append(Math.round(pixelsPerBlock * 100.0D) + "%");
-        graphics.centeredText(font, status, width / 2, bottom + 10, 0xFFC8D6CF);
+        drawFloatingText(graphics, status, width / 2, height - 38, 0xFFC8D6CF);
     }
 
-    private void drawTerrain(GuiGraphicsExtractor graphics, int bottom) {
+    private void drawFloatingText(GuiGraphicsExtractor graphics, Component text, int centerX, int y, int color) {
+        int textWidth = font.width(text);
+        graphics.fill(centerX - textWidth / 2 - 3, y - 2,
+            centerX + (textWidth + 1) / 2 + 3, y + 11, 0xB8111518);
+        graphics.centeredText(font, text, centerX, y, color);
+    }
+
+    private void drawTerrain(GuiGraphicsExtractor graphics) {
         int minChunkX = Mth.floor(screenToWorldX(0)) >> 4;
         int maxChunkX = Mth.floor(screenToWorldX(width - 1)) >> 4;
-        int minChunkZ = Mth.floor(screenToWorldZ(MAP_TOP)) >> 4;
-        int maxChunkZ = Mth.floor(screenToWorldZ(bottom - 1)) >> 4;
+        int minChunkZ = Mth.floor(screenToWorldZ(0)) >> 4;
+        int maxChunkZ = Mth.floor(screenToWorldZ(height - 1)) >> 4;
         int sampleY = minecraft.player == null ? 64 : minecraft.player.getBlockY();
         terrainTiles.beginFrame();
         for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
@@ -109,11 +151,11 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
         }
     }
 
-    private void drawChunkOverlays(GuiGraphicsExtractor graphics, int bottom) {
+    private void drawChunkOverlays(GuiGraphicsExtractor graphics) {
         int minChunkX = Mth.floor(screenToWorldX(0)) >> 4;
         int maxChunkX = Mth.floor(screenToWorldX(width - 1)) >> 4;
-        int minChunkZ = Mth.floor(screenToWorldZ(MAP_TOP)) >> 4;
-        int maxChunkZ = Mth.floor(screenToWorldZ(bottom - 1)) >> 4;
+        int minChunkZ = Mth.floor(screenToWorldZ(0)) >> 4;
+        int maxChunkZ = Mth.floor(screenToWorldZ(height - 1)) >> 4;
         Map<Long, ManualLoadMode> painted = controller.painted();
         var erased = controller.erased();
         for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
@@ -132,22 +174,17 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
         }
     }
 
-    private void drawFakePlayers(GuiGraphicsExtractor graphics, int bottom) {
+    private void drawFakePlayers(GuiGraphicsExtractor graphics) {
         for (var fake : controller.snapshot().fakePlayers()) {
             if (!fake.dimension().equals(controller.snapshot().dimension())) continue;
-            double blockX = fake.x() + 0.5D;
-            double blockZ = fake.z() + 0.5D;
             if (fake.enabled()) {
-                outlineRange(graphics, blockX, blockZ, fake.simulationDistance(), 0xFF4EC9E8);
-                outlineRange(graphics, blockX, blockZ, 2, 0xFFE8C34E);
-                outlineRange(graphics, blockX, blockZ, 8, 0xFFE86B62);
+                outlineRange(graphics, fake.x() + 0.5D, fake.z() + 0.5D,
+                    fake.simulationDistance(), 0xFF4EC9E8);
             }
-            int x = worldToScreenX(blockX);
-            int y = worldToScreenZ(blockZ);
-            if (x >= 0 && x < width && y >= MAP_TOP && y < bottom) {
-                graphics.fill(x - 2, y - 2, x + 3, y + 3, 0xFFFFFFFF);
-                graphics.outline(x - 3, y - 3, 7, 7, 0xFF202428);
-            }
+        }
+        for (var fake : controller.snapshot().fakePlayers()) {
+            if (!fake.dimension().equals(controller.snapshot().dimension())) continue;
+            drawPlayerMarker(graphics, fake.id(), fake.x() + 0.5D, fake.z() + 0.5D, fake.yaw(), fake.name());
         }
     }
 
@@ -161,40 +198,160 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
         graphics.outline(left, top, Math.max(1, right - left), Math.max(1, bottom - top), color);
     }
 
-    private void drawPlayer(GuiGraphicsExtractor graphics, int bottom) {
-        double x = controller.snapshot().playerChunkX() * 16.0D + 8.0D;
-        double z = controller.snapshot().playerChunkZ() * 16.0D + 8.0D;
-        int screenX = worldToScreenX(x);
-        int screenY = worldToScreenZ(z);
-        if (screenX >= 0 && screenX < width && screenY >= MAP_TOP && screenY < bottom) {
-            graphics.fill(screenX - 2, screenY - 5, screenX + 3, screenY + 6, 0xFFFFFFFF);
-            graphics.fill(screenX - 5, screenY - 2, screenX + 6, screenY + 3, 0xFFFFFFFF);
-            graphics.outline(screenX - 6, screenY - 6, 13, 13, 0xFF202428);
-        }
+    private void drawPlayer(GuiGraphicsExtractor graphics) {
+        if (minecraft.player == null) return;
+        drawPlayerMarker(graphics, minecraft.player.getUUID(), minecraft.player.getX(), minecraft.player.getZ(),
+            minecraft.player.getYRot(), minecraft.player.getGameProfile().name());
     }
 
-    private void drawHoveredChunk(GuiGraphicsExtractor graphics, int mouseX, int mouseY, int bottom) {
+    private void drawPlayerMarker(GuiGraphicsExtractor graphics, java.util.UUID id, double blockX, double blockZ,
+                                  float yaw, String name) {
+        int screenX = worldToScreenX(blockX);
+        int screenY = worldToScreenZ(blockZ);
+        int nameHeight = Mth.ceil(9.0D * ChunkMapClientConfig.markerNameScale());
+        if (screenX < 4 || screenX >= width - 4 || screenY < 4 || screenY >= height - nameHeight - 6) return;
+        graphics.pose().pushMatrix();
+        graphics.pose().translate(screenX, screenY);
+        // 原版地图玩家图标默认朝北，而实体 yaw 为 0 时朝南。
+        graphics.pose().rotate((float) Math.toRadians(yaw + 180.0F));
+        graphics.blit(RenderPipelines.GUI_TEXTURED, PLAYER_MARKER, -4, -4,
+            0.0F, 0.0F, 8, 8, 8, 8, 8, 8, markerColor(id));
+        graphics.pose().popMatrix();
+        float scale = (float) ChunkMapClientConfig.markerNameScale();
+        int nameWidth = Mth.ceil(font.width(name) * scale);
+        int nameX = Mth.clamp(screenX - nameWidth / 2, 2, Math.max(2, width - nameWidth - 2));
+        int nameY = screenY + 5;
+        graphics.fill(nameX - 2, nameY - 1, nameX + nameWidth + 2, nameY + nameHeight, 0x99000000);
+        graphics.pose().pushMatrix();
+        graphics.pose().translate(nameX, nameY);
+        graphics.pose().scale(scale, scale);
+        graphics.text(font, Component.literal(name), 0, 0, 0xFFFFFFFF, false);
+        graphics.pose().popMatrix();
+    }
+
+    private static int markerColor(java.util.UUID id) {
+        int hash = Long.hashCode(id.getMostSignificantBits()) ^ Long.hashCode(id.getLeastSignificantBits());
+        return PLAYER_MARKER_COLORS[Math.floorMod(hash, PLAYER_MARKER_COLORS.length)];
+    }
+
+    private PlayerMarker playerMarkerAt(int mouseX, int mouseY) {
+        if (minecraft.player != null) {
+            PlayerMarker player = new PlayerMarker(minecraft.player.getUUID(),
+                minecraft.player.getGameProfile().name(), minecraft.player.getX(), minecraft.player.getZ(), false);
+            if (containsMarker(player, mouseX, mouseY)) return player;
+        }
+        for (var fake : controller.snapshot().fakePlayers()) {
+            if (!fake.dimension().equals(controller.snapshot().dimension())) continue;
+            PlayerMarker marker = new PlayerMarker(fake.id(), fake.name(), fake.x() + 0.5D, fake.z() + 0.5D, true);
+            if (containsMarker(marker, mouseX, mouseY)) return marker;
+        }
+        return null;
+    }
+
+    private boolean containsMarker(PlayerMarker player, int mouseX, int mouseY) {
+        int markerX = worldToScreenX(player.blockX());
+        int markerY = worldToScreenZ(player.blockZ());
+        float scale = (float) ChunkMapClientConfig.markerNameScale();
+        int nameWidth = Mth.ceil(font.width(player.name()) * scale);
+        int nameHeight = Mth.ceil(9.0F * scale);
+        int nameX = Mth.clamp(markerX - nameWidth / 2, 2, Math.max(2, width - nameWidth - 2));
+        boolean overIcon = mouseX >= markerX - 5 && mouseX <= markerX + 5
+            && mouseY >= markerY - 5 && mouseY <= markerY + 5;
+        boolean overName = mouseX >= nameX - 2 && mouseX <= nameX + nameWidth + 2
+            && mouseY >= markerY + 4 && mouseY <= markerY + 5 + nameHeight;
+        return overIcon || overName;
+    }
+
+    private PlayerSkin skin(PlayerMarker player) {
+        if (minecraft.getConnection() != null) {
+            var info = minecraft.getConnection().getPlayerInfo(player.id());
+            if (info != null) return info.getSkin();
+        }
+        return DefaultPlayerSkin.get(new GameProfile(player.id(), player.name()));
+    }
+
+    private void drawSettings(GuiGraphicsExtractor graphics) {
+        graphics.fill(0, 0, width, height, 0xFF111518);
+        graphics.centeredText(font, Component.translatable("gui.fakeplayer.chunkloader.map_settings_title"),
+            width / 2, height / 2 - 48, 0xFFFFFFFF);
+        graphics.centeredText(font, Component.translatable("gui.fakeplayer.chunkloader.marker_name_preview"),
+            width / 2, height / 2 + 28, 0xFFAAAAAA);
+        drawScaledPreview(graphics, Component.literal(minecraft.player == null
+            ? "Player" : minecraft.player.getGameProfile().name()), width / 2, height / 2 + 44);
+    }
+
+    private void drawScaledPreview(GuiGraphicsExtractor graphics, Component text, int centerX, int y) {
+        float scale = (float) ChunkMapClientConfig.markerNameScale();
+        int scaledWidth = Mth.ceil(font.width(text) * scale);
+        int x = centerX - scaledWidth / 2;
+        graphics.fill(x - 2, y - 1, x + scaledWidth + 2, y + Mth.ceil(9.0F * scale), 0x99000000);
+        graphics.pose().pushMatrix();
+        graphics.pose().translate(x, y);
+        graphics.pose().scale(scale, scale);
+        graphics.text(font, text, 0, 0, 0xFFFFFFFF, false);
+        graphics.pose().popMatrix();
+    }
+
+    private void showSettings(boolean value) {
+        if (settingsOpen && !value) ChunkMapClientConfig.save();
+        settingsOpen = value;
+        rebuildWidgets();
+    }
+
+    @Override
+    public void onClose() {
+        if (settingsOpen) showSettings(false);
+        else super.onClose();
+    }
+
+    private void drawHoveredChunk(GuiGraphicsExtractor graphics, int mouseX, int mouseY,
+                                  PlayerMarker hoveredPlayer) {
         int[] chunk = chunkAt(mouseX, mouseY);
         if (chunk == null) return;
+        int blockX = Mth.floor(screenToWorldX(mouseX));
+        int blockZ = Mth.floor(screenToWorldZ(mouseY));
         int left = worldToScreenX(chunk[0] * 16.0D);
         int top = worldToScreenZ(chunk[1] * 16.0D);
         int right = worldToScreenX((chunk[0] + 1) * 16.0D);
         int tileBottom = worldToScreenZ((chunk[1] + 1) * 16.0D);
         graphics.outline(left, top, Math.max(1, right - left), Math.max(1, tileBottom - top), 0xFFFFFFFF);
-        String names = controller.snapshot().regions().stream()
+        Component names = controller.snapshot().regions().stream()
             .filter(region -> region.contains(chunk[0], chunk[1]))
             .map(region -> region.name() + ":" + region.mode().name().toLowerCase(Locale.ROOT))
-            .reduce((a, b) -> a + ", " + b).orElse("-");
-        Component hover = Component.translatable("gui.fakeplayer.chunkloader.map_hover", chunk[0], chunk[1], names);
-        int textX = Math.max(4, Math.min(width - font.width(hover) - 4, mouseX + 10));
-        int textY = Math.max(MAP_TOP + 4, Math.min(bottom - 13, mouseY + 10));
-        graphics.fill(textX - 2, textY - 2, textX + font.width(hover) + 2, textY + 11, 0xD9111518);
-        graphics.text(font, hover, textX, textY, 0xFFFFFFFF);
+            .reduce((a, b) -> a + ", " + b)
+            .<Component>map(Component::literal)
+            .orElseGet(() -> Component.translatable("gui.fakeplayer.chunkloader.map_hover.none"));
+        Component chunkLine = Component.translatable("gui.fakeplayer.chunkloader.map_hover.chunk", chunk[0], chunk[1]);
+        Component blockLine = Component.translatable("gui.fakeplayer.chunkloader.map_hover.block", blockX, blockZ);
+        Component regionsLine = Component.translatable("gui.fakeplayer.chunkloader.map_hover.regions", names);
+        Component playerLine = hoveredPlayer == null ? Component.empty() : Component.literal(hoveredPlayer.name());
+        if (hoveredPlayer != null && hoveredPlayer.fake()) {
+            playerLine = playerLine.copy().append(Component.translatable("gui.fakeplayer.tab_marker")
+                .withStyle(ChatFormatting.DARK_GRAY));
+        }
+        int textWidth = Math.max(font.width(chunkLine), Math.max(font.width(blockLine), font.width(regionsLine)));
+        int faceSize = font.lineHeight;
+        int playerWidth = hoveredPlayer == null ? 0 : faceSize + 2 + font.width(playerLine);
+        int contentWidth = Math.max(textWidth, playerWidth);
+        int contentHeight = hoveredPlayer == null ? 29 : 29 + faceSize + 2;
+        int textX = Math.max(4, Math.min(width - contentWidth - 4, mouseX + 10));
+        int textY = Math.max(4, Math.min(height - contentHeight - 4, mouseY + 10));
+        graphics.fill(textX - 2, textY - 2, textX + contentWidth + 2,
+            textY + contentHeight + 2, 0xD9111518);
+        graphics.text(font, chunkLine, textX, textY, 0xFFFFFFFF);
+        graphics.text(font, blockLine, textX, textY + 10, 0xFFFFFFFF);
+        graphics.text(font, regionsLine, textX, textY + 20, 0xFFFFFFFF);
+        if (hoveredPlayer != null) {
+            int playerY = textY + 31;
+            PlayerFaceExtractor.extractRenderState(graphics, skin(hoveredPlayer), textX, playerY, faceSize);
+            graphics.text(font, playerLine, textX + faceSize + 2, playerY, 0xFFFFFFFF, false);
+        }
     }
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         if (super.mouseClicked(event, doubleClick)) return true;
+        if (settingsOpen) return false;
         int[] chunk = chunkAt(event.x(), event.y());
         if (chunk == null) return false;
         dragging = true;
@@ -206,6 +363,7 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
 
     @Override
     public boolean mouseDragged(MouseButtonEvent event, double deltaX, double deltaY) {
+        if (settingsOpen) return super.mouseDragged(event, deltaX, deltaY);
         if (!dragging) return super.mouseDragged(event, deltaX, deltaY);
         if (controller.mode() == ChunkMapEditMode.BROWSE || event.button() == 1) {
             centerBlockX -= deltaX / pixelsPerBlock;
@@ -226,6 +384,7 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        if (settingsOpen) return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
         if (!insideMap(mouseX, mouseY)) return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
         double worldX = screenToWorldX(mouseX);
         double worldZ = screenToWorldZ(mouseY);
@@ -233,7 +392,7 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
         if (next != pixelsPerBlock) {
             pixelsPerBlock = next;
             centerBlockX = worldX - (mouseX - width / 2.0D) / pixelsPerBlock;
-            centerBlockZ = worldZ - (mouseY - mapCenterY()) / pixelsPerBlock;
+            centerBlockZ = worldZ - (mouseY - height / 2.0D) / pixelsPerBlock;
         }
         return true;
     }
@@ -244,7 +403,7 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
     }
 
     private boolean insideMap(double x, double y) {
-        return x >= 0 && x < width && y >= MAP_TOP && y < mapBottom();
+        return x >= 0 && x < width && y >= 0 && y < height;
     }
 
     private int worldToScreenX(double worldX) {
@@ -252,7 +411,7 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
     }
 
     private int worldToScreenZ(double worldZ) {
-        return Mth.floor(mapCenterY() + (worldZ - centerBlockZ) * pixelsPerBlock);
+        return Mth.floor(height / 2.0D + (worldZ - centerBlockZ) * pixelsPerBlock);
     }
 
     private double screenToWorldX(double screenX) {
@@ -260,11 +419,8 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
     }
 
     private double screenToWorldZ(double screenY) {
-        return centerBlockZ + (screenY - mapCenterY()) / pixelsPerBlock;
+        return centerBlockZ + (screenY - height / 2.0D) / pixelsPerBlock;
     }
-
-    private int mapBottom() { return Math.max(MAP_TOP + 1, height - MAP_BOTTOM_MARGIN); }
-    private double mapCenterY() { return (MAP_TOP + mapBottom()) / 2.0D; }
 
     private void rebuildAuthoritativeModes() {
         authoritativeModes.clear();
@@ -301,6 +457,28 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
 
     @Override public void setEditMode(ChunkMapEditMode mode) { controller.setMode(mode); }
     @Override public void close() { onClose(); }
+
+    private final class MarkerNameScaleSlider extends CompactSliderButton {
+        private MarkerNameScaleSlider(int x, int y, int width, int height) {
+            super(x, y, width, height, Component.empty(),
+                (ChunkMapClientConfig.markerNameScale() - 0.5D) / 1.5D);
+            updateMessage();
+        }
+
+        @Override
+        protected void updateMessage() {
+            setMessage(Component.translatable("gui.fakeplayer.chunkloader.marker_name_scale",
+                Math.round((0.5D + value * 1.5D) * 100.0D)));
+        }
+
+        @Override
+        protected void applyValue() {
+            ChunkMapClientConfig.setMarkerNameScale(0.5D + value * 1.5D);
+        }
+    }
+
+    private record PlayerMarker(java.util.UUID id, String name, double blockX, double blockZ, boolean fake) {
+    }
 
     @Override
     public void removed() {

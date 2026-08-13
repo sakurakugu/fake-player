@@ -10,6 +10,7 @@ import com.sakurakugu.fakeplayer.network.ChunkMapSnapshotPayload;
 import com.sakurakugu.fakeplayer.network.BodyRotationPayload;
 import com.sakurakugu.fakeplayer.client.chunkloading.ClientChunkLoadingState;
 import com.sakurakugu.fakeplayer.client.chunkloading.ChunkLoadingHud;
+import com.sakurakugu.fakeplayer.client.chunkloading.ChunkMapClientConfig;
 import com.sakurakugu.fakeplayer.client.ui.IconButton;
 import com.sakurakugu.fakeplayer.client.ui.TransferButton;
 import net.minecraft.client.KeyMapping;
@@ -24,6 +25,8 @@ import net.minecraft.world.inventory.ChestMenu;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.config.ModConfig;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
@@ -58,7 +61,8 @@ public final class FakePlayerClientMod {
     private static CreativeModeInventoryScreen creativeInventoryScreen;
     private static Button creativePossessionButton;
 
-    public FakePlayerClientMod(IEventBus modBus) {
+    public FakePlayerClientMod(IEventBus modBus, ModContainer container) {
+        container.registerConfig(ModConfig.Type.CLIENT, ChunkMapClientConfig.SPEC, "fakeplayer-client.toml");
         modBus.addListener(FakePlayerClientMod::registerKeys);
         modBus.addListener(FakePlayerClientMod::registerGuiLayers);
         modBus.addListener(FakePlayerClientMod::registerClientPayloads);

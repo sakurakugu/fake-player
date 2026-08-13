@@ -72,7 +72,7 @@ public record ChunkMapSnapshotPayload(
                     .orElse(new FakePlayerLoadPolicy(fake.getUUID(), false, 0));
                 return new FakePlayerView(fake.getUUID(), fake.getGameProfile().name(),
                     fake.level().dimension().identifier().toString(), fake.getBlockX(), fake.getBlockY(),
-                    fake.getBlockZ(), true, policy.enabled(), policy.simulationDistance());
+                    fake.getBlockZ(), fake.getYRot(), true, policy.enabled(), policy.simulationDistance());
             }).toList();
         return new ChunkMapSnapshotPayload(openScreen, data.revision(), dimension,
             player.chunkPosition().x(), player.chunkPosition().z(), regionViews, fakeViews);
@@ -152,11 +152,12 @@ public record ChunkMapSnapshotPayload(
         public boolean ticking() { return mode != ManualLoadMode.LOADED; }
     }
 
-    public record FakePlayerView(UUID id, String name, String dimension, int x, int y, int z,
+    public record FakePlayerView(UUID id, String name, String dimension, int x, int y, int z, float yaw,
                                  boolean online, boolean enabled, int simulationDistance) {
         private FakePlayerView(RegistryFriendlyByteBuf buffer) {
             this(buffer.readUUID(), buffer.readUtf(32), buffer.readUtf(256), buffer.readInt(), buffer.readInt(),
-                buffer.readInt(), buffer.readBoolean(), buffer.readBoolean(), buffer.readVarInt());
+                buffer.readInt(), buffer.readFloat(), buffer.readBoolean(), buffer.readBoolean(), buffer.readVarInt());
+            if (!Float.isFinite(yaw)) throw new IllegalArgumentException("假玩家朝向非法");
             if (simulationDistance < 0 || simulationDistance > ChunkLoaderSavedData.MAX_SIMULATION_DISTANCE) {
                 throw new IllegalArgumentException("假玩家模拟距离非法");
             }
@@ -165,6 +166,7 @@ public record ChunkMapSnapshotPayload(
         private void write(RegistryFriendlyByteBuf buffer) {
             buffer.writeUUID(id); buffer.writeUtf(name, 32); buffer.writeUtf(dimension, 256);
             buffer.writeInt(x); buffer.writeInt(y); buffer.writeInt(z);
+            buffer.writeFloat(yaw);
             buffer.writeBoolean(online); buffer.writeBoolean(enabled); buffer.writeVarInt(simulationDistance);
         }
     }
