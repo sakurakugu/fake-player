@@ -2,6 +2,7 @@ package com.sakurakugu.fakeplayer.client.chunkloading;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import com.sakurakugu.fakeplayer.FakePlayerMod;
+import java.lang.ref.WeakReference;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Iterator;
@@ -50,7 +51,8 @@ final class ChunkTerrainTileCache implements AutoCloseable {
         int layer = level.dimensionType().hasCeiling() ? Math.floorDiv(sampleY, 16) : 0;
         TileKey key = new TileKey(chunkX, chunkZ, layer);
         Tile cached = tiles.get(key);
-        if (cached != null) return cached.identifier();
+        if (cached != null && cached.source().get() == chunk) return cached.identifier();
+        if (cached != null) retire(tiles.remove(key));
         if (creationBudget-- <= 0) return null;
 
         Identifier identifier = Identifier.fromNamespaceAndPath(FakePlayerMod.MOD_ID,
@@ -59,7 +61,7 @@ final class ChunkTerrainTileCache implements AutoCloseable {
         NativeImage image = createImage(level, chunk, sampleY);
         minecraft.getTextureManager().register(identifier,
             new DynamicTexture(() -> "fakeplayer chunk map tile", image));
-        tiles.put(key, new Tile(identifier));
+        tiles.put(key, new Tile(identifier, new WeakReference<>(chunk)));
         trim();
         return identifier;
     }
@@ -109,10 +111,14 @@ final class ChunkTerrainTileCache implements AutoCloseable {
         Iterator<Map.Entry<TileKey, Tile>> iterator = tiles.entrySet().iterator();
         while (tiles.size() > MAX_TILES && iterator.hasNext()) {
             Tile tile = iterator.next().getValue();
-            // GUI 在提取完绘制状态后才真正提交 GPU，不能在当前帧立即释放纹理。
-            retiredTiles.addLast(new RetiredTile(tile.identifier(), frame + RELEASE_DELAY_FRAMES));
+            retire(tile);
             iterator.remove();
         }
+    }
+
+    private void retire(Tile tile) {
+        // GUI 在提取完绘制状态后才真正提交 GPU，不能在当前帧立即释放纹理。
+        retiredTiles.addLast(new RetiredTile(tile.identifier(), frame + RELEASE_DELAY_FRAMES));
     }
 
     private void releaseRetiredTiles() {
@@ -130,6 +136,6 @@ final class ChunkTerrainTileCache implements AutoCloseable {
     }
 
     private record TileKey(int chunkX, int chunkZ, int layer) { }
-    private record Tile(Identifier identifier) { }
+    private record Tile(Identifier identifier, WeakReference<LevelChunk> source) { }
     private record RetiredTile(Identifier identifier, long releaseFrame) { }
 }

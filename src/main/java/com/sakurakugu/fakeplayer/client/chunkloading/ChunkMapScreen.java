@@ -50,7 +50,7 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
     public ChunkMapScreen(ChunkMapSnapshotPayload snapshot) {
         super(Component.translatable("gui.fakeplayer.chunkloader.map_title"));
         controller = new ChunkLoadMapController(snapshot);
-        terrainTiles = new ChunkTerrainTileCache(net.minecraft.client.Minecraft.getInstance());
+        terrainTiles = ClientChunkLoadingState.terrainTiles();
         centerBlockX = snapshot.playerChunkX() * 16.0D + 8.0D;
         centerBlockZ = snapshot.playerChunkZ() * 16.0D + 8.0D;
         rebuildAuthoritativeModes();
@@ -480,8 +480,4 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
     private record PlayerMarker(java.util.UUID id, String name, double blockX, double blockZ, boolean fake) {
     }
 
-    @Override
-    public void removed() {
-        terrainTiles.close();
-    }
 }
