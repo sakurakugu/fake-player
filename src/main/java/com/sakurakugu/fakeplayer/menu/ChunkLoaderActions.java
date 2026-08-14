@@ -5,6 +5,8 @@ import com.sakurakugu.fakeplayer.chunkloading.ManualLoadMode;
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.network.ChunkLoaderActionPayload;
 import net.minecraft.network.chat.Component;
+import net.neoforged.neoforge.network.PacketDistributor;
+import com.sakurakugu.fakeplayer.network.ChunkMapSnapshotPayload;
 import net.minecraft.server.level.ServerPlayer;
 
 /** 在服务端执行区块加载点界面操作并返回最新快照。 */
@@ -31,7 +33,8 @@ public final class ChunkLoaderActions {
             viewer.sendSystemMessage(Component.translatable(
                 "gui.fakeplayer.chunkloader.action_success." + payload.action().name().toLowerCase(java.util.Locale.ROOT)));
         }
-        FakePlayerMenuOpener.openChunkLoaders(viewer);
+        PacketDistributor.sendToPlayer(viewer, ChunkMapSnapshotPayload.create(viewer,
+            ChunkLoaderManager.data(server(viewer)), false, false));
     }
 
     private static ChunkLoaderManager.Result add(ServerPlayer viewer, ChunkLoaderActionPayload payload) {

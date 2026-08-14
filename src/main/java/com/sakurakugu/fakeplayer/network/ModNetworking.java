@@ -6,7 +6,6 @@ import com.sakurakugu.fakeplayer.menu.FakePlayerMenuOpener;
 import com.sakurakugu.fakeplayer.menu.BotManagementActions;
 import com.sakurakugu.fakeplayer.menu.BotManagementMenu;
 import com.sakurakugu.fakeplayer.menu.ChunkLoaderActions;
-import com.sakurakugu.fakeplayer.menu.ChunkLoaderMenu;
 import com.sakurakugu.fakeplayer.menu.GlobalFakePlayerMenu;
 import com.sakurakugu.fakeplayer.menu.FakePlayerInventoryMenu;
 import com.sakurakugu.fakeplayer.menu.FakePlayerManagementActions;
@@ -34,16 +33,6 @@ public final class ModNetworking {
                 if (context.player() instanceof ServerPlayer player
                     && FakePlayerConfig.canUseCommands(player.createCommandSourceStack())) {
                     FakePlayerMenuOpener.openGlobal(player);
-                }
-            }
-        );
-        registrar.playToServer(
-            OpenChunkLoaderMenuPayload.TYPE,
-            OpenChunkLoaderMenuPayload.STREAM_CODEC,
-            (payload, context) -> {
-                if (context.player() instanceof ServerPlayer player
-                    && FakePlayerConfig.canUseCommands(player.createCommandSourceStack())) {
-                    FakePlayerMenuOpener.openChunkLoaders(player);
                 }
             }
         );
@@ -115,8 +104,6 @@ public final class ModNetworking {
             ChunkLoaderActionPayload.STREAM_CODEC,
             (payload, context) -> {
                 if (context.player() instanceof ServerPlayer player
-                    && player.containerMenu instanceof ChunkLoaderMenu
-                    && player.containerMenu.containerId == payload.containerId()
                     && FakePlayerConfig.canUseCommands(player.createCommandSourceStack())) {
                     ChunkLoaderActions.handle(player, payload);
                 }
@@ -131,7 +118,7 @@ public final class ModNetworking {
                     var result = ChunkLoadApplicationService.apply(player, payload);
                     if (!result.successful()) player.sendSystemMessage(net.minecraft.network.chat.Component.literal(result.reason()));
                     PacketDistributor.sendToPlayer(player, ChunkMapSnapshotPayload.create(player,
-                        ChunkLoaderManager.data(player.level().getServer()), false));
+                        ChunkLoaderManager.data(player.level().getServer()), false, false));
                 }
             }
         );
@@ -143,7 +130,8 @@ public final class ModNetworking {
                     && FakePlayerConfig.canUseCommands(player.createCommandSourceStack())) {
                     var data = ChunkLoaderManager.data(player.level().getServer());
                     PacketDistributor.sendToPlayer(player,
-                        ChunkMapSnapshotPayload.create(player, data, payload.openScreen()));
+                        ChunkMapSnapshotPayload.create(player, data,
+                            payload.openScreen(), payload.openManagement()));
                 }
             }
         );

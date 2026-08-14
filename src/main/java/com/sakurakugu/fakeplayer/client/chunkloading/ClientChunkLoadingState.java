@@ -17,7 +17,7 @@ public final class ClientChunkLoadingState {
     public static void accept(ChunkMapSnapshotPayload value) {
         snapshot = value;
         if (value.openScreen()) {
-            Minecraft.getInstance().setScreen(new ChunkMapScreen(value));
+            Minecraft.getInstance().setScreen(new ChunkMapScreen(value, value.openManagement()));
         } else if (Minecraft.getInstance().screen instanceof ChunkMapScreen screen) {
             screen.update(value);
         }

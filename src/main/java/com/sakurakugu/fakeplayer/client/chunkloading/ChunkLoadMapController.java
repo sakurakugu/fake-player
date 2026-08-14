@@ -72,6 +72,7 @@ public final class ChunkLoadMapController {
                 "map_" + Long.toUnsignedString(System.nanoTime(), 36), loadMode, true, 0, chunks));
         }
         for (ChunkMapSnapshotPayload.AnchorView region : snapshot.regions()) {
+            if (!region.dimension().equals(snapshot.dimension())) continue;
             List<Long> chunks = erased.stream().filter(region.chunks()::contains).toList();
             if (chunks.isEmpty()) continue;
             boolean delete = chunks.size() == region.chunks().size();

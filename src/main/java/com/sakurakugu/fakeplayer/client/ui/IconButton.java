@@ -9,6 +9,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 
 /** 用原版物品或纹理渲染图标，文字仅作为悬浮提示和无障碍说明。 */
+// 这是物品栏图标按钮的样式，仅限用到有物品栏的区域，其他区域会很丑
 public final class IconButton extends Button {
     private static final int SIZE = 18;
 

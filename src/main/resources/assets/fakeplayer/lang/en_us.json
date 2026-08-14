@@ -89,6 +89,8 @@
   "gui.fakeplayer.chunkloader.map_hover.block": "Block: %1$s, %2$s",
   "gui.fakeplayer.chunkloader.map_hover.regions": "Load regions: %s",
   "gui.fakeplayer.chunkloader.map_hover.none": "None",
+  "gui.fakeplayer.chunkloader.map_undo": "Undo",
+  "gui.fakeplayer.chunkloader.map_save": "Save changes",
   "gui.fakeplayer.chunkloader.open_management": "Manage Loaders",
   "gui.fakeplayer.tab_marker": " [Bot]",
   "gui.fakeplayer.title": "%s - Fake Player",

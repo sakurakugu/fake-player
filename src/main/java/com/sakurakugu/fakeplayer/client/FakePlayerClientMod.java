@@ -109,7 +109,7 @@ public final class FakePlayerClientMod {
         }
         while (OPEN_CHUNK_MAP.consumeClick()) {
             if (minecraft.player != null && minecraft.screen == null) {
-                ClientPacketDistributor.sendToServer(new RequestChunkMapPayload(true));
+                ClientPacketDistributor.sendToServer(new RequestChunkMapPayload(true, false));
             }
         }
         while (TOGGLE_CHUNK_HUD.consumeClick()) {
@@ -120,7 +120,7 @@ public final class FakePlayerClientMod {
             ClientChunkLoadingState.clear();
             refreshTicks = 0;
         } else if (ClientChunkLoadingState.hudEnabled() && refreshTicks-- <= 0) {
-            ClientPacketDistributor.sendToServer(new RequestChunkMapPayload(false));
+            ClientPacketDistributor.sendToServer(new RequestChunkMapPayload(false, false));
             refreshTicks = 40;
         }
     }

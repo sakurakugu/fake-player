@@ -20,11 +20,14 @@ import net.minecraft.world.level.ChunkPos;
 /** 当前维度的权威加载快照，同时供内置地图和第三方地图前端使用。 */
 public record ChunkMapSnapshotPayload(
     boolean openScreen,
+    boolean openManagement,
+    int maximumRadius,
     long revision,
     String dimension,
     int playerChunkX,
     int playerChunkZ,
     List<AnchorView> regions,
+    List<RegionSummary> managementRegions,
     List<FakePlayerView> fakePlayers
 ) implements CustomPacketPayload {
     public static final int MAX_REGIONS = 1024;
@@ -37,33 +40,45 @@ public record ChunkMapSnapshotPayload(
         CustomPacketPayload.codec(ChunkMapSnapshotPayload::write, ChunkMapSnapshotPayload::new);
 
     public ChunkMapSnapshotPayload {
+        if (maximumRadius < 0 || maximumRadius > 32) throw new IllegalArgumentException("最大半径非法");
         regions = List.copyOf(regions);
+        managementRegions = List.copyOf(managementRegions);
         fakePlayers = List.copyOf(fakePlayers);
     }
 
     private ChunkMapSnapshotPayload(RegistryFriendlyByteBuf buffer) {
-        this(buffer.readBoolean(), buffer.readVarLong(), buffer.readUtf(256), buffer.readInt(), buffer.readInt(),
-            readRegions(buffer), readFakePlayers(buffer));
+        this(buffer.readBoolean(), buffer.readBoolean(), buffer.readVarInt(), buffer.readVarLong(),
+            buffer.readUtf(256), buffer.readInt(), buffer.readInt(),
+            readRegions(buffer), readRegionSummaries(buffer), readFakePlayers(buffer));
     }
 
     private void write(RegistryFriendlyByteBuf buffer) {
         buffer.writeBoolean(openScreen);
+        buffer.writeBoolean(openManagement);
+        buffer.writeVarInt(maximumRadius);
         buffer.writeVarLong(revision);
         buffer.writeUtf(dimension, 256);
         buffer.writeInt(playerChunkX);
         buffer.writeInt(playerChunkZ);
         buffer.writeVarInt(regions.size());
         regions.forEach(region -> region.write(buffer));
+        buffer.writeVarInt(managementRegions.size());
+        managementRegions.forEach(region -> region.write(buffer));
         buffer.writeVarInt(fakePlayers.size());
         fakePlayers.forEach(fake -> fake.write(buffer));
     }
 
-    public static ChunkMapSnapshotPayload create(ServerPlayer player, ChunkLoaderSavedData data, boolean openScreen) {
+    public static ChunkMapSnapshotPayload create(ServerPlayer player, ChunkLoaderSavedData data,
+                                                 boolean openScreen, boolean openManagement) {
         String dimension = player.level().dimension().identifier().toString();
         List<AnchorView> regionViews = data.regions().stream()
             .filter(region -> region.dimension().toString().equals(dimension))
             .limit(MAX_REGIONS)
             .map(AnchorView::from)
+            .toList();
+        List<RegionSummary> summaries = data.regions().stream()
+            .limit(MAX_REGIONS)
+            .map(RegionSummary::from)
             .toList();
         List<FakePlayerView> fakeViews = FakePlayerManager.all(player.level().getServer()).stream()
             .limit(MAX_FAKE_PLAYERS)
@@ -74,8 +89,9 @@ public record ChunkMapSnapshotPayload(
                     fake.level().dimension().identifier().toString(), fake.getBlockX(), fake.getBlockY(),
                     fake.getBlockZ(), fake.getYRot(), true, policy.enabled(), policy.simulationDistance());
             }).toList();
-        return new ChunkMapSnapshotPayload(openScreen, data.revision(), dimension,
-            player.chunkPosition().x(), player.chunkPosition().z(), regionViews, fakeViews);
+        return new ChunkMapSnapshotPayload(openScreen, openManagement,
+            com.sakurakugu.fakeplayer.config.FakePlayerConfig.maxChunkLoadingRadius(), data.revision(), dimension,
+            player.chunkPosition().x(), player.chunkPosition().z(), regionViews, summaries, fakeViews);
     }
 
     private static List<AnchorView> readRegions(RegistryFriendlyByteBuf buffer) {
@@ -98,6 +114,13 @@ public record ChunkMapSnapshotPayload(
         return values;
     }
 
+    private static List<RegionSummary> readRegionSummaries(RegistryFriendlyByteBuf buffer) {
+        int size = checkedSize(buffer.readVarInt(), MAX_REGIONS, "区域摘要");
+        List<RegionSummary> values = new ArrayList<>(size);
+        for (int index = 0; index < size; index++) values.add(new RegionSummary(buffer));
+        return values;
+    }
+
     private static int checkedSize(int size, int maximum, String type) {
         if (size < 0 || size > maximum) throw new IllegalArgumentException(type + "数量超过上限");
         return size;
@@ -110,15 +133,17 @@ public record ChunkMapSnapshotPayload(
         return regions;
     }
 
-    public record AnchorView(UUID id, String name, ManualLoadMode mode, boolean enabled, Set<Long> chunks) {
+    public record AnchorView(UUID id, String name, String dimension, ManualLoadMode mode,
+                             boolean enabled, Set<Long> chunks) {
         private AnchorView(RegistryFriendlyByteBuf buffer) {
-            this(buffer.readUUID(), buffer.readUtf(32), buffer.readEnum(ManualLoadMode.class), buffer.readBoolean(),
-                readChunks(buffer));
+            this(buffer.readUUID(), buffer.readUtf(32), buffer.readUtf(256),
+                buffer.readEnum(ManualLoadMode.class), buffer.readBoolean(), readChunks(buffer));
         }
 
         private void write(RegistryFriendlyByteBuf buffer) {
             buffer.writeUUID(id);
             buffer.writeUtf(name, 32);
+            buffer.writeUtf(dimension, 256);
             buffer.writeEnum(mode);
             buffer.writeBoolean(enabled);
             buffer.writeVarInt(chunks.size());
@@ -126,7 +151,8 @@ public record ChunkMapSnapshotPayload(
         }
 
         private static AnchorView from(ManualLoadRegion region) {
-            return new AnchorView(region.id(), region.name(), region.mode(), region.enabled(), region.chunks());
+            return new AnchorView(region.id(), region.name(), region.dimension().toString(),
+                region.mode(), region.enabled(), region.chunks());
         }
 
         private static Set<Long> readChunks(RegistryFriendlyByteBuf buffer) {
@@ -149,6 +175,39 @@ public record ChunkMapSnapshotPayload(
             int height = chunks.stream().mapToInt(ChunkPos::getZ).max().orElse(0) - chunkZ();
             return Math.max(width, height) / 2;
         }
+        public boolean ticking() { return mode != ManualLoadMode.LOADED; }
+    }
+
+    public record RegionSummary(String name, String dimension, int chunkX, int chunkZ, int radius,
+                                int chunkCount, ManualLoadMode mode, boolean enabled) {
+        private RegionSummary(RegistryFriendlyByteBuf buffer) {
+            this(buffer.readUtf(32), buffer.readUtf(256), buffer.readInt(), buffer.readInt(),
+                buffer.readVarInt(), buffer.readVarInt(), buffer.readEnum(ManualLoadMode.class), buffer.readBoolean());
+            if (radius < 0 || radius > 32 || chunkCount < 1 || chunkCount > ChunkLoaderSavedData.MAX_REGION_CHUNKS) {
+                throw new IllegalArgumentException("区域摘要非法");
+            }
+        }
+
+        private void write(RegistryFriendlyByteBuf buffer) {
+            buffer.writeUtf(name, 32);
+            buffer.writeUtf(dimension, 256);
+            buffer.writeInt(chunkX);
+            buffer.writeInt(chunkZ);
+            buffer.writeVarInt(radius);
+            buffer.writeVarInt(chunkCount);
+            buffer.writeEnum(mode);
+            buffer.writeBoolean(enabled);
+        }
+
+        private static RegionSummary from(ManualLoadRegion region) {
+            int minX = region.chunks().stream().mapToInt(ChunkPos::getX).min().orElse(0);
+            int maxX = region.chunks().stream().mapToInt(ChunkPos::getX).max().orElse(0);
+            int minZ = region.chunks().stream().mapToInt(ChunkPos::getZ).min().orElse(0);
+            int maxZ = region.chunks().stream().mapToInt(ChunkPos::getZ).max().orElse(0);
+            return new RegionSummary(region.name(), region.dimension().toString(), minX, minZ,
+                Math.max(maxX - minX, maxZ - minZ) / 2, region.chunks().size(), region.mode(), region.enabled());
+        }
+
         public boolean ticking() { return mode != ManualLoadMode.LOADED; }
     }
 

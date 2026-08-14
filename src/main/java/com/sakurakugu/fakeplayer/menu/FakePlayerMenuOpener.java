@@ -72,47 +72,6 @@ public final class FakePlayerMenuOpener {
         );
     }
 
-    public static void openChunkLoaders(ServerPlayer viewer) {
-        List<ChunkLoaderMenu.AnchorSummary> anchors = ChunkLoaderManager.data(viewer.level().getServer()).regions()
-            .stream()
-            .sorted(java.util.Comparator.comparing(
-                com.sakurakugu.fakeplayer.chunkloading.ManualLoadRegion::name,
-                String.CASE_INSENSITIVE_ORDER))
-            .limit(ChunkLoaderMenu.MAX_ANCHORS)
-            .map(region -> {
-                long center = region.chunks().iterator().next();
-                int minX = region.chunks().stream().mapToInt(net.minecraft.world.level.ChunkPos::getX).min().orElse(0);
-                int maxX = region.chunks().stream().mapToInt(net.minecraft.world.level.ChunkPos::getX).max().orElse(0);
-                int minZ = region.chunks().stream().mapToInt(net.minecraft.world.level.ChunkPos::getZ).min().orElse(0);
-                int maxZ = region.chunks().stream().mapToInt(net.minecraft.world.level.ChunkPos::getZ).max().orElse(0);
-                int radius = Math.max(maxX - minX, maxZ - minZ) / 2;
-                return new ChunkLoaderMenu.AnchorSummary(region.name(), region.dimension().toString(),
-                    net.minecraft.world.level.ChunkPos.getX(center) << 4, 0,
-                    net.minecraft.world.level.ChunkPos.getZ(center) << 4, radius,
-                    region.enabled(), region.mode() != com.sakurakugu.fakeplayer.chunkloading.ManualLoadMode.LOADED);
-            })
-            .toList();
-        int maximumRadius = FakePlayerConfig.maxChunkLoadingRadius();
-        viewer.openMenu(new SimpleMenuProvider(
-            (containerId, inventory, player) -> new ChunkLoaderMenu(
-                containerId, inventory, maximumRadius, anchors),
-            Component.translatable("gui.fakeplayer.chunkloader.title")
-        ), data -> {
-            data.writeVarInt(maximumRadius);
-            data.writeVarInt(anchors.size());
-            anchors.forEach(anchor -> {
-                data.writeUtf(anchor.name(), 32);
-                data.writeUtf(anchor.dimension(), 256);
-                data.writeInt(anchor.x());
-                data.writeInt(anchor.y());
-                data.writeInt(anchor.z());
-                data.writeVarInt(anchor.radius());
-                data.writeBoolean(anchor.enabled());
-                data.writeBoolean(anchor.ticking());
-            });
-        });
-    }
-
     private static void writeStrings(net.minecraft.network.RegistryFriendlyByteBuf data, List<String> values) {
         data.writeVarInt(values.size());
         values.forEach(data::writeUtf);

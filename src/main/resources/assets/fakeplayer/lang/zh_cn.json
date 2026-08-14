@@ -89,6 +89,8 @@
   "gui.fakeplayer.chunkloader.map_hover.block": "坐标：%1$s, %2$s",
   "gui.fakeplayer.chunkloader.map_hover.regions": "加载区域：%s",
   "gui.fakeplayer.chunkloader.map_hover.none": "无",
+  "gui.fakeplayer.chunkloader.map_undo": "撤销",
+  "gui.fakeplayer.chunkloader.map_save": "保存更改",
   "gui.fakeplayer.chunkloader.open_management": "管理加载点",
   "gui.fakeplayer.tab_marker": " [假人]",
   "gui.fakeplayer.title": "%s - 假人控制",

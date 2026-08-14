@@ -11,13 +11,13 @@ import com.sakurakugu.fakeplayer.chunkloading.ManualLoadRegion;
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
-import com.sakurakugu.fakeplayer.menu.FakePlayerMenuOpener;
-import java.util.Comparator;
+import com.sakurakugu.fakeplayer.network.ChunkMapSnapshotPayload;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 /** 提供区块票加载点的创建、配置和生命周期命令。 */
 public final class ChunkLoaderCommand {
@@ -27,8 +27,8 @@ public final class ChunkLoaderCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("chunkloader")
             .requires(FakePlayerConfig::canUseCommands)
-            .executes(ChunkLoaderCommand::openGui)
-            .then(Commands.literal("list").executes(ChunkLoaderCommand::list))
+            .executes(context -> openMap(context, false))
+            .then(Commands.literal("list").executes(context -> openMap(context, true)))
             .then(Commands.literal("backup").executes(ChunkLoaderCommand::backup))
             .then(Commands.literal("restore").then(Commands.literal("confirm")
                 .executes(ChunkLoaderCommand::restore)))
@@ -61,8 +61,11 @@ public final class ChunkLoaderCommand {
                         .executes(ChunkLoaderCommand::configure))))));
     }
 
-    private static int openGui(CommandContext<CommandSourceStack> context) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
-        FakePlayerMenuOpener.openChunkLoaders(context.getSource().getPlayerOrException());
+    private static int openMap(CommandContext<CommandSourceStack> context, boolean management)
+        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        var player = context.getSource().getPlayerOrException();
+        PacketDistributor.sendToPlayer(player, ChunkMapSnapshotPayload.create(player,
+            ChunkLoaderManager.data(context.getSource().getServer()), true, management));
         return 1;
     }
 
@@ -177,18 +180,6 @@ public final class ChunkLoaderCommand {
         int distance = policy == null ? 0 : policy.simulationDistance();
         context.getSource().sendSuccess(() -> Component.literal("假人 " + fake.getName().getString()
             + " 的模拟加载：" + (enabled ? "已启用" : "未启用") + "，距离 " + distance + " 区块"), false);
-        return 1;
-    }
-
-    private static int list(CommandContext<CommandSourceStack> context) {
-        String values = ChunkLoaderManager.data(context.getSource().getServer()).regions().stream()
-            .sorted(Comparator.comparing(ManualLoadRegion::name, String.CASE_INSENSITIVE_ORDER))
-            .map(anchor -> anchor.name() + " [" + (anchor.enabled() ? "on" : "off") + ", r="
-                + anchor.chunks().size() + ", " + mode(anchor).getString() + "]")
-            .reduce((left, right) -> left + ", " + right)
-            .orElse(Component.translatable("commands.fakeplayer.none").getString());
-        context.getSource().sendSuccess(
-            () -> Component.translatable("commands.fakeplayer.chunkloader.list", values), false);
         return 1;
     }
 
