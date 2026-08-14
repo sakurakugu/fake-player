@@ -6,6 +6,7 @@ import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.resources.Identifier;
@@ -39,6 +40,14 @@ public final class FakePlayerSimulationService {
         for (FakeServerPlayer fake : online) update(fake);
         Set<UUID> onlineIds = online.stream().map(FakeServerPlayer::getUUID).collect(java.util.stream.Collectors.toSet());
         ACTIVE.keySet().stream().filter(id -> !onlineIds.contains(id)).toList().forEach(FakePlayerSimulationService::removeActive);
+    }
+
+    /** 返回已实际提交区块票的假人加载范围。 */
+    public static Optional<ActiveRangeView> activeRange(UUID fakePlayerId) {
+        ActiveRange range = ACTIVE.get(fakePlayerId);
+        if (range == null) return Optional.empty();
+        return Optional.of(new ActiveRangeView(range.level().dimension().identifier().toString(),
+            range.chunkX(), range.chunkZ(), range.distance()));
     }
 
     public static ChunkLoaderManager.Result setPolicy(MinecraftServer server, UUID fakePlayerId,
@@ -128,5 +137,8 @@ public final class FakePlayerSimulationService {
             return other != null && level == other.level && chunkX == other.chunkX && chunkZ == other.chunkZ
                 && distance == other.distance;
         }
+    }
+
+    public record ActiveRangeView(String dimension, int chunkX, int chunkZ, int distance) {
     }
 }

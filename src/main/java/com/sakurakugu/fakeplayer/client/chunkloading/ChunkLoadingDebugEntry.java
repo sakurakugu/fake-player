@@ -26,10 +26,19 @@ public final class ChunkLoadingDebugEntry implements DebugScreenEntry {
         if (snapshot != null && minecraft.player != null) {
             int chunkX = minecraft.player.chunkPosition().x();
             int chunkZ = minecraft.player.chunkPosition().z();
+            String dimension = minecraft.player.level().dimension().identifier().toString();
             entries = snapshot.anchors().stream()
+                .filter(anchor -> anchor.dimension().equals(dimension))
                 .filter(anchor -> anchor.contains(chunkX, chunkZ))
                 .map(ChunkLoadingDebugEntry::describe)
                 .collect(Collectors.joining("; "));
+            boolean loadedByFakePlayer = snapshot.fakePlayers().stream()
+                .anyMatch(fake -> fake.loadsChunk(dimension, chunkX, chunkZ));
+            if (loadedByFakePlayer) {
+                entries = entries.isEmpty()
+                    ? Component.translatable("fakeplayer.chunkloader.fake_label").getString()
+                    : entries + " | " + Component.translatable("fakeplayer.chunkloader.fake_label").getString();
+            }
         }
         String status = entries.isEmpty()
             ? Component.translatable("commands.fakeplayer.none").getString()
@@ -40,7 +49,7 @@ public final class ChunkLoadingDebugEntry implements DebugScreenEntry {
 
     private static String describe(AnchorView anchor) {
         return Component.translatable("f3.fakeplayer.chunkloader.entry", anchor.name(),
-            anchor.radius(), Component.translatable(anchor.ticking()
+            anchor.chunks().size(), Component.translatable(anchor.ticking()
                 ? "commands.fakeplayer.chunkloader.mode_ticking"
                 : "commands.fakeplayer.chunkloader.mode_loading")).getString();
     }

@@ -13,7 +13,6 @@ import com.sakurakugu.fakeplayer.network.RequestChunkMapPayload;
 import com.sakurakugu.fakeplayer.network.OpenFakePlayerPagePayload;
 import com.sakurakugu.fakeplayer.network.ToggleGlobalSettingPayload;
 import java.util.HashMap;
-import java.util.Locale;
 import java.util.Map;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
@@ -230,10 +229,9 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
 
     private void drawFakePlayers(GuiGraphicsExtractor graphics) {
         for (var fake : controller.snapshot().fakePlayers()) {
-            if (!fake.dimension().equals(controller.snapshot().dimension())) continue;
-            if (fake.enabled()) {
-                outlineRange(graphics, fake.x() + 0.5D, fake.z() + 0.5D,
-                    fake.simulationDistance(), 0xFF4EC9E8);
+            if (fake.loadingActive() && fake.loadingDimension().equals(controller.snapshot().dimension())) {
+                outlineRange(graphics, fake.loadingChunkX(), fake.loadingChunkZ(),
+                    fake.loadingDistance(), 0xFF4EC9E8);
             }
         }
         for (var fake : controller.snapshot().fakePlayers()) {
@@ -242,9 +240,8 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
         }
     }
 
-    private void outlineRange(GuiGraphicsExtractor graphics, double blockX, double blockZ, int radius, int color) {
-        int centerChunkX = Mth.floor(blockX) >> 4;
-        int centerChunkZ = Mth.floor(blockZ) >> 4;
+    private void outlineRange(GuiGraphicsExtractor graphics, int centerChunkX, int centerChunkZ,
+                              int radius, int color) {
         int left = worldToScreenX((centerChunkX - radius) * 16.0D);
         int top = worldToScreenZ((centerChunkZ - radius) * 16.0D);
         int right = worldToScreenX((centerChunkX + radius + 1) * 16.0D);
@@ -603,15 +600,22 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
         int right = worldToScreenX((chunk[0] + 1) * 16.0D);
         int tileBottom = worldToScreenZ((chunk[1] + 1) * 16.0D);
         graphics.outline(left, top, Math.max(1, right - left), Math.max(1, tileBottom - top), 0xFFFFFFFF);
-        Component names = controller.snapshot().regions().stream()
+        var regionNames = controller.snapshot().regions().stream()
             .filter(region -> region.dimension().equals(controller.snapshot().dimension()))
             .filter(region -> region.contains(chunk[0], chunk[1]))
-            .map(region -> region.name() + ":" + region.mode().name().toLowerCase(Locale.ROOT))
-            .reduce((a, b) -> a + ", " + b)
-            .<Component>map(Component::literal)
-            .orElseGet(() -> Component.translatable("gui.fakeplayer.chunkloader.map_hover.none"));
+            .map(region -> region.name() + ":" + modeLabel(region.mode()).getString())
+            .reduce((a, b) -> a + ", " + b);
         Component chunkLine = Component.translatable("gui.fakeplayer.chunkloader.map_hover.chunk", chunk[0], chunk[1]);
         Component blockLine = Component.translatable("gui.fakeplayer.chunkloader.map_hover.block", blockX, blockZ);
+        boolean loadedByFakePlayer = controller.snapshot().fakePlayers().stream()
+            .anyMatch(fake -> fake.loadsChunk(controller.snapshot().dimension(), chunk[0], chunk[1]));
+        Component names = regionNames.<Component>map(Component::literal)
+            .orElseGet(() -> Component.translatable(loadedByFakePlayer
+                ? "fakeplayer.chunkloader.fake_label"
+                : "gui.fakeplayer.chunkloader.map_hover.none"));
+        if (loadedByFakePlayer && regionNames.isPresent()) {
+            names = names.copy().append(" | ").append(Component.translatable("fakeplayer.chunkloader.fake_label"));
+        }
         Component regionsLine = Component.translatable("gui.fakeplayer.chunkloader.map_hover.regions", names);
         Component playerLine = hoveredPlayer == null ? Component.empty() : Component.literal(hoveredPlayer.name());
         if (hoveredPlayer != null && hoveredPlayer.fake()) {
@@ -728,6 +732,14 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
     private static int modeColor(ManualLoadMode mode) { return switch (mode) {
         case LOADED -> 0x66287E8E; case TICKING -> 0x66D18B35; case FULL -> 0x66C94D55;
     }; }
+
+    private static Component modeLabel(ManualLoadMode mode) {
+        return Component.translatable(switch (mode) {
+            case LOADED -> "gui.fakeplayer.chunkloader.mode_loading";
+            case TICKING -> "gui.fakeplayer.chunkloader.mode_ticking";
+            case FULL -> "gui.fakeplayer.chunkloader.mode_full";
+        });
+    }
 
     private static String label(ChunkMapEditMode mode) { return switch (mode) {
         case BROWSE -> "浏览"; case LOADED -> "弱"; case TICKING -> "强"; case FULL -> "完整"; case ERASE -> "擦除";

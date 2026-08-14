@@ -6,10 +6,12 @@ import com.sakurakugu.fakeplayer.network.ApplyChunkLoadEditsPayload;
 import com.sakurakugu.fakeplayer.network.ChunkMapSnapshotPayload;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -64,12 +66,18 @@ public final class ChunkLoadMapController {
     public void apply() {
         if (!dirty()) return;
         List<ApplyChunkLoadEditsPayload.Edit> edits = new ArrayList<>();
+        Set<String> occupiedNames = new HashSet<>();
+        snapshot.managementRegions().forEach(region -> occupiedNames.add(region.name().toLowerCase(Locale.ROOT)));
         for (ManualLoadMode loadMode : ManualLoadMode.values()) {
             List<Long> chunks = painted.entrySet().stream().filter(entry -> entry.getValue() == loadMode)
                 .map(Map.Entry::getKey).toList();
-            if (!chunks.isEmpty()) edits.add(new ApplyChunkLoadEditsPayload.Edit(
-                ApplyChunkLoadEditsPayload.Action.CREATE_REGION, UUID.randomUUID(),
-                "map_" + Long.toUnsignedString(System.nanoTime(), 36), loadMode, true, 0, chunks));
+            if (!chunks.isEmpty()) {
+                String name = nextRegionName(occupiedNames);
+                occupiedNames.add(name.toLowerCase(Locale.ROOT));
+                edits.add(new ApplyChunkLoadEditsPayload.Edit(
+                    ApplyChunkLoadEditsPayload.Action.CREATE_REGION, UUID.randomUUID(),
+                    name, loadMode, true, 0, chunks));
+            }
         }
         for (ChunkMapSnapshotPayload.AnchorView region : snapshot.regions()) {
             if (!region.dimension().equals(snapshot.dimension())) continue;
@@ -90,5 +98,16 @@ public final class ChunkLoadMapController {
 
     private DraftState state() { return new DraftState(Map.copyOf(painted), Set.copyOf(erased)); }
     private void clearDraft() { painted.clear(); erased.clear(); undo.clear(); }
+
+    static String nextRegionName(Collection<String> existingNames) {
+        Set<String> normalized = new HashSet<>();
+        existingNames.forEach(name -> normalized.add(name.toLowerCase(Locale.ROOT)));
+        for (long suffix = 1; suffix < Long.MAX_VALUE; suffix++) {
+            String candidate = "region_" + suffix;
+            if (!normalized.contains(candidate)) return candidate;
+        }
+        throw new IllegalStateException("无法生成加载区域名称");
+    }
+
     private record DraftState(Map<Long, ManualLoadMode> painted, Set<Long> erased) { }
 }
