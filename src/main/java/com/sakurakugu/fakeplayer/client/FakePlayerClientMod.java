@@ -8,7 +8,7 @@ import com.sakurakugu.fakeplayer.network.StopPossessionPayload;
 import com.sakurakugu.fakeplayer.network.ChunkMapSnapshotPayload;
 import com.sakurakugu.fakeplayer.network.BodyRotationPayload;
 import com.sakurakugu.fakeplayer.client.chunkloading.ClientChunkLoadingState;
-import com.sakurakugu.fakeplayer.client.chunkloading.ChunkLoadingHud;
+import com.sakurakugu.fakeplayer.client.chunkloading.ChunkLoadingDebugEntry;
 import com.sakurakugu.fakeplayer.client.chunkloading.ChunkMapClientConfig;
 import com.sakurakugu.fakeplayer.client.ui.InventorySlotButton;
 import com.sakurakugu.fakeplayer.client.ui.TransferButton;
@@ -18,6 +18,8 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.client.gui.components.debug.DebugScreenEntryStatus;
+import net.minecraft.client.gui.components.debug.DebugScreenProfile;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.inventory.ChestMenu;
@@ -27,8 +29,8 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.RegisterDebugEntriesEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
-import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.client.network.event.RegisterClientPayloadHandlersEvent;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
@@ -44,9 +46,6 @@ public final class FakePlayerClientMod {
     private static final KeyMapping OPEN_CHUNK_MAP = new KeyMapping(
         "key.fakeplayer.open_chunk_map", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_C, CATEGORY
     );
-    private static final KeyMapping TOGGLE_CHUNK_HUD = new KeyMapping(
-        "key.fakeplayer.toggle_chunk_hud", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_B, CATEGORY
-    );
     private static final KeyMapping STOP_POSSESSION = new KeyMapping(
         "key.fakeplayer.stop_possession", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_P, CATEGORY
     );
@@ -57,7 +56,7 @@ public final class FakePlayerClientMod {
     public FakePlayerClientMod(IEventBus modBus, ModContainer container) {
         container.registerConfig(ModConfig.Type.CLIENT, ChunkMapClientConfig.SPEC, "fakeplayer-client.toml");
         modBus.addListener(FakePlayerClientMod::registerKeys);
-        modBus.addListener(FakePlayerClientMod::registerGuiLayers);
+        modBus.addListener(FakePlayerClientMod::registerDebugEntries);
         modBus.addListener(FakePlayerClientMod::registerClientPayloads);
         NeoForge.EVENT_BUS.addListener(FakePlayerClientMod::clientTick);
         NeoForge.EVENT_BUS.addListener(FakePlayerClientMod::addInventoryButtons);
@@ -66,13 +65,15 @@ public final class FakePlayerClientMod {
     private static void registerKeys(RegisterKeyMappingsEvent event) {
         event.registerCategory(CATEGORY);
         event.register(OPEN_CHUNK_MAP);
-        event.register(TOGGLE_CHUNK_HUD);
         event.register(STOP_POSSESSION);
     }
 
-    private static void registerGuiLayers(RegisterGuiLayersEvent event) {
-        event.registerAboveAll(Identifier.fromNamespaceAndPath(FakePlayerMod.MOD_ID, "chunk_loading_hud"),
-            ChunkLoadingHud::render);
+    private static void registerDebugEntries(RegisterDebugEntriesEvent event) {
+        event.register(ChunkLoadingDebugEntry.ID, new ChunkLoadingDebugEntry());
+        event.includeInProfile(ChunkLoadingDebugEntry.ID, DebugScreenProfile.DEFAULT,
+            DebugScreenEntryStatus.ALWAYS_ON);
+        event.includeInProfile(ChunkLoadingDebugEntry.ID, DebugScreenProfile.PERFORMANCE,
+            DebugScreenEntryStatus.ALWAYS_ON);
     }
 
     private static void registerClientPayloads(RegisterClientPayloadHandlersEvent event) {
@@ -99,14 +100,12 @@ public final class FakePlayerClientMod {
                 ClientPacketDistributor.sendToServer(new RequestChunkMapPayload(true, false, false));
             }
         }
-        while (TOGGLE_CHUNK_HUD.consumeClick()) {
-            ClientChunkLoadingState.toggleHud();
-            refreshTicks = 0;
-        }
         if (minecraft.player == null) {
             ClientChunkLoadingState.clear();
             refreshTicks = 0;
-        } else if (ClientChunkLoadingState.hudEnabled() && refreshTicks-- <= 0) {
+        } else if (!minecraft.debugEntries.isOverlayVisible()) {
+            refreshTicks = 0;
+        } else if (refreshTicks-- <= 0) {
             ClientPacketDistributor.sendToServer(new RequestChunkMapPayload(false, false, false));
             refreshTicks = 40;
         }

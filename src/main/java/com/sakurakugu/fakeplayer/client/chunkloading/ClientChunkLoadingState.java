@@ -9,7 +9,6 @@ import net.minecraft.client.multiplayer.ClientLevel;
 /** 保存服务端最近一次同步的加载点快照。 */
 public final class ClientChunkLoadingState {
     private static ChunkMapSnapshotPayload snapshot;
-    private static boolean hudEnabled = true;
     private static ClientLevel terrainLevel;
     private static ChunkTerrainTileCache terrainTiles;
 
@@ -31,14 +30,6 @@ public final class ClientChunkLoadingState {
 
     public static ChunkMapSnapshotPayload snapshot() {
         return snapshot;
-    }
-
-    public static boolean hudEnabled() {
-        return hudEnabled;
-    }
-
-    public static void toggleHud() {
-        hudEnabled = !hudEnabled;
     }
 
     static ChunkTerrainTileCache terrainTiles() {
