@@ -27,12 +27,28 @@ public final class ModNetworking {
     public static void register(RegisterPayloadHandlersEvent event) {
         PayloadRegistrar registrar = event.registrar("1");
         registrar.playToServer(
-            OpenGlobalMenuPayload.TYPE,
-            OpenGlobalMenuPayload.STREAM_CODEC,
+            OpenFakePlayerPagePayload.TYPE,
+            OpenFakePlayerPagePayload.STREAM_CODEC,
             (payload, context) -> {
                 if (context.player() instanceof ServerPlayer player
                     && FakePlayerConfig.canUseCommands(player.createCommandSourceStack())) {
-                    FakePlayerMenuOpener.openGlobal(player);
+                    switch (payload.page()) {
+                        case SPAWN -> FakePlayerMenuOpener.openSpawn(player);
+                        case LIST -> FakePlayerMenuOpener.openList(player);
+                        case PRESETS -> FakePlayerMenuOpener.openBotManagement(player);
+                    }
+                }
+            }
+        );
+        registrar.playToServer(
+            ToggleGlobalSettingPayload.TYPE,
+            ToggleGlobalSettingPayload.STREAM_CODEC,
+            (payload, context) -> {
+                if (context.player() instanceof ServerPlayer player
+                    && FakePlayerConfig.canUseCommands(player.createCommandSourceStack())
+                    && FakePlayerConfig.toggleGlobalSetting(payload.settingIndex())) {
+                    PacketDistributor.sendToPlayer(player, ChunkMapSnapshotPayload.create(player,
+                        ChunkLoaderManager.data(player.level().getServer()), false, false));
                 }
             }
         );
@@ -131,7 +147,7 @@ public final class ModNetworking {
                     var data = ChunkLoaderManager.data(player.level().getServer());
                     PacketDistributor.sendToPlayer(player,
                         ChunkMapSnapshotPayload.create(player, data,
-                            payload.openScreen(), payload.openManagement()));
+                            payload.openScreen(), payload.openManagement(), payload.openSettings()));
                 }
             }
         );

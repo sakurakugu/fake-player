@@ -2,7 +2,7 @@ package com.sakurakugu.fakeplayer.client;
 
 import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 
-/** 保存全局菜单最近一次从服务端确认的客户端设置。 */
+/** 保存服务端最近一次确认的客户端设置。 */
 public final class ClientGlobalSettings {
     private static Boolean containerTransferButtons;
 
@@ -17,5 +17,9 @@ public final class ClientGlobalSettings {
 
     public static void setContainerTransferButtons(boolean enabled) {
         containerTransferButtons = enabled;
+    }
+
+    public static void clear() {
+        containerTransferButtons = null;
     }
 }

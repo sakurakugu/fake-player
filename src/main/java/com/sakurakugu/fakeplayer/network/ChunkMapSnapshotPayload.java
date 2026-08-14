@@ -21,6 +21,8 @@ import net.minecraft.world.level.ChunkPos;
 public record ChunkMapSnapshotPayload(
     boolean openScreen,
     boolean openManagement,
+    boolean openSettings,
+    int globalSettingsMask,
     int maximumRadius,
     long revision,
     String dimension,
@@ -47,7 +49,8 @@ public record ChunkMapSnapshotPayload(
     }
 
     private ChunkMapSnapshotPayload(RegistryFriendlyByteBuf buffer) {
-        this(buffer.readBoolean(), buffer.readBoolean(), buffer.readVarInt(), buffer.readVarLong(),
+        this(buffer.readBoolean(), buffer.readBoolean(), buffer.readBoolean(), buffer.readVarInt(),
+            buffer.readVarInt(), buffer.readVarLong(),
             buffer.readUtf(256), buffer.readInt(), buffer.readInt(),
             readRegions(buffer), readRegionSummaries(buffer), readFakePlayers(buffer));
     }
@@ -55,6 +58,8 @@ public record ChunkMapSnapshotPayload(
     private void write(RegistryFriendlyByteBuf buffer) {
         buffer.writeBoolean(openScreen);
         buffer.writeBoolean(openManagement);
+        buffer.writeBoolean(openSettings);
+        buffer.writeVarInt(globalSettingsMask);
         buffer.writeVarInt(maximumRadius);
         buffer.writeVarLong(revision);
         buffer.writeUtf(dimension, 256);
@@ -70,6 +75,12 @@ public record ChunkMapSnapshotPayload(
 
     public static ChunkMapSnapshotPayload create(ServerPlayer player, ChunkLoaderSavedData data,
                                                  boolean openScreen, boolean openManagement) {
+        return create(player, data, openScreen, openManagement, false);
+    }
+
+    public static ChunkMapSnapshotPayload create(ServerPlayer player, ChunkLoaderSavedData data,
+                                                 boolean openScreen, boolean openManagement,
+                                                 boolean openSettings) {
         String dimension = player.level().dimension().identifier().toString();
         List<AnchorView> regionViews = data.regions().stream()
             .filter(region -> region.dimension().toString().equals(dimension))
@@ -89,7 +100,8 @@ public record ChunkMapSnapshotPayload(
                     fake.level().dimension().identifier().toString(), fake.getBlockX(), fake.getBlockY(),
                     fake.getBlockZ(), fake.getYRot(), true, policy.enabled(), policy.simulationDistance());
             }).toList();
-        return new ChunkMapSnapshotPayload(openScreen, openManagement,
+        return new ChunkMapSnapshotPayload(openScreen, openManagement, openSettings,
+            com.sakurakugu.fakeplayer.config.FakePlayerConfig.globalSettingsMask(),
             com.sakurakugu.fakeplayer.config.FakePlayerConfig.maxChunkLoadingRadius(), data.revision(), dimension,
             player.chunkPosition().x(), player.chunkPosition().z(), regionViews, summaries, fakeViews);
     }

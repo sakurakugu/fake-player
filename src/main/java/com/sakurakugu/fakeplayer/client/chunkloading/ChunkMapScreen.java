@@ -10,6 +10,8 @@ import com.sakurakugu.fakeplayer.network.ChunkLoaderActionPayload;
 import com.sakurakugu.fakeplayer.network.ChunkLoaderActionPayload.Action;
 import com.sakurakugu.fakeplayer.network.ChunkMapSnapshotPayload;
 import com.sakurakugu.fakeplayer.network.RequestChunkMapPayload;
+import com.sakurakugu.fakeplayer.network.OpenFakePlayerPagePayload;
+import com.sakurakugu.fakeplayer.network.ToggleGlobalSettingPayload;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -32,7 +34,14 @@ import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend {
     private static final int PANEL_WIDTH = 430;
     private static final int PANEL_HEIGHT = 286;
+    private static final int SETTINGS_PANEL_WIDTH = 430;
+    private static final int SETTINGS_PANEL_HEIGHT = 180;
     private static final int PAGE_SIZE = 6;
+    private static final int BOTTOM_BUTTON_WIDTH = 52;
+    private static final int BOTTOM_BUTTON_GAP = 4;
+    private static final String[] GLOBAL_SETTING_KEYS = {
+        "restore_players", "container_transfer_buttons"
+    };
     private static final double MIN_SCALE = 0.35D;
     private static final double MAX_SCALE = 2.5D;
     private static final int UNLOADED_A = 0xFF20262A;
@@ -56,17 +65,19 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
     private boolean managementOpen;
     private int snapshotRefreshTicks;
     private Button saveButton;
+    private final Button[] globalSettingButtons = new Button[GLOBAL_SETTING_KEYS.length];
     private int page;
     private int selectedIndex = -1;
     private boolean configureTicking;
     private boolean addTicking;
     private Action confirmation;
 
-    public ChunkMapScreen(ChunkMapSnapshotPayload snapshot, boolean managementOpen) {
+    public ChunkMapScreen(ChunkMapSnapshotPayload snapshot, boolean managementOpen, boolean settingsOpen) {
         super(Component.translatable("gui.fakeplayer.chunkloader.map_title"));
         controller = new ChunkLoadMapController(snapshot);
         terrainTiles = ClientChunkLoadingState.terrainTiles();
         this.managementOpen = managementOpen;
+        this.settingsOpen = settingsOpen;
         centerBlockX = snapshot.playerChunkX() * 16.0D + 8.0D;
         centerBlockZ = snapshot.playerChunkZ() * 16.0D + 8.0D;
         rebuildAuthoritativeModes();
@@ -79,7 +90,7 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
         super.tick();
         if (saveButton != null) saveButton.active = controller.dirty();
         if (minecraft.player != null && minecraft.getConnection() != null && snapshotRefreshTicks-- <= 0) {
-            ClientPacketDistributor.sendToServer(new RequestChunkMapPayload(false, false));
+            ClientPacketDistributor.sendToServer(new RequestChunkMapPayload(false, false, false));
             snapshotRefreshTicks = 10;
         }
     }
@@ -92,9 +103,20 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
             return;
         }
         if (settingsOpen) {
-            addRenderableWidget(new MarkerNameScaleSlider(width / 2 - 100, height / 2 - 10, 200, 20));
+            int panelWidth = settingsPanelWidth();
+            int left = (width - panelWidth) / 2;
+            int top = settingsPanelTop();
+            int halfWidth = panelWidth / 2;
+            addRenderableWidget(new MarkerNameScaleSlider(
+                left + halfWidth + 8, top + 44, halfWidth - 24, 20));
+            for (int index = 0; index < GLOBAL_SETTING_KEYS.length; index++) {
+                int settingIndex = index;
+                globalSettingButtons[index] = addRenderableWidget(Button.builder(globalSettingLabel(index),
+                    button -> toggleGlobalSetting(settingIndex))
+                    .bounds(left + 16, top + 104 + index * 26, panelWidth - 32, 20).build());
+            }
             addRenderableWidget(Button.builder(Component.translatable("gui.back"), button -> showSettings(false))
-                .bounds(width / 2 - 50, height - 32, 100, 20).build());
+                .bounds(width / 2 - 50, top + SETTINGS_PANEL_HEIGHT - 26, 100, 20).build());
             return;
         }
         int modeCount = ChunkMapEditMode.values().length;
@@ -114,11 +136,7 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
         addRenderableWidget(new SolidButton(width - 22, 7, 18, 18, PixelGlyph.CLOSE,
             Component.translatable("gui.close"), button -> closeMap()));
 
-        addRenderableWidget(Button.builder(Component.translatable("gui.fakeplayer.chunkloader.map_settings"),
-            button -> showSettings(true)).bounds(6, height - 26, 48, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("gui.fakeplayer.chunkloader.open_management"),
-            button -> showManagement(true))
-            .bounds(width - 94, height - 26, 88, 20).build());
+        addBottomBar();
     }
 
     @Override
@@ -128,18 +146,13 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
             return;
         }
         if (settingsOpen) {
+            drawMapContents(graphics);
             drawSettings(graphics);
             return;
         }
-        graphics.fill(0, 0, width, height, 0xFF111518);
-        graphics.enableScissor(0, 0, width, height);
-        drawTerrain(graphics);
-        drawChunkOverlays(graphics);
-        drawFakePlayers(graphics);
-        drawPlayer(graphics);
+        drawMapContents(graphics);
         PlayerMarker hoveredPlayer = playerMarkerAt(mouseX, mouseY);
         drawHoveredChunk(graphics, mouseX, mouseY, hoveredPlayer);
-        graphics.disableScissor();
 
         Component heading = Component.literal(title.getString() + "  [" + label(controller.mode()) + "]");
         drawFloatingText(graphics, heading, width / 2, 32, 0xFFFFFFFF);
@@ -149,6 +162,16 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
             centerChunkX, centerChunkZ, controller.snapshot().dimension()).copy()
             .append("  ").append(Math.round(pixelsPerBlock * 100.0D) + "%");
         drawFloatingText(graphics, status, width / 2, height - 38, 0xFFC8D6CF);
+    }
+
+    private void drawMapContents(GuiGraphicsExtractor graphics) {
+        graphics.fill(0, 0, width, height, 0xFF111518);
+        graphics.enableScissor(0, 0, width, height);
+        drawTerrain(graphics);
+        drawChunkOverlays(graphics);
+        drawFakePlayers(graphics);
+        drawPlayer(graphics);
+        graphics.disableScissor();
     }
 
     private void drawFloatingText(GuiGraphicsExtractor graphics, Component text, int centerX, int y, int color) {
@@ -302,13 +325,67 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
     }
 
     private void drawSettings(GuiGraphicsExtractor graphics) {
-        graphics.fill(0, 0, width, height, 0xFF111518);
+        int panelWidth = settingsPanelWidth();
+        int left = (width - panelWidth) / 2;
+        int top = settingsPanelTop();
+        int right = left + panelWidth;
+        int halfWidth = panelWidth / 2;
+        graphics.fill(0, 0, width, height, 0x55000000);
+        graphics.fill(left, top, right, top + SETTINGS_PANEL_HEIGHT, 0xC0111518);
+        graphics.outline(left, top, panelWidth, SETTINGS_PANEL_HEIGHT, 0xB08B8B8B);
         graphics.centeredText(font, Component.translatable("gui.fakeplayer.chunkloader.map_settings_title"),
-            width / 2, height / 2 - 48, 0xFFFFFFFF);
+            width / 2, top + 10, 0xFFFFFFFF);
         graphics.centeredText(font, Component.translatable("gui.fakeplayer.chunkloader.marker_name_preview"),
-            width / 2, height / 2 + 28, 0xFFAAAAAA);
+            left + halfWidth / 2, top + 34, 0xFFB8C1BD);
         drawScaledPreview(graphics, Component.literal(minecraft.player == null
-            ? "Player" : minecraft.player.getGameProfile().name()), width / 2, height / 2 + 44);
+            ? "Player" : minecraft.player.getGameProfile().name()), left + halfWidth / 2, top + 52);
+        graphics.fill(left + 12, top + 78, right - 12, top + 79, 0x808B8B8B);
+        graphics.text(font, Component.translatable("gui.fakeplayer.chunkloader.fake_player_settings"),
+            left + 16, top + 88, 0xFFB8C1BD, false);
+    }
+
+    private int settingsPanelWidth() {
+        return Math.min(SETTINGS_PANEL_WIDTH, width - 24);
+    }
+
+    private int settingsPanelTop() {
+        return Math.max(6, (height - SETTINGS_PANEL_HEIGHT) / 2);
+    }
+
+    private void addBottomBar() {
+        int count = 5;
+        int totalWidth = count * BOTTOM_BUTTON_WIDTH + (count - 1) * BOTTOM_BUTTON_GAP;
+        int x = (width - totalWidth) / 2;
+        int y = height - 26;
+        addRenderableWidget(Button.builder(Component.translatable("gui.fakeplayer.chunkloader.map_settings"),
+            button -> showSettings(true)).bounds(x, y, BOTTOM_BUTTON_WIDTH, 20).build());
+        x += BOTTOM_BUTTON_WIDTH + BOTTOM_BUTTON_GAP;
+        addPageButton(x, y, "gui.fakeplayer.chunkloader.bottom_spawn", OpenFakePlayerPagePayload.Page.SPAWN);
+        x += BOTTOM_BUTTON_WIDTH + BOTTOM_BUTTON_GAP;
+        addPageButton(x, y, "gui.fakeplayer.chunkloader.bottom_list", OpenFakePlayerPagePayload.Page.LIST);
+        x += BOTTOM_BUTTON_WIDTH + BOTTOM_BUTTON_GAP;
+        addPageButton(x, y, "gui.fakeplayer.chunkloader.bottom_presets", OpenFakePlayerPagePayload.Page.PRESETS);
+        x += BOTTOM_BUTTON_WIDTH + BOTTOM_BUTTON_GAP;
+        addRenderableWidget(Button.builder(Component.translatable("gui.fakeplayer.chunkloader.bottom_management"),
+            button -> showManagement(true)).bounds(x, y, BOTTOM_BUTTON_WIDTH, 20).build());
+    }
+
+    private void addPageButton(int x, int y, String translationKey, OpenFakePlayerPagePayload.Page page) {
+        addRenderableWidget(Button.builder(Component.translatable(translationKey),
+            button -> ClientPacketDistributor.sendToServer(new OpenFakePlayerPagePayload(page)))
+            .bounds(x, y, BOTTOM_BUTTON_WIDTH, 20).build());
+    }
+
+    private void toggleGlobalSetting(int index) {
+        ClientPacketDistributor.sendToServer(new ToggleGlobalSettingPayload(index));
+        for (Button button : globalSettingButtons) if (button != null) button.active = false;
+    }
+
+    private Component globalSettingLabel(int index) {
+        Component name = Component.translatable("gui.fakeplayer.global.setting." + GLOBAL_SETTING_KEYS[index]);
+        Component state = Component.translatable((controller.snapshot().globalSettingsMask() & (1 << index)) != 0
+            ? "gui.fakeplayer.global.enabled" : "gui.fakeplayer.global.disabled");
+        return Component.translatable("gui.fakeplayer.global.setting_value", name, state);
     }
 
     private void drawScaledPreview(GuiGraphicsExtractor graphics, Component text, int centerX, int y) {
@@ -661,6 +738,9 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
         var previous = controller.snapshot();
         controller.accept(snapshot);
         rebuildAuthoritativeModes();
+        if (settingsOpen && snapshot.globalSettingsMask() != previous.globalSettingsMask()) {
+            rebuildWidgets();
+        }
         if (managementOpen && (snapshot.revision() != previous.revision()
             || !snapshot.managementRegions().equals(previous.managementRegions()))) {
             selectedIndex = Math.min(selectedIndex, snapshot.managementRegions().size() - 1);

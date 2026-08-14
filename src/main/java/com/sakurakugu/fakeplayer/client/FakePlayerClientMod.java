@@ -2,7 +2,6 @@ package com.sakurakugu.fakeplayer.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import com.sakurakugu.fakeplayer.FakePlayerMod;
-import com.sakurakugu.fakeplayer.network.OpenGlobalMenuPayload;
 import com.sakurakugu.fakeplayer.network.PossessionStatePayload;
 import com.sakurakugu.fakeplayer.network.RequestChunkMapPayload;
 import com.sakurakugu.fakeplayer.network.StopPossessionPayload;
@@ -36,20 +35,14 @@ import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import net.neoforged.neoforge.common.NeoForge;
 import org.lwjgl.glfw.GLFW;
 
-/** 客户端入口，负责注册并处理全局设置快捷键。 */
+/** 客户端入口，负责注册并处理客户端快捷键。 */
 @Mod(value = FakePlayerMod.MOD_ID, dist = Dist.CLIENT)
 public final class FakePlayerClientMod {
     private static final KeyMapping.Category CATEGORY = new KeyMapping.Category(
         Identifier.fromNamespaceAndPath(FakePlayerMod.MOD_ID, "main")
     );
-    private static final KeyMapping OPEN_GLOBAL = new KeyMapping(
-        "key.fakeplayer.open_global",
-        InputConstants.Type.KEYSYM,
-        GLFW.GLFW_KEY_G,
-        CATEGORY
-    );
     private static final KeyMapping OPEN_CHUNK_MAP = new KeyMapping(
-        "key.fakeplayer.open_chunk_map", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_M, CATEGORY
+        "key.fakeplayer.open_chunk_map", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_C, CATEGORY
     );
     private static final KeyMapping TOGGLE_CHUNK_HUD = new KeyMapping(
         "key.fakeplayer.toggle_chunk_hud", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_B, CATEGORY
@@ -72,7 +65,6 @@ public final class FakePlayerClientMod {
 
     private static void registerKeys(RegisterKeyMappingsEvent event) {
         event.registerCategory(CATEGORY);
-        event.register(OPEN_GLOBAL);
         event.register(OPEN_CHUNK_MAP);
         event.register(TOGGLE_CHUNK_HUD);
         event.register(STOP_POSSESSION);
@@ -102,14 +94,9 @@ public final class FakePlayerClientMod {
                 ClientPacketDistributor.sendToServer(new StopPossessionPayload());
             }
         }
-        while (OPEN_GLOBAL.consumeClick()) {
-            if (minecraft.player != null && minecraft.screen == null) {
-                ClientPacketDistributor.sendToServer(new OpenGlobalMenuPayload());
-            }
-        }
         while (OPEN_CHUNK_MAP.consumeClick()) {
             if (minecraft.player != null && minecraft.screen == null) {
-                ClientPacketDistributor.sendToServer(new RequestChunkMapPayload(true, false));
+                ClientPacketDistributor.sendToServer(new RequestChunkMapPayload(true, false, false));
             }
         }
         while (TOGGLE_CHUNK_HUD.consumeClick()) {
@@ -120,7 +107,7 @@ public final class FakePlayerClientMod {
             ClientChunkLoadingState.clear();
             refreshTicks = 0;
         } else if (ClientChunkLoadingState.hudEnabled() && refreshTicks-- <= 0) {
-            ClientPacketDistributor.sendToServer(new RequestChunkMapPayload(false, false));
+            ClientPacketDistributor.sendToServer(new RequestChunkMapPayload(false, false, false));
             refreshTicks = 40;
         }
     }

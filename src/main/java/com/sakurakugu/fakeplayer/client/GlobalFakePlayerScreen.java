@@ -1,8 +1,8 @@
 package com.sakurakugu.fakeplayer.client;
 
-import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.menu.GlobalFakePlayerMenu;
 import com.sakurakugu.fakeplayer.network.SpawnFakePlayerPayload;
+import com.sakurakugu.fakeplayer.network.RequestChunkMapPayload;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -11,29 +11,21 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
-/** 显示全局设置，并允许切换到假人列表。 */
+/** 显示假人生成页或假人列表。 */
 public final class GlobalFakePlayerScreen extends AbstractContainerScreen<GlobalFakePlayerMenu> {
     private static final int PANEL_WIDTH = 300;
     private static final int PANEL_HEIGHT = 240;
     private static final int PAGE_SIZE = 5;
     private static final int BUTTON_HEIGHT = 24;
     private static final int ROW_GAP = 5;
-    private static final String[] SETTING_KEYS = {
-        "restore_players", "container_transfer_buttons"
-    };
-
     private int page;
     private Page currentPage;
     private EditBox nameInput;
     private Button spawnButton;
-    private final Button[] settingButtons = new Button[SETTING_KEYS.length];
-    private int displayedSettingsMask;
 
     public GlobalFakePlayerScreen(GlobalFakePlayerMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, PANEL_WIDTH, PANEL_HEIGHT);
-        currentPage = menu.openListInitially() ? Page.LIST : Page.SETTINGS;
-        displayedSettingsMask = menu.settingsMask();
-        syncClientSettings();
+        currentPage = menu.openSpawnInitially() ? Page.SPAWN : Page.LIST;
     }
 
     @Override
@@ -46,38 +38,6 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
         clearWidgets();
         nameInput = null;
         spawnButton = null;
-        java.util.Arrays.fill(settingButtons, null);
-        if (currentPage == Page.SETTINGS) {
-            int settingWidth = 130;
-            for (int index = 0; index < FakePlayerConfig.GlobalSetting.values().length; index++) {
-                int column = index % 2;
-                int row = index / 2;
-                int actionId = GlobalFakePlayerMenu.settingAction(index);
-                settingButtons[index] = addRenderableWidget(
-                    Button.builder(settingLabel(index), button -> sendAction(actionId))
-                        .bounds(leftPos + 16 + column * 138, topPos + 52 + row * 32, settingWidth, BUTTON_HEIGHT)
-                        .build()
-                );
-            }
-            addRenderableWidget(
-                Button.builder(Component.translatable("gui.fakeplayer.global.open_spawn"), button -> showSpawn())
-                    .bounds(leftPos + 50, topPos + 120, PANEL_WIDTH - 100, BUTTON_HEIGHT)
-                    .build()
-            );
-            addRenderableWidget(
-                Button.builder(Component.translatable("gui.fakeplayer.global.open_list"), button -> showList())
-                    .bounds(leftPos + 50, topPos + 150, PANEL_WIDTH - 100, BUTTON_HEIGHT)
-                    .build()
-            );
-            addRenderableWidget(
-                Button.builder(Component.translatable("gui.fakeplayer.global.open_bots"),
-                        button -> sendAction(GlobalFakePlayerMenu.ACTION_OPEN_BOTS))
-                    .bounds(leftPos + 50, topPos + 180, PANEL_WIDTH - 100, BUTTON_HEIGHT)
-                    .build()
-            );
-            return;
-        }
-
         if (currentPage == Page.SPAWN) {
             nameInput = addRenderableWidget(new EditBox(
                 font, leftPos + 50, topPos + 86, PANEL_WIDTH - 100, 22,
@@ -93,7 +53,7 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
             );
             updateSpawnButton();
             addRenderableWidget(
-                Button.builder(Component.translatable("gui.fakeplayer.global.settings"), button -> showSettings())
+                Button.builder(Component.translatable("gui.fakeplayer.global.settings"), button -> returnToMap())
                     .bounds(leftPos + 50, topPos + 180, PANEL_WIDTH - 100, BUTTON_HEIGHT)
                     .build()
             );
@@ -121,7 +81,7 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
         addRenderableWidget(previous);
 
         addRenderableWidget(
-            Button.builder(Component.translatable("gui.fakeplayer.global.settings"), button -> showSettings())
+            Button.builder(Component.translatable("gui.fakeplayer.global.settings"), button -> returnToMap())
                 .bounds(leftPos + 58, footerY, 76, 20)
                 .build()
         );
@@ -139,20 +99,8 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
         addRenderableWidget(next);
     }
 
-    private void showList() {
-        currentPage = Page.LIST;
-        page = 0;
-        rebuildButtons();
-    }
-
-    private void showSettings() {
-        currentPage = Page.SETTINGS;
-        rebuildButtons();
-    }
-
-    private void showSpawn() {
-        currentPage = Page.SPAWN;
-        rebuildButtons();
+    private void returnToMap() {
+        ClientPacketDistributor.sendToServer(new RequestChunkMapPayload(true, false, false));
     }
 
     private void updateSpawnButton() {
@@ -184,34 +132,6 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
     }
 
     @Override
-    protected void containerTick() {
-        super.containerTick();
-        if (displayedSettingsMask == menu.settingsMask()) {
-            return;
-        }
-        displayedSettingsMask = menu.settingsMask();
-        for (int index = 0; index < settingButtons.length; index++) {
-            if (settingButtons[index] != null) {
-                settingButtons[index].setMessage(settingLabel(index));
-            }
-        }
-        syncClientSettings();
-    }
-
-    private void syncClientSettings() {
-        ClientGlobalSettings.setContainerTransferButtons(
-            menu.settingEnabled(FakePlayerConfig.GlobalSetting.CONTAINER_TRANSFER_BUTTONS.ordinal()));
-    }
-
-    private Component settingLabel(int index) {
-        Component name = Component.translatable("gui.fakeplayer.global.setting." + SETTING_KEYS[index]);
-        Component state = Component.translatable(menu.settingEnabled(index)
-            ? "gui.fakeplayer.global.enabled"
-            : "gui.fakeplayer.global.disabled");
-        return Component.translatable("gui.fakeplayer.global.setting_value", name, state);
-    }
-
-    @Override
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractBackground(graphics, mouseX, mouseY, partialTick);
         graphics.fill(leftPos, topPos, leftPos + PANEL_WIDTH, topPos + PANEL_HEIGHT, 0xF0222528);
@@ -225,7 +145,6 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
         Component pageTitle = switch (currentPage) {
             case LIST -> Component.translatable("gui.fakeplayer.global.list_title");
             case SPAWN -> Component.translatable("gui.fakeplayer.global.spawn_title");
-            case SETTINGS -> title;
         };
         graphics.centeredText(font, pageTitle, PANEL_WIDTH / 2, 12, 0xFFFFFFFF);
         if (currentPage != Page.LIST) {
@@ -244,7 +163,6 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
     }
 
     private enum Page {
-        SETTINGS,
         LIST,
         SPAWN
     }

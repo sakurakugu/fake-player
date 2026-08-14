@@ -9,45 +9,31 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.item.ItemStack;
 
-/** 为全局设置和假人列表提供客户端快照与服务端操作通道。 */
+/** 为生成页面和假人列表提供客户端快照与服务端操作通道。 */
 public final class GlobalFakePlayerMenu extends AbstractContainerMenu {
     public static final int ACTION_REFRESH = -1;
-    public static final int ACTION_OPEN_BOTS = -100;
-    private static final int ACTION_SETTING_BASE = -2;
 
     private final List<String> playerNames;
     private final boolean openListInitially;
-    private int settingsMask;
+    private final boolean openSpawnInitially;
 
     public GlobalFakePlayerMenu(int containerId, Inventory inventory, RegistryFriendlyByteBuf data) {
-        this(containerId, inventory, data.readBoolean(), data.readVarInt(), readPlayerNames(data));
+        this(containerId, inventory, data.readBoolean(), data.readBoolean(), readPlayerNames(data));
     }
 
     public GlobalFakePlayerMenu(
         int containerId,
         Inventory inventory,
         boolean openListInitially,
-        int settingsMask,
+        boolean openSpawnInitially,
         List<String> playerNames
     ) {
         super(ModMenus.GLOBAL_FAKE_PLAYER.get(), containerId);
         this.openListInitially = openListInitially;
-        this.settingsMask = settingsMask;
+        this.openSpawnInitially = openSpawnInitially;
         this.playerNames = List.copyOf(playerNames);
-        addDataSlot(new DataSlot() {
-            @Override
-            public int get() {
-                return GlobalFakePlayerMenu.this.settingsMask;
-            }
-
-            @Override
-            public void set(int value) {
-                GlobalFakePlayerMenu.this.settingsMask = value;
-            }
-        });
     }
 
     private static List<String> readPlayerNames(RegistryFriendlyByteBuf data) {
@@ -65,16 +51,6 @@ public final class GlobalFakePlayerMenu extends AbstractContainerMenu {
         }
         if (actionId == ACTION_REFRESH) {
             FakePlayerMenuOpener.openList(viewer);
-            return true;
-        }
-        if (actionId == ACTION_OPEN_BOTS) {
-            FakePlayerMenuOpener.openBotManagement(viewer);
-            return true;
-        }
-        int settingIndex = ACTION_SETTING_BASE - actionId;
-        if (FakePlayerConfig.toggleGlobalSetting(settingIndex)) {
-            settingsMask = FakePlayerConfig.globalSettingsMask();
-            broadcastChanges();
             return true;
         }
         if (actionId < 0 || actionId >= playerNames.size()) {
@@ -109,15 +85,8 @@ public final class GlobalFakePlayerMenu extends AbstractContainerMenu {
         return openListInitially;
     }
 
-    public boolean settingEnabled(int index) {
-        return (settingsMask & (1 << index)) != 0;
+    public boolean openSpawnInitially() {
+        return openSpawnInitially;
     }
 
-    public int settingsMask() {
-        return settingsMask;
-    }
-
-    public static int settingAction(int index) {
-        return ACTION_SETTING_BASE - index;
-    }
 }

@@ -9,10 +9,12 @@ import com.sakurakugu.fakeplayer.entity.FakePlayerPossession;
 import com.sakurakugu.fakeplayer.entity.FakeServerPlayer;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerPersistence;
 import com.sakurakugu.fakeplayer.persistence.FakePlayerSavedData;
+import com.sakurakugu.fakeplayer.network.ChunkMapSnapshotPayload;
 import java.util.List;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.SimpleMenuProvider;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 /** 统一创建假人全局菜单和物品栏管理页面。 */
 public final class FakePlayerMenuOpener {
@@ -20,11 +22,16 @@ public final class FakePlayerMenuOpener {
     }
 
     public static void openGlobal(ServerPlayer viewer) {
-        openGlobal(viewer, false);
+        PacketDistributor.sendToPlayer(viewer, ChunkMapSnapshotPayload.create(
+            viewer, ChunkLoaderManager.data(viewer.level().getServer()), true, false, true));
     }
 
     public static void openList(ServerPlayer viewer) {
-        openGlobal(viewer, true);
+        openGlobal(viewer, true, false);
+    }
+
+    public static void openSpawn(ServerPlayer viewer) {
+        openGlobal(viewer, false, true);
     }
 
     public static void openBotManagement(ServerPlayer viewer) {
@@ -77,7 +84,7 @@ public final class FakePlayerMenuOpener {
         values.forEach(data::writeUtf);
     }
 
-    private static void openGlobal(ServerPlayer viewer, boolean openListInitially) {
+    private static void openGlobal(ServerPlayer viewer, boolean openListInitially, boolean openSpawnInitially) {
         List<String> names = FakePlayerManager.all(viewer.level().getServer()).stream()
             .map(fake -> fake.getGameProfile().name())
             .sorted(String.CASE_INSENSITIVE_ORDER)
@@ -88,14 +95,14 @@ public final class FakePlayerMenuOpener {
                     containerId,
                     inventory,
                     openListInitially,
-                    FakePlayerConfig.globalSettingsMask(),
+                    openSpawnInitially,
                     names
                 ),
                 Component.translatable("gui.fakeplayer.global.title")
             ),
             data -> {
                 data.writeBoolean(openListInitially);
-                data.writeVarInt(FakePlayerConfig.globalSettingsMask());
+                data.writeBoolean(openSpawnInitially);
                 data.writeVarInt(names.size());
                 names.forEach(name -> data.writeUtf(name, 64));
             }

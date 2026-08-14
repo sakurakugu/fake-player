@@ -1,5 +1,7 @@
 package com.sakurakugu.fakeplayer.client.chunkloading;
 
+import com.sakurakugu.fakeplayer.client.ClientGlobalSettings;
+import com.sakurakugu.fakeplayer.config.FakePlayerConfig;
 import com.sakurakugu.fakeplayer.network.ChunkMapSnapshotPayload;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -16,8 +18,12 @@ public final class ClientChunkLoadingState {
 
     public static void accept(ChunkMapSnapshotPayload value) {
         snapshot = value;
+        int transferSetting = FakePlayerConfig.GlobalSetting.CONTAINER_TRANSFER_BUTTONS.ordinal();
+        ClientGlobalSettings.setContainerTransferButtons(
+            (value.globalSettingsMask() & (1 << transferSetting)) != 0);
         if (value.openScreen()) {
-            Minecraft.getInstance().setScreen(new ChunkMapScreen(value, value.openManagement()));
+            Minecraft.getInstance().setScreen(new ChunkMapScreen(
+                value, value.openManagement(), value.openSettings()));
         } else if (Minecraft.getInstance().screen instanceof ChunkMapScreen screen) {
             screen.update(value);
         }
@@ -47,6 +53,7 @@ public final class ClientChunkLoadingState {
 
     public static void clear() {
         snapshot = null;
+        ClientGlobalSettings.clear();
         closeTerrainTiles();
     }
 
