@@ -11,7 +11,7 @@ import com.sakurakugu.fakeplayer.network.BodyRotationPayload;
 import com.sakurakugu.fakeplayer.client.chunkloading.ClientChunkLoadingState;
 import com.sakurakugu.fakeplayer.client.chunkloading.ChunkLoadingHud;
 import com.sakurakugu.fakeplayer.client.chunkloading.ChunkMapClientConfig;
-import com.sakurakugu.fakeplayer.client.ui.IconButton;
+import com.sakurakugu.fakeplayer.client.ui.InventorySlotButton;
 import com.sakurakugu.fakeplayer.client.ui.TransferButton;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -151,7 +151,7 @@ public final class FakePlayerClientMod {
             + (screen instanceof CreativeModeInventoryScreen ? 28 : -12);
         int buttonY = screen.height / 2 
             + (screen instanceof CreativeModeInventoryScreen ? -50 : -40);;
-        Button button = new IconButton(
+        Button button = new InventorySlotButton(
             buttonX,
             buttonY,
             FakePlayerInventoryScreen.POSSESSION_EXIT_ICON,

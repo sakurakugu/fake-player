@@ -3,9 +3,9 @@ package com.sakurakugu.fakeplayer.client.chunkloading;
 import com.mojang.authlib.GameProfile;
 import com.sakurakugu.fakeplayer.chunkloading.ChunkKey;
 import com.sakurakugu.fakeplayer.chunkloading.ManualLoadMode;
-import com.sakurakugu.fakeplayer.client.ui.CompactButton;
+import com.sakurakugu.fakeplayer.client.ui.SolidButton;
 import com.sakurakugu.fakeplayer.client.ui.PixelGlyph;
-import com.sakurakugu.fakeplayer.client.ui.CompactSliderButton;
+import com.sakurakugu.fakeplayer.client.ui.SolidSliderButton;
 import com.sakurakugu.fakeplayer.network.ChunkLoaderActionPayload;
 import com.sakurakugu.fakeplayer.network.ChunkLoaderActionPayload.Action;
 import com.sakurakugu.fakeplayer.network.ChunkMapSnapshotPayload;
@@ -108,10 +108,10 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
         addRenderableWidget(Button.builder(Component.translatable("gui.fakeplayer.chunkloader.map_undo"),
             button -> controller.undo()).bounds(x + 6, 6, 48, 20).build());
 
-        saveButton = addRenderableWidget(new CompactButton(width - 42, 7, 18, 18, PixelGlyph.SAVE,
+        saveButton = addRenderableWidget(new SolidButton(width - 42, 7, 18, 18, PixelGlyph.SAVE,
             Component.translatable("gui.fakeplayer.chunkloader.map_save"), button -> controller.apply()));
         saveButton.active = controller.dirty();
-        addRenderableWidget(new CompactButton(width - 22, 7, 18, 18, PixelGlyph.CLOSE,
+        addRenderableWidget(new SolidButton(width - 22, 7, 18, 18, PixelGlyph.CLOSE,
             Component.translatable("gui.close"), button -> closeMap()));
 
         addRenderableWidget(Button.builder(Component.translatable("gui.fakeplayer.chunkloader.map_settings"),
@@ -349,7 +349,7 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
                 ? "gui.fakeplayer.chunkloader.confirm_restore" : "gui.fakeplayer.chunkloader.restore"),
             button -> confirmOrSend(Action.RESTORE, ""))
             .bounds(left + 348, top + 9, 66, 20).build());
-        addRenderableWidget(new CompactButton(width - 22, 7, 18, 18, PixelGlyph.CLOSE,
+        addRenderableWidget(new SolidButton(width - 22, 7, 18, 18, PixelGlyph.CLOSE,
             Component.translatable("gui.close"), button -> closeMap()));
 
         int first = page * PAGE_SIZE;
@@ -680,7 +680,7 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
     @Override public void setEditMode(ChunkMapEditMode mode) { controller.setMode(mode); }
     @Override public void close() { onClose(); }
 
-    private final class MarkerNameScaleSlider extends CompactSliderButton {
+    private final class MarkerNameScaleSlider extends SolidSliderButton {
         private MarkerNameScaleSlider(int x, int y, int width, int height) {
             super(x, y, width, height, Component.empty(),
                 (ChunkMapClientConfig.markerNameScale() - 0.5D) / 1.5D);

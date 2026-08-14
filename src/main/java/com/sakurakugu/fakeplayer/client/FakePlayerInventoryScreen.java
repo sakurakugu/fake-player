@@ -4,12 +4,14 @@ import com.sakurakugu.fakeplayer.menu.FakePlayerInventoryMenu;
 import com.sakurakugu.fakeplayer.network.RenameFakePlayerPayload;
 import com.sakurakugu.fakeplayer.network.FakePlayerSimulationPayload;
 import com.sakurakugu.fakeplayer.network.FakePlayerViewRotationPayload;
-import com.sakurakugu.fakeplayer.client.ui.CompactButton;
-import com.sakurakugu.fakeplayer.client.ui.CompactDropdownButton;
-import com.sakurakugu.fakeplayer.client.ui.CompactSliderButton;
-import com.sakurakugu.fakeplayer.client.ui.IconButton;
+import com.sakurakugu.fakeplayer.client.ui.HotbarSelector;
+import com.sakurakugu.fakeplayer.client.ui.IntegerSliderButton;
+import com.sakurakugu.fakeplayer.client.ui.SolidButton;
+import com.sakurakugu.fakeplayer.client.ui.SolidDropdownButton;
+import com.sakurakugu.fakeplayer.client.ui.InventorySlotButton;
 import com.sakurakugu.fakeplayer.client.ui.OverlayPanelManager;
 import com.sakurakugu.fakeplayer.client.ui.PixelGui;
+import com.sakurakugu.fakeplayer.client.ui.RotationPad;
 import com.sakurakugu.fakeplayer.client.ui.ToggleSwitchButton;
 import com.sakurakugu.fakeplayer.client.ui.TransferButton;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -77,12 +79,8 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private static final int TARGET_INVENTORY_HEIGHT = 159;
     private static final int HOTBAR_SELECTOR_TOP = 159;
     private static final int HOTBAR_SELECTOR_HEIGHT = 5;
-    private static final int HOTBAR_SLOT_COUNT = 9;
-    private static final int HOTBAR_SLOT_SPACING = 18;
     // 选择区整体比快捷栏第一格左移 1 像素，这样才对的齐。
     private static final int HOTBAR_SELECTOR_LEFT = 7;
-    // 与快捷栏 18 像素格距一致，选择框覆盖整个格子。
-    private static final int HOTBAR_SELECTOR_WIDTH = 18;
     private static final int VIEWER_SECTION_TOP = 164;
     // 普通管理页面不开放假人的 2x2 合成区。
     private static final int CRAFTING_AREA_LEFT = 97;
@@ -122,7 +120,6 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private static final OverlayPanelManager.Layout SIMULATION_PANEL_LAYOUT = panelLayout(8, 100, 92);
     private static final int MOUNT_BUTTON_HEIGHT = 16;
     private static final int AIM_PAD_SIZE = 62;
-    private static final float MAX_HEAD_YAW_OFFSET = 50.0F;
     private static final int CONTINUOUS_BUTTON_HEIGHT = 16;
     private static final int CONTINUOUS_SLIDER_HEIGHT = 14;
     private static final String AIM_PANEL_ID = "aim";
@@ -164,18 +161,18 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     private int heldAction = -1;
     private int heldTicks;
     private boolean heldStarted;
-    private DropAmountSlider dropAmountSlider;
+    private IntegerSliderButton dropAmountSlider;
     private Button dropModeButton;
     private Button flyUpButton;
     private Button flyDownButton;
-    private AimPad aimPad;
-    private AimPad directionPad;
+    private RotationPad aimPad;
+    private RotationPad directionPad;
     private EditBox pitchInput;
     private EditBox yawInput;
     private ToggleSwitchButton bodyFollowsHeadButton;
     private boolean syncingAimInputs;
     private EditBox nameInput;
-    private CompactDropdownButton<GameType> gameModeButton;
+    private SolidDropdownButton<GameType> gameModeButton;
     private boolean simulationEnabled;
     private int simulationDistance;
     private boolean simulationStateInitialized;
@@ -209,7 +206,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         }
         if (menu.view() == FakePlayerInventoryMenu.View.POSSESSED_INVENTORY) {
             addRenderableWidget(
-                new IconButton(
+                new InventorySlotButton(
                     leftPos + ACTION_BUTTON_LEFT,
                     topPos + ACTION_BUTTON_TOP + (ACTION_BUTTON_HEIGHT + ACTION_BUTTON_GAP) * 2,
                     POSSESSION_EXIT_ICON,
@@ -220,7 +217,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             return;
         }
         addRenderableWidget(
-            new IconButton(
+            new InventorySlotButton(
                 leftPos + ACTION_BUTTON_LEFT,
                 topPos + ACTION_BUTTON_TOP,
                 new ItemStack(Items.BARRIER),
@@ -228,8 +225,8 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
                 button -> sendAction(FakePlayerInventoryMenu.ACTION_REMOVE)
             )
         );
-        IconButton possessButton = addRenderableWidget(
-            new IconButton(
+        InventorySlotButton possessButton = addRenderableWidget(
+            new InventorySlotButton(
                 leftPos + ACTION_BUTTON_LEFT,
                 topPos + ACTION_BUTTON_TOP + (ACTION_BUTTON_HEIGHT + ACTION_BUTTON_GAP) * 2,
                 menu.possessedByViewer() ? POSSESSION_EXIT_ICON : POSSESSION_ENTER_ICON,
@@ -244,7 +241,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             possessButton.active = false;
         }
         addRenderableWidget(
-            new IconButton(
+            new InventorySlotButton(
                 leftPos + ACTION_BUTTON_LEFT,
                 topPos + ACTION_BUTTON_TOP + ACTION_BUTTON_HEIGHT + ACTION_BUTTON_GAP,
                 new ItemStack(Items.ENDER_CHEST),
@@ -253,6 +250,17 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             )
         );
         addTransferButtons(TRANSFER_BUTTON_TOP);
+        addRenderableWidget(new HotbarSelector(
+            leftPos + HOTBAR_SELECTOR_LEFT,
+            topPos + HOTBAR_SELECTOR_TOP,
+            HOTBAR_SELECTOR_HEIGHT,
+            menu::selectedHotbarSlot,
+            slot -> {
+                if (minecraft.gameMode != null) {
+                    minecraft.gameMode.handleInventoryButtonClick(menu.containerId, slot);
+                }
+            }
+        ));
         addControlButtons();
         createPanels();
         addInfoPanel();
@@ -310,17 +318,17 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         int panelLeft = mountPanel.getX();
         addRenderableWidget(mountPanel);
         int mountTop = mountPanel.getY();
-        Button mountButton = addRenderableWidget(new CompactButton(
+        Button mountButton = addRenderableWidget(new SolidButton(
             panelLeft + 6, mountTop + 21, mountPanel.contentWidth() - 12, MOUNT_BUTTON_HEIGHT,
             Component.translatable("gui.fakeplayer.mount.mount"),
             button -> sendAction(FakePlayerInventoryMenu.ACTION_MOUNT)
         ));
-        Button mountAnythingButton = addRenderableWidget(new CompactButton(
+        Button mountAnythingButton = addRenderableWidget(new SolidButton(
             panelLeft + 6, mountTop + 39, mountPanel.contentWidth() - 12, MOUNT_BUTTON_HEIGHT,
             Component.translatable("gui.fakeplayer.mount.mount_anything"),
             button -> sendAction(FakePlayerInventoryMenu.ACTION_MOUNT_ANYTHING)
         ));
-        Button dismountButton = addRenderableWidget(new CompactButton(
+        Button dismountButton = addRenderableWidget(new SolidButton(
             panelLeft + 6, mountTop + 57, mountPanel.contentWidth() - 12, MOUNT_BUTTON_HEIGHT,
             Component.translatable("gui.fakeplayer.mount.dismount"),
             button -> sendAction(FakePlayerInventoryMenu.ACTION_DISMOUNT)
@@ -351,19 +359,26 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
                 button -> sendAction(CONTINUOUS_ACTIONS[controlIndex])
             ));
         }
-        ContinuousIntervalSlider[] intervalSliders = new ContinuousIntervalSlider[3];
+        IntegerSliderButton[] intervalSliders = new IntegerSliderButton[3];
         for (int index = 0; index < intervalSliders.length; index++) {
+            int controlIndex = index;
             int buttonTop = continuousTop + 4 * (CONTINUOUS_BUTTON_HEIGHT + 2)
                 + index * (CONTINUOUS_BUTTON_HEIGHT + CONTINUOUS_SLIDER_HEIGHT + 4);
-            intervalSliders[index] = addRenderableWidget(new ContinuousIntervalSlider(
+            intervalSliders[index] = addRenderableWidget(new IntegerSliderButton(
                 panelLeft + 6,
                 buttonTop + CONTINUOUS_BUTTON_HEIGHT + 2,
                 continuousPanel.contentWidth() - 12,
                 CONTINUOUS_SLIDER_HEIGHT,
-                index
+                1,
+                FakePlayerInventoryMenu.MAX_CONTINUOUS_INTERVAL,
+                menu.continuousInterval(controlIndex),
+                value -> Component.translatable("gui.fakeplayer.continuous.interval", value),
+                value -> sendAction(FakePlayerInventoryMenu.continuousIntervalActionId(controlIndex, value))
             ));
+            intervalSliders[index].setTooltip(Tooltip.create(
+                Component.translatable("gui.fakeplayer.continuous.interval_tooltip")));
         }
-        Button stopAllContinuousButton = addRenderableWidget(new CompactButton(
+        Button stopAllContinuousButton = addRenderableWidget(new SolidButton(
             panelLeft + 6,
             continuousTop + 4 * (CONTINUOUS_BUTTON_HEIGHT + 2)
                 + intervalSliders.length * (CONTINUOUS_BUTTON_HEIGHT + CONTINUOUS_SLIDER_HEIGHT + 4) + 2,
@@ -392,14 +407,25 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             DROP_TAB_ICON, Component.translatable("gui.fakeplayer.drop_tab")));
 
         dropModeButton = addRenderableWidget(
-            new CompactButton(panelLeft + 74, panelTop + 28, 14, 14, dropModeMessage(), button -> toggleDropMode())
+            new SolidButton(panelLeft + 74, panelTop + 28, 14, 14, dropModeMessage(), button -> toggleDropMode())
         );
         updateDropModeTooltip();
-        dropAmountSlider = addRenderableWidget(new DropAmountSlider(
+        dropAmountSlider = addRenderableWidget(new IntegerSliderButton(
             panelLeft + 6,
             panelTop + 46,
             dropPanel.contentWidth() - 12,
-            16
+            16,
+            1,
+            FakePlayerInventoryMenu.MAX_DROP_AMOUNT,
+            dropAmount,
+            value -> Component.literal(value + (percentageDrop ? "%" : "")),
+            value -> {
+                if (percentageDrop) {
+                    dropPercentage = value;
+                } else {
+                    dropAmount = value;
+                }
+            }
         ));
         ToggleSwitchButton continuousDropButton = addRenderableWidget(
             new ToggleSwitchButton(panelLeft + 6, panelTop + 67, dropPanel.contentWidth() - 12, 16,
@@ -408,7 +434,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             })
         );
         Button executeDropButton = addRenderableWidget(
-            new CompactButton(
+            new SolidButton(
                 panelLeft + 6,
                 panelTop + 88,
                 dropPanel.contentWidth() - 12,
@@ -432,12 +458,12 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         nameInput.setMaxLength(16);
         nameInput.setValue(menu.targetName());
         nameInput.setHint(Component.translatable("gui.fakeplayer.info.name"));
-        Button renameButton = addRenderableWidget(new CompactButton(
+        Button renameButton = addRenderableWidget(new SolidButton(
             left + 96, top + 28, 28, 16,
             Component.translatable("gui.fakeplayer.info.rename"),
             button -> submitRename()
         ));
-        gameModeButton = addRenderableWidget(new CompactDropdownButton<>(
+        gameModeButton = addRenderableWidget(new SolidDropdownButton<>(
             left + 54, top + 47, 70, 16,
             java.util.List.of(GameType.SURVIVAL, GameType.CREATIVE, GameType.ADVENTURE, GameType.SPECTATOR),
             gameType(), this::gameModeName,
@@ -449,7 +475,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         CoordinateDisplay coordinateDisplay = addRenderableWidget(new CoordinateDisplay(
             left + 7, top + 138, 85, 15
         ));
-        Button copyPositionButton = addRenderableWidget(new CompactButton(
+        Button copyPositionButton = addRenderableWidget(new SolidButton(
             left + 96, top + 139, 28, 14,
             Component.translatable("gui.fakeplayer.info.copy"),
             button -> copyPosition()
@@ -483,9 +509,12 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
             left + 6, top + 24, simulationPanel.contentWidth() - 12, 16,
             Component.translatable("gui.fakeplayer.simulation.enabled"), () -> simulationEnabled,
             button -> simulationEnabled = !simulationEnabled));
-        SimulationDistanceSlider slider = addRenderableWidget(
-            new SimulationDistanceSlider(left + 6, top + 47, simulationPanel.contentWidth() - 12, 16));
-        Button apply = addRenderableWidget(new CompactButton(
+        IntegerSliderButton slider = addRenderableWidget(new IntegerSliderButton(
+            left + 6, top + 47, simulationPanel.contentWidth() - 12, 16,
+            0, 32, simulationDistance,
+            value -> Component.translatable("gui.fakeplayer.simulation.distance", value),
+            value -> simulationDistance = value));
+        Button apply = addRenderableWidget(new SolidButton(
             left + 6, top + 70, simulationPanel.contentWidth() - 12, 16,
             Component.translatable("gui.fakeplayer.simulation.apply"), button -> {
                 ClientPacketDistributor.sendToServer(new FakePlayerSimulationPayload(
@@ -554,8 +583,16 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         ));
         bodyFollowsHeadButton.setTooltip(Tooltip.create(
             Component.translatable("gui.fakeplayer.look.body_follows_head_tooltip")));
-        aimPad = addRenderableWidget(new AimPad(x + 16, y + 50, AIM_PAD_SIZE, false));
-        directionPad = addRenderableWidget(new AimPad(x + 16, y + 124, AIM_PAD_SIZE, true));
+        aimPad = addRenderableWidget(new RotationPad(
+            x + 16, y + 50, AIM_PAD_SIZE, RotationPad.Mode.VIEW,
+            menu::pitch, menu::yaw, menu::bodyYaw, menu::bodyFollowsHead,
+            selectedYaw -> sendAction(FakePlayerInventoryMenu.bodyYawAction(selectedYaw)),
+            this::sendViewRotation));
+        directionPad = addRenderableWidget(new RotationPad(
+            x + 16, y + 124, AIM_PAD_SIZE, RotationPad.Mode.BODY,
+            menu::pitch, menu::yaw, menu::bodyYaw, menu::bodyFollowsHead,
+            selectedYaw -> sendAction(FakePlayerInventoryMenu.bodyYawAction(selectedYaw)),
+            this::sendViewRotation));
         pitchInput = addRenderableWidget(new EditBox(font, x + 36, y + 192, 52, 16,
             Component.translatable("gui.fakeplayer.look_pitch")));
         yawInput = addRenderableWidget(new EditBox(font, x + 36, y + 212, 52, 16,
@@ -605,7 +642,7 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
     }
 
     private Button addControlButtonAt(int x, int y, String label, int actionId) {
-        return addRenderableWidget(new CompactButton(
+        return addRenderableWidget(new SolidButton(
             x,
             y,
             CONTROL_SIZE,
@@ -654,7 +691,10 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         percentageDrop = !percentageDrop;
         dropModeButton.setMessage(dropModeMessage());
         updateDropModeTooltip();
-        dropAmountSlider.refreshValue();
+        int maximum = percentageDrop
+            ? FakePlayerInventoryMenu.MAX_DROP_PERCENTAGE
+            : FakePlayerInventoryMenu.MAX_DROP_AMOUNT;
+        dropAmountSlider.setRange(1, maximum, currentDropValue());
     }
 
     private void updateDropModeTooltip() {
@@ -787,46 +827,6 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         };
     }
 
-    /** 根据当前计量模式，将滑块位置映射到整数数量或百分比。 */
-    private final class DropAmountSlider extends CompactSliderButton {
-        private DropAmountSlider(int x, int y, int width, int height) {
-            super(
-                x,
-                y,
-                width,
-                height,
-                Component.literal(Integer.toString(dropAmount)),
-                (double) (dropAmount - 1) / (FakePlayerInventoryMenu.MAX_DROP_AMOUNT - 1)
-            );
-        }
-
-        @Override
-        protected void updateMessage() {
-            setMessage(Component.literal(currentDropValue() + (percentageDrop ? "%" : "")));
-        }
-
-        @Override
-        protected void applyValue() {
-            int maximum = percentageDrop
-                ? FakePlayerInventoryMenu.MAX_DROP_PERCENTAGE
-                : FakePlayerInventoryMenu.MAX_DROP_AMOUNT;
-            int selectedValue = 1 + (int) Math.round(value * (maximum - 1));
-            if (percentageDrop) {
-                dropPercentage = selectedValue;
-            } else {
-                dropAmount = selectedValue;
-            }
-        }
-
-        private void refreshValue() {
-            int maximum = percentageDrop
-                ? FakePlayerInventoryMenu.MAX_DROP_PERCENTAGE
-                : FakePlayerInventoryMenu.MAX_DROP_AMOUNT;
-            setValue((double) (currentDropValue() - 1) / (maximum - 1));
-        }
-
-    }
-
     @Override
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractBackground(graphics, mouseX, mouseY, partialTick);
@@ -919,47 +919,8 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         aimPanel.drawBackground(graphics);
         simulationPanel.drawBackground(graphics);
 
-        for (int slot = 0; slot < HOTBAR_SLOT_COUNT; slot++) {
-            int x = leftPos + HOTBAR_SELECTOR_LEFT + slot * HOTBAR_SLOT_SPACING;
-            int y = topPos + HOTBAR_SELECTOR_TOP;
-            boolean hovered = mouseX >= x && mouseX < x + HOTBAR_SELECTOR_WIDTH
-                && mouseY >= y && mouseY < y + HOTBAR_SELECTOR_HEIGHT;
-            int color = slot == menu.selectedHotbarSlot()
-                ? hovered ? 0xFF5DDB6C : 0xFF36B54A
-                : hovered ? 0xFF8A8A8A : 0xFF5A5A5A;
-            // 使用原版选择框的明暗边框；每个选择框独立绘制，不与相邻选择框共线。
-            int right = x + HOTBAR_SELECTOR_WIDTH;
-            int bottom = y + HOTBAR_SELECTOR_HEIGHT;
-            graphics.fill(x, y, right, y + 1, 0xFF373737);
-            graphics.fill(x, y + 1, x + 1, bottom, 0xFF373737);
-            graphics.fill(x + 1, bottom - 1, right, bottom, 0xFFFFFFFF);
-            graphics.fill(right - 1, y + 1, right, bottom, 0xFFFFFFFF);
-            graphics.fill(x + 1, y + 1, right - 1, bottom - 1, color);
-            graphics.fill(x, bottom - 1, x + 1, bottom, 0xFF8B8B8B);
-            graphics.fill(right - 1, y, right, y + 1, 0xFF8B8B8B);
-        }
-
         drawTargetEntity(graphics, mouseX, mouseY);
         drawSelectorAreaSideBorders(graphics);
-    }
-
-    /** 将滑块位置映射为 0-32 区块的模拟距离。 */
-    private final class SimulationDistanceSlider extends CompactSliderButton {
-        private SimulationDistanceSlider(int x, int y, int width, int height) {
-            super(x, y, width, height, Component.empty(),
-                Math.clamp(simulationDistance / 32.0D, 0.0D, 1.0D));
-            updateMessage();
-        }
-
-        @Override
-        protected void updateMessage() {
-            setMessage(Component.translatable("gui.fakeplayer.simulation.distance", simulationDistance));
-        }
-
-        @Override
-        protected void applyValue() {
-            simulationDistance = Math.max(0, Math.min(32, (int) Math.round(value * 32.0D)));
-        }
     }
 
     private void clearCraftingArea(GuiGraphicsExtractor graphics) {
@@ -1121,45 +1082,6 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         return Component.translatable("selectWorld.gameMode." + id);
     }
 
-    /** 将滑块位置映射为持续动作的 tick 间隔。 */
-    private final class ContinuousIntervalSlider extends CompactSliderButton {
-        private final int controlIndex;
-        private int interval;
-
-        private ContinuousIntervalSlider(int x, int y, int width, int height, int controlIndex) {
-            super(
-                x,
-                y,
-                width,
-                height,
-                Component.empty(),
-                (double) (menu.continuousInterval(controlIndex) - 1)
-                    / (FakePlayerInventoryMenu.MAX_CONTINUOUS_INTERVAL - 1)
-            );
-            this.controlIndex = controlIndex;
-            this.interval = menu.continuousInterval(controlIndex);
-            updateMessage();
-            setTooltip(Tooltip.create(Component.translatable("gui.fakeplayer.continuous.interval_tooltip")));
-        }
-
-        @Override
-        protected void updateMessage() {
-            setMessage(Component.translatable("gui.fakeplayer.continuous.interval", interval));
-        }
-
-        @Override
-        protected void applyValue() {
-            int selected = 1 + (int) Math.round(
-                value * (FakePlayerInventoryMenu.MAX_CONTINUOUS_INTERVAL - 1));
-            if (selected == interval) {
-                return;
-            }
-            interval = selected;
-            updateMessage();
-            sendAction(FakePlayerInventoryMenu.continuousIntervalActionId(controlIndex, interval));
-        }
-    }
-
     private void syncAimInputs() {
         if (pitchInput == null || yawInput == null) return;
         syncingAimInputs = true;
@@ -1193,154 +1115,10 @@ public final class FakePlayerInventoryScreen extends AbstractContainerScreen<Fak
         graphics.fill(leftPos + imageWidth - 1, top, leftPos + imageWidth, bottom, 0xFF000000);
     }
 
-    /** 视角/身体朝向控制器；方形视角盘为自由二维输入，圆形朝向盘沿圆周连续旋转。 */
-    private final class AimPad extends Button {
-        private final boolean cardinal;
-        private boolean dragging;
-        private boolean draggingOutsideHorizontally;
-        private float dragStartBodyYaw;
-        private float dragYawOffset;
-        AimPad(int x, int y, int size, boolean cardinal) {
-            super(x, y, size, size, Component.empty(), button -> { }, DEFAULT_NARRATION);
-            this.cardinal = cardinal;
-        }
-        @Override protected void extractContents(GuiGraphicsExtractor g, int mx, int my, float pt) {
-            if (cardinal) {
-                setTooltip(Tooltip.create(Component.translatable(
-                    "gui.fakeplayer.look.direction_tooltip",
-                    menu.bodyYaw(),
-                    Math.round(wrapDegrees(menu.yaw() - menu.bodyYaw())),
-                    bodyBearing(menu.bodyYaw())
-                )));
-            } else {
-                setTooltip(Tooltip.create(Component.translatable(
-                    "gui.fakeplayer.look.view_tooltip", menu.pitch(), menu.yaw()
-                )));
-            }
-            int cx = getX() + getWidth() / 2, cy = getY() + getHeight() / 2, r = getWidth() / 2 - 2;
-            if (cardinal) {
-                for (int a = 0; a < 360; a += 3) {
-                    int px = cx + Math.round((float) Math.cos(Math.toRadians(a)) * r);
-                    int py = cy + Math.round((float) Math.sin(Math.toRadians(a)) * r);
-                    g.fill(px, py, px + 2, py + 2, 0xFF555555);
-                }
-            } else {
-                int left = cx - r;
-                int top = cy - r;
-                int right = cx + r + 1;
-                int bottom = cy + r + 1;
-                g.fill(left, top, right, top + 2, 0xFF555555);
-                g.fill(left, bottom - 2, right, bottom, 0xFF555555);
-                g.fill(left, top + 2, left + 2, bottom - 2, 0xFF555555);
-                g.fill(right - 2, top + 2, right, bottom - 2, 0xFF555555);
-            }
-            int bx;
-            int by;
-            if (cardinal) {
-                double angle = Math.toRadians(menu.bodyYaw() + 90);
-                bx = cx + (int) Math.round(Math.cos(angle) * r);
-                by = cy + (int) Math.round(Math.sin(angle) * r);
-            } else {
-                // 联动时身体会吸收越界角度，拖动期间使用本地偏移避免网络同步造成摇杆抖动。
-                float headOffset = menu.bodyFollowsHead() && dragging
-                    ? dragYawOffset
-                    : wrapDegrees(menu.yaw() - menu.bodyYaw());
-                bx = cx + Math.round(headOffset * (r - 3) / MAX_HEAD_YAW_OFFSET);
-                if (menu.bodyFollowsHead() && draggingOutsideHorizontally) {
-                    // 只有鼠标越过左右边框时才让摇杆露出一半，表示当前正在带动身体。
-                    bx = cx + (dragYawOffset < 0.0F ? -r : r);
-                }
-                by = cy + Math.round(menu.pitch() * (r - 3) / 90.0f);
-            }
-            g.fill(bx - 3, by - 3, bx + 4, by + 4, 0xFFFFFFFF);
-            g.fill(bx - 2, by - 2, bx + 3, by + 3, 0xFFC6C6C6);
-        }
-        @Override public boolean mouseClicked(MouseButtonEvent e, boolean dbl) {
-            if (e.button() != 0 || !isMouseOver(e.x(), e.y())) return false;
-            dragging = true;
-            dragStartBodyYaw = menu.bodyYaw();
-            update(e.x(), e.y());
-            return true;
-        }
-        @Override public boolean mouseDragged(MouseButtonEvent e, double dx, double dy) {
-            if (!dragging) return false; update(e.x(), e.y()); return true;
-        }
-        @Override public boolean mouseReleased(MouseButtonEvent e) {
-            dragging = false;
-            draggingOutsideHorizontally = false;
-            return super.mouseReleased(e);
-        }
-        private void update(double mx, double my) {
-            double cx = getX() + getWidth() / 2.0, cy = getY() + getHeight() / 2.0;
-            double dx = mx - cx, dy = my - cy, r = getWidth() / 2.0 - 3;
-            double rawDx = dx;
-            double len = Math.sqrt(dx * dx + dy * dy);
-            if (cardinal && len > 0) { dx *= r / len; dy *= r / len; }
-            else if (!cardinal) { dx = Math.max(-r, Math.min(r, dx)); dy = Math.max(-r, Math.min(r, dy)); }
-            if (cardinal) {
-                int yaw = (int) Math.round(Math.toDegrees(Math.atan2(dy, dx)) - 90);
-                sendAction(FakePlayerInventoryMenu.bodyYawAction(yaw));
-                return;
-            }
-            dragYawOffset = (float) (dx / r * MAX_HEAD_YAW_OFFSET);
-            draggingOutsideHorizontally = menu.bodyFollowsHead() && Math.abs(rawDx) > r;
-            float requestedYawOffset = menu.bodyFollowsHead()
-                ? Math.clamp((float) (rawDx / r * MAX_HEAD_YAW_OFFSET), -179.0F, 179.0F)
-                : dragYawOffset;
-            float yawBase = menu.bodyFollowsHead() ? dragStartBodyYaw : menu.bodyYaw();
-            int yaw = Math.round(yawBase + requestedYawOffset);
-            int pitch = (int) Math.round(dy / r * 90.0);
-            sendViewRotation(pitch, yaw);
-        }
-    }
-
-    private static float wrapDegrees(float degrees) {
-        float wrapped = degrees % 360.0F;
-        if (wrapped >= 180.0F) wrapped -= 360.0F;
-        if (wrapped < -180.0F) wrapped += 360.0F;
-        return wrapped;
-    }
-
-    /** 将 Minecraft 偏航角转换为易读的象限方位。 */
-    private static Component bodyBearing(float bodyYaw) {
-        int yaw = Math.round(wrapDegrees(bodyYaw));
-        return switch (yaw) {
-            case 0 -> Component.translatable("gui.fakeplayer.look.bearing.south");
-            case -90 -> Component.translatable("gui.fakeplayer.look.bearing.east");
-            case 90 -> Component.translatable("gui.fakeplayer.look.bearing.west");
-            case -180 -> Component.translatable("gui.fakeplayer.look.bearing.north");
-            default -> {
-                if (yaw < -90) {
-                    yield Component.translatable("gui.fakeplayer.look.bearing.east_north", -yaw - 90);
-                }
-                if (yaw < 0) {
-                    yield Component.translatable("gui.fakeplayer.look.bearing.east_south", yaw + 90);
-                }
-                if (yaw < 90) {
-                    yield Component.translatable("gui.fakeplayer.look.bearing.west_south", 90 - yaw);
-                }
-                yield Component.translatable("gui.fakeplayer.look.bearing.west_north", yaw - 90);
-            }
-        };
-    }
-
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         if (gameModeButton != null && gameModeButton.popupMouseClicked(event)) {
             return true;
-        }
-        if (menu.view() == FakePlayerInventoryMenu.View.INVENTORY && event.button() == 0) {
-            int relativeX = (int) event.x() - leftPos;
-            int relativeY = (int) event.y() - topPos;
-            if (relativeY >= HOTBAR_SELECTOR_TOP && relativeY < HOTBAR_SELECTOR_TOP + HOTBAR_SELECTOR_HEIGHT) {
-                for (int slot = 0; slot < HOTBAR_SLOT_COUNT; slot++) {
-                    int x = HOTBAR_SELECTOR_LEFT + slot * HOTBAR_SLOT_SPACING;
-                    if (relativeX >= x && relativeX < x + HOTBAR_SELECTOR_WIDTH) {
-                        minecraft.gameMode.handleInventoryButtonClick(menu.containerId, slot);
-                        return true;
-                    }
-                }
-            }
         }
         return super.mouseClicked(event, doubleClick);
     }

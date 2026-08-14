@@ -9,6 +9,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.item.ItemStack;
 
 /** 为全局设置和假人列表提供客户端快照与服务端操作通道。 */
@@ -19,7 +20,7 @@ public final class GlobalFakePlayerMenu extends AbstractContainerMenu {
 
     private final List<String> playerNames;
     private final boolean openListInitially;
-    private final int settingsMask;
+    private int settingsMask;
 
     public GlobalFakePlayerMenu(int containerId, Inventory inventory, RegistryFriendlyByteBuf data) {
         this(containerId, inventory, data.readBoolean(), data.readVarInt(), readPlayerNames(data));
@@ -36,6 +37,17 @@ public final class GlobalFakePlayerMenu extends AbstractContainerMenu {
         this.openListInitially = openListInitially;
         this.settingsMask = settingsMask;
         this.playerNames = List.copyOf(playerNames);
+        addDataSlot(new DataSlot() {
+            @Override
+            public int get() {
+                return GlobalFakePlayerMenu.this.settingsMask;
+            }
+
+            @Override
+            public void set(int value) {
+                GlobalFakePlayerMenu.this.settingsMask = value;
+            }
+        });
     }
 
     private static List<String> readPlayerNames(RegistryFriendlyByteBuf data) {
@@ -61,8 +73,8 @@ public final class GlobalFakePlayerMenu extends AbstractContainerMenu {
         }
         int settingIndex = ACTION_SETTING_BASE - actionId;
         if (FakePlayerConfig.toggleGlobalSetting(settingIndex)) {
-            // 重新打开菜单，将服务端确认后的配置状态同步给客户端。
-            FakePlayerMenuOpener.openGlobal(viewer);
+            settingsMask = FakePlayerConfig.globalSettingsMask();
+            broadcastChanges();
             return true;
         }
         if (actionId < 0 || actionId >= playerNames.size()) {
@@ -99,6 +111,10 @@ public final class GlobalFakePlayerMenu extends AbstractContainerMenu {
 
     public boolean settingEnabled(int index) {
         return (settingsMask & (1 << index)) != 0;
+    }
+
+    public int settingsMask() {
+        return settingsMask;
     }
 
     public static int settingAction(int index) {

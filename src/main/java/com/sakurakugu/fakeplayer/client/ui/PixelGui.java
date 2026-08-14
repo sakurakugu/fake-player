@@ -10,7 +10,7 @@ public final class PixelGui {
     private PixelGui() {
     }
 
-    public static void drawCompactControl(
+    public static void drawSolidControl(
         GuiGraphicsExtractor graphics, int x, int y, int width, int height, boolean hovered
     ) {
         int right = x + width;
@@ -23,6 +23,21 @@ public final class PixelGui {
         graphics.fill(right - 2, y + 1, right - 1, bottom - 1, 0xFF565656);
         graphics.fill(x + 1, bottom - 2, x + 2, bottom - 1, 0xFF8B8B8B);
         graphics.fill(right - 2, y + 1, right - 1, y + 2, 0xFF8B8B8B);
+    }
+
+    /** 绘制原版物品栏槽位使用的凹陷边框。 */
+    public static void drawInventorySlotBackground(
+        GuiGraphicsExtractor graphics, int x, int y, int width, int height, int color
+    ) {
+        int right = x + width;
+        int bottom = y + height;
+        graphics.fill(x, y, right, y + 1, 0xFF373737);
+        graphics.fill(x, y + 1, x + 1, bottom, 0xFF373737);
+        graphics.fill(x + 1, bottom - 1, right, bottom, 0xFFFFFFFF);
+        graphics.fill(right - 1, y + 1, right, bottom, 0xFFFFFFFF);
+        graphics.fill(x + 1, y + 1, right - 1, bottom - 1, color);
+        graphics.fill(x, bottom - 1, x + 1, bottom, 0xFF8B8B8B);
+        graphics.fill(right - 1, y, right, y + 1, 0xFF8B8B8B);
     }
 
     public static void drawToggle(

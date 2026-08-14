@@ -9,8 +9,8 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
-/** 适合窄面板的紧凑下拉选择器。 */
-public final class CompactDropdownButton<T> extends Button {
+/** 使用纯色像素风边框的下拉选择器。 */
+public final class SolidDropdownButton<T> extends Button {
     private static final int OPTION_HEIGHT = 16;
     private static final int TEXT_PADDING = 4;
     private final List<T> options;
@@ -19,7 +19,7 @@ public final class CompactDropdownButton<T> extends Button {
     private T selected;
     private boolean open;
 
-    public CompactDropdownButton(
+    public SolidDropdownButton(
         int x,
         int y,
         int width,
@@ -57,7 +57,7 @@ public final class CompactDropdownButton<T> extends Button {
 
     @Override
     protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-        PixelGui.drawCompactControl(graphics, getX(), getY(), getWidth(), getHeight(), isMouseOver(mouseX, mouseY));
+        PixelGui.drawSolidControl(graphics, getX(), getY(), getWidth(), getHeight(), isMouseOver(mouseX, mouseY));
         graphics.enableScissor(getX() + TEXT_PADDING, getY(), getX() + getWidth() - 10, getY() + getHeight());
         graphics.text(Minecraft.getInstance().font, getMessage(),
             getX() + TEXT_PADDING, getY() + (getHeight() - 8) / 2,

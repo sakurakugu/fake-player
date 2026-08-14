@@ -26,12 +26,14 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
     private Page currentPage;
     private EditBox nameInput;
     private Button spawnButton;
+    private final Button[] settingButtons = new Button[SETTING_KEYS.length];
+    private int displayedSettingsMask;
 
     public GlobalFakePlayerScreen(GlobalFakePlayerMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, PANEL_WIDTH, PANEL_HEIGHT);
         currentPage = menu.openListInitially() ? Page.LIST : Page.SETTINGS;
-        ClientGlobalSettings.setContainerTransferButtons(
-            menu.settingEnabled(FakePlayerConfig.GlobalSetting.CONTAINER_TRANSFER_BUTTONS.ordinal()));
+        displayedSettingsMask = menu.settingsMask();
+        syncClientSettings();
     }
 
     @Override
@@ -44,13 +46,14 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
         clearWidgets();
         nameInput = null;
         spawnButton = null;
+        java.util.Arrays.fill(settingButtons, null);
         if (currentPage == Page.SETTINGS) {
             int settingWidth = 130;
             for (int index = 0; index < FakePlayerConfig.GlobalSetting.values().length; index++) {
                 int column = index % 2;
                 int row = index / 2;
                 int actionId = GlobalFakePlayerMenu.settingAction(index);
-                addRenderableWidget(
+                settingButtons[index] = addRenderableWidget(
                     Button.builder(settingLabel(index), button -> sendAction(actionId))
                         .bounds(leftPos + 16 + column * 138, topPos + 52 + row * 32, settingWidth, BUTTON_HEIGHT)
                         .build()
@@ -178,6 +181,26 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
         if (minecraft.gameMode != null) {
             minecraft.gameMode.handleInventoryButtonClick(menu.containerId, actionId);
         }
+    }
+
+    @Override
+    protected void containerTick() {
+        super.containerTick();
+        if (displayedSettingsMask == menu.settingsMask()) {
+            return;
+        }
+        displayedSettingsMask = menu.settingsMask();
+        for (int index = 0; index < settingButtons.length; index++) {
+            if (settingButtons[index] != null) {
+                settingButtons[index].setMessage(settingLabel(index));
+            }
+        }
+        syncClientSettings();
+    }
+
+    private void syncClientSettings() {
+        ClientGlobalSettings.setContainerTransferButtons(
+            menu.settingEnabled(FakePlayerConfig.GlobalSetting.CONTAINER_TRANSFER_BUTTONS.ordinal()));
     }
 
     private Component settingLabel(int index) {
