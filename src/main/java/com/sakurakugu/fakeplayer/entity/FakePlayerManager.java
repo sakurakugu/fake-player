@@ -92,13 +92,14 @@ public final class FakePlayerManager {
             : FakePlayerPersistence.readPlayerData(fake);
         playerData.ifPresent(data -> FakePlayerPersistence.applyPlayerData(fake, data));
         fake.snapTo(position.x, position.y, position.z, rotation.y, rotation.x);
-        fake.gameMode.changeGameModeForPlayer(gameType);
-        fake.getAbilities().flying = flying && fake.getAbilities().mayfly;
 
         // 通过原版登录流程接入玩家列表，让追踪、区块加载和广播行为保持一致。
         FakeConnection connection = new FakeConnection();
         try {
             server.getPlayerList().placeNewPlayer(connection, fake, CommonListenerCookie.createInitial(profile, false));
+            // NeoForge 26.1.2 会在切换模式时读取 connection.latency()；必须先完成登录流程。
+            fake.gameMode.changeGameModeForPlayer(gameType);
+            fake.getAbilities().flying = flying && fake.getAbilities().mayfly;
             playerData.ifPresent(data -> FakePlayerPersistence.finishPlayerDataLoad(fake, data, !overrideSavedSpawnState));
             if (overrideSavedSpawnState) {
                 // 手动生成的位置由命令决定，不恢复存档中的载具关系。
