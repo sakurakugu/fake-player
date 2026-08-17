@@ -110,24 +110,24 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
                 left + halfWidth + 8, top + 44, halfWidth - 24, 20));
             for (int index = 0; index < GLOBAL_SETTING_KEYS.length; index++) {
                 int settingIndex = index;
-                globalSettingButtons[index] = addRenderableWidget(Button.builder(globalSettingLabel(index),
-                    button -> toggleGlobalSetting(settingIndex))
-                    .bounds(left + 16, top + 104 + index * 26, panelWidth - 32, 20).build());
+                globalSettingButtons[index] = addRenderableWidget(new SolidButton(
+                    left + 16, top + 104 + index * 26, panelWidth - 32, 20,
+                    globalSettingLabel(index), button -> toggleGlobalSetting(settingIndex)));
             }
-            addRenderableWidget(Button.builder(Component.translatable("gui.back"), button -> showSettings(false))
-                .bounds(width / 2 - 50, top + SETTINGS_PANEL_HEIGHT - 26, 100, 20).build());
+            addRenderableWidget(new SolidButton(width / 2 - 50, top + SETTINGS_PANEL_HEIGHT - 26, 100, 20,
+                Component.translatable("gui.back"), button -> showSettings(false)));
             return;
         }
         int modeCount = ChunkMapEditMode.values().length;
         int buttonWidth = Mth.clamp((width - 118) / modeCount, 32, 44);
         int x = 6;
         for (ChunkMapEditMode mode : ChunkMapEditMode.values()) {
-            addRenderableWidget(Button.builder(Component.literal(label(mode)), button -> setEditMode(mode))
-                .bounds(x, 6, buttonWidth, 20).build());
+            addRenderableWidget(new SolidButton(x, 6, buttonWidth, 20,
+                Component.literal(label(mode)), button -> setEditMode(mode)));
             x += buttonWidth;
         }
-        addRenderableWidget(Button.builder(Component.translatable("gui.fakeplayer.chunkloader.map_undo"),
-            button -> controller.undo()).bounds(x + 6, 6, 48, 20).build());
+        addRenderableWidget(new SolidButton(x + 6, 6, 48, 20,
+            Component.translatable("gui.fakeplayer.chunkloader.map_undo"), button -> controller.undo()));
 
         saveButton = addRenderableWidget(new SolidButton(width - 42, 7, 18, 18, PixelGlyph.SAVE,
             Component.translatable("gui.fakeplayer.chunkloader.map_save"), button -> controller.apply()));
@@ -354,8 +354,8 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
         int totalWidth = count * BOTTOM_BUTTON_WIDTH + (count - 1) * BOTTOM_BUTTON_GAP;
         int x = (width - totalWidth) / 2;
         int y = height - 26;
-        addRenderableWidget(Button.builder(Component.translatable("gui.fakeplayer.chunkloader.map_settings"),
-            button -> showSettings(true)).bounds(x, y, BOTTOM_BUTTON_WIDTH, 20).build());
+        addRenderableWidget(new SolidButton(x, y, BOTTOM_BUTTON_WIDTH, 20,
+            Component.translatable("gui.fakeplayer.chunkloader.map_settings"), button -> showSettings(true)));
         x += BOTTOM_BUTTON_WIDTH + BOTTOM_BUTTON_GAP;
         addPageButton(x, y, "gui.fakeplayer.chunkloader.bottom_spawn", OpenFakePlayerPagePayload.Page.SPAWN);
         x += BOTTOM_BUTTON_WIDTH + BOTTOM_BUTTON_GAP;
@@ -363,14 +363,15 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
         x += BOTTOM_BUTTON_WIDTH + BOTTOM_BUTTON_GAP;
         addPageButton(x, y, "gui.fakeplayer.chunkloader.bottom_presets", OpenFakePlayerPagePayload.Page.PRESETS);
         x += BOTTOM_BUTTON_WIDTH + BOTTOM_BUTTON_GAP;
-        addRenderableWidget(Button.builder(Component.translatable("gui.fakeplayer.chunkloader.bottom_management"),
-            button -> showManagement(true)).bounds(x, y, BOTTOM_BUTTON_WIDTH, 20).build());
+        addRenderableWidget(new SolidButton(x, y, BOTTOM_BUTTON_WIDTH, 20,
+            Component.translatable("gui.fakeplayer.chunkloader.bottom_management"),
+            button -> showManagement(true)));
     }
 
     private void addPageButton(int x, int y, String translationKey, OpenFakePlayerPagePayload.Page page) {
-        addRenderableWidget(Button.builder(Component.translatable(translationKey),
-            button -> ClientPacketDistributor.sendToServer(new OpenFakePlayerPagePayload(page)))
-            .bounds(x, y, BOTTOM_BUTTON_WIDTH, 20).build());
+        addRenderableWidget(new SolidButton(x, y, BOTTOM_BUTTON_WIDTH, 20,
+            Component.translatable(translationKey),
+            button -> ClientPacketDistributor.sendToServer(new OpenFakePlayerPagePayload(page))));
     }
 
     private void toggleGlobalSetting(int index) {
@@ -414,15 +415,15 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
     private void addManagementControls() {
         int left = (width - PANEL_WIDTH) / 2;
         int top = (height - PANEL_HEIGHT) / 2;
-        addRenderableWidget(Button.builder(Component.translatable("gui.back"), button -> showManagement(false))
-            .bounds(left + 16, top + 9, 54, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("gui.fakeplayer.chunkloader.backup"),
-            button -> sendManagementAction(Action.BACKUP, "", 0, false))
-            .bounds(left + 280, top + 9, 64, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable(confirmation == Action.RESTORE
+        addRenderableWidget(new SolidButton(left + 16, top + 9, 54, 20,
+            Component.translatable("gui.back"), button -> showManagement(false)));
+        addRenderableWidget(new SolidButton(left + 280, top + 9, 64, 20,
+            Component.translatable("gui.fakeplayer.chunkloader.backup"),
+            button -> sendManagementAction(Action.BACKUP, "", 0, false)));
+        addRenderableWidget(new SolidButton(left + 348, top + 9, 66, 20,
+            Component.translatable(confirmation == Action.RESTORE
                 ? "gui.fakeplayer.chunkloader.confirm_restore" : "gui.fakeplayer.chunkloader.restore"),
-            button -> confirmOrSend(Action.RESTORE, ""))
-            .bounds(left + 348, top + 9, 66, 20).build());
+            button -> confirmOrSend(Action.RESTORE, "")));
         addRenderableWidget(new SolidButton(width - 22, 7, 18, 18, PixelGlyph.CLOSE,
             Component.translatable("gui.close"), button -> closeMap()));
 
@@ -432,8 +433,8 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
             int selected = index;
             var region = regions().get(index);
             Component label = Component.literal((region.enabled() ? "[+] " : "[-] ") + region.name());
-            addRenderableWidget(Button.builder(label, button -> selectRegion(selected))
-                .bounds(left + 16, top + 48 + (index - first) * 27, 145, 22).build());
+            addRenderableWidget(new SolidButton(left + 16, top + 48 + (index - first) * 27,
+                145, 22, label, button -> selectRegion(selected)));
         }
         addManagementPageButtons(left, top);
         addSelectedRegionControls(left, top);
@@ -448,20 +449,23 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
         radius.setMaxLength(2);
         radius.setValue(Integer.toString(selected.radius()));
         radius.setFilter(value -> value.isEmpty() || value.chars().allMatch(Character::isDigit));
-        addRenderableWidget(Button.builder(modeLabel(configureTicking), button -> {
+        addRenderableWidget(new SolidButton(left + 236, top + 138, 95, 20,
+            modeLabel(configureTicking), button -> {
             configureTicking = !configureTicking;
             button.setMessage(modeLabel(configureTicking));
-        }).bounds(left + 236, top + 138, 95, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("gui.fakeplayer.chunkloader.apply"), button ->
-            sendManagementAction(Action.CONFIGURE, selected.name(), parseRadius(radius), configureTicking))
-            .bounds(left + 335, top + 138, 69, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable(selected.enabled()
+        }));
+        addRenderableWidget(new SolidButton(left + 335, top + 138, 69, 20,
+            Component.translatable("gui.fakeplayer.chunkloader.apply"), button ->
+                sendManagementAction(Action.CONFIGURE, selected.name(), parseRadius(radius), configureTicking)));
+        addRenderableWidget(new SolidButton(left + 180, top + 166, 105, 20,
+            Component.translatable(selected.enabled()
                 ? "gui.fakeplayer.chunkloader.disable" : "gui.fakeplayer.chunkloader.enable"), button ->
             sendManagementAction(selected.enabled() ? Action.DISABLE : Action.ENABLE,
-                selected.name(), 0, false)).bounds(left + 180, top + 166, 105, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable(confirmation == Action.REMOVE
-                ? "gui.fakeplayer.chunkloader.confirm_remove" : "gui.fakeplayer.chunkloader.remove"), button ->
-            confirmOrSend(Action.REMOVE, selected.name())).bounds(left + 289, top + 166, 115, 20).build());
+                selected.name(), 0, false)));
+        addRenderableWidget(new SolidButton(left + 289, top + 166, 115, 20,
+            Component.translatable(confirmation == Action.REMOVE
+                ? "gui.fakeplayer.chunkloader.confirm_remove" : "gui.fakeplayer.chunkloader.remove"),
+            button -> confirmOrSend(Action.REMOVE, selected.name())));
     }
 
     private void addCreateRegionControls(int left, int top) {
@@ -474,22 +478,23 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
         radius.setMaxLength(2);
         radius.setValue("0");
         radius.setFilter(value -> value.isEmpty() || value.chars().allMatch(Character::isDigit));
-        addRenderableWidget(Button.builder(modeLabel(addTicking), button -> {
+        addRenderableWidget(new SolidButton(left + 197, top + 251, 118, 20,
+            modeLabel(addTicking), button -> {
             addTicking = !addTicking;
             button.setMessage(modeLabel(addTicking));
-        }).bounds(left + 197, top + 251, 118, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("gui.fakeplayer.chunkloader.add"), button ->
-            sendManagementAction(Action.ADD, name.getValue(), parseRadius(radius), addTicking))
-            .bounds(left + 319, top + 251, 95, 20).build());
+        }));
+        addRenderableWidget(new SolidButton(left + 319, top + 251, 95, 20,
+            Component.translatable("gui.fakeplayer.chunkloader.add"), button ->
+                sendManagementAction(Action.ADD, name.getValue(), parseRadius(radius), addTicking)));
     }
 
     private void addManagementPageButtons(int left, int top) {
-        Button previous = Button.builder(Component.literal("<"), button -> changeManagementPage(-1))
-            .bounds(left + 16, top + 214, 32, 20).build();
+        Button previous = new SolidButton(left + 16, top + 214, 32, 20,
+            Component.literal("<"), button -> changeManagementPage(-1));
         previous.active = page > 0;
         addRenderableWidget(previous);
-        Button next = Button.builder(Component.literal(">"), button -> changeManagementPage(1))
-            .bounds(left + 129, top + 214, 32, 20).build();
+        Button next = new SolidButton(left + 129, top + 214, 32, 20,
+            Component.literal(">"), button -> changeManagementPage(1));
         next.active = page + 1 < managementPageCount();
         addRenderableWidget(next);
     }

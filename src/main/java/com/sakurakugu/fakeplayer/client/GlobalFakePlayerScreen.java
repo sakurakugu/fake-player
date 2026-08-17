@@ -3,6 +3,7 @@ package com.sakurakugu.fakeplayer.client;
 import com.sakurakugu.fakeplayer.menu.GlobalFakePlayerMenu;
 import com.sakurakugu.fakeplayer.network.SpawnFakePlayerPayload;
 import com.sakurakugu.fakeplayer.network.RequestChunkMapPayload;
+import com.sakurakugu.fakeplayer.client.ui.SolidButton;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -47,15 +48,13 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
             nameInput.setHint(Component.translatable("gui.fakeplayer.global.spawn_name"));
             nameInput.setResponder(value -> updateSpawnButton());
             spawnButton = addRenderableWidget(
-                Button.builder(Component.translatable("gui.fakeplayer.global.spawn"), button -> submitSpawn())
-                    .bounds(leftPos + 50, topPos + 120, PANEL_WIDTH - 100, BUTTON_HEIGHT)
-                    .build()
+                new SolidButton(leftPos + 50, topPos + 120, PANEL_WIDTH - 100, BUTTON_HEIGHT,
+                    Component.translatable("gui.fakeplayer.global.spawn"), button -> submitSpawn())
             );
             updateSpawnButton();
             addRenderableWidget(
-                Button.builder(Component.translatable("gui.fakeplayer.global.settings"), button -> returnToMap())
-                    .bounds(leftPos + 50, topPos + 180, PANEL_WIDTH - 100, BUTTON_HEIGHT)
-                    .build()
+                new SolidButton(leftPos + 50, topPos + 180, PANEL_WIDTH - 100, BUTTON_HEIGHT,
+                    Component.translatable("gui.fakeplayer.global.settings"), button -> returnToMap())
             );
             setInitialFocus(nameInput);
             return;
@@ -67,34 +66,31 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
             int row = index - firstIndex;
             int actionId = index;
             addRenderableWidget(
-                Button.builder(Component.literal(menu.playerNames().get(index)), button -> sendAction(actionId))
-                    .bounds(leftPos + 16, topPos + 48 + row * (BUTTON_HEIGHT + ROW_GAP), PANEL_WIDTH - 32, BUTTON_HEIGHT)
-                    .build()
+                new SolidButton(leftPos + 16, topPos + 48 + row * (BUTTON_HEIGHT + ROW_GAP),
+                    PANEL_WIDTH - 32, BUTTON_HEIGHT, Component.literal(menu.playerNames().get(index)),
+                    button -> sendAction(actionId))
             );
         }
 
         int footerY = topPos + PANEL_HEIGHT - 30;
-        Button previous = Button.builder(Component.literal("<"), button -> changePage(-1))
-            .bounds(leftPos + 16, footerY, 32, 20)
-            .build();
+        Button previous = new SolidButton(leftPos + 16, footerY, 32, 20,
+            Component.literal("<"), button -> changePage(-1));
         previous.active = page > 0;
         addRenderableWidget(previous);
 
         addRenderableWidget(
-            Button.builder(Component.translatable("gui.fakeplayer.global.settings"), button -> returnToMap())
-                .bounds(leftPos + 58, footerY, 76, 20)
-                .build()
+            new SolidButton(leftPos + 58, footerY, 76, 20,
+                Component.translatable("gui.fakeplayer.global.settings"), button -> returnToMap())
         );
 
         addRenderableWidget(
-            Button.builder(Component.translatable("gui.fakeplayer.global.refresh"), button -> sendAction(GlobalFakePlayerMenu.ACTION_REFRESH))
-                .bounds(leftPos + 142, footerY, 76, 20)
-                .build()
+            new SolidButton(leftPos + 142, footerY, 76, 20,
+                Component.translatable("gui.fakeplayer.global.refresh"),
+                button -> sendAction(GlobalFakePlayerMenu.ACTION_REFRESH))
         );
 
-        Button next = Button.builder(Component.literal(">"), button -> changePage(1))
-            .bounds(leftPos + PANEL_WIDTH - 48, footerY, 32, 20)
-            .build();
+        Button next = new SolidButton(leftPos + PANEL_WIDTH - 48, footerY, 32, 20,
+            Component.literal(">"), button -> changePage(1));
         next.active = page + 1 < pageCount();
         addRenderableWidget(next);
     }
