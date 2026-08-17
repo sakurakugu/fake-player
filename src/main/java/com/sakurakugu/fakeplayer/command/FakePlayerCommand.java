@@ -485,6 +485,8 @@ public final class FakePlayerCommand {
         GameType gameType,
         boolean flying
     ) {
+        // 旁观模式的假人无法执行常规交互，统一以创造模式生成。
+        GameType effectiveGameType = gameType == GameType.SPECTATOR ? GameType.CREATIVE : gameType;
         if (!name.matches("[A-Za-z0-9_-]{1,16}")) {
             source.sendFailure(Component.translatable("commands.fakeplayer.invalid_name"));
             return 0;
@@ -510,7 +512,7 @@ public final class FakePlayerCommand {
                 sendProfileFailure(source, name, result.status());
                 return;
             }
-            spawnResolved(source, level, result.profile(), position, rotation, gameType, requestedFlying);
+            spawnResolved(source, level, result.profile(), position, rotation, effectiveGameType, requestedFlying);
         }, server);
         return 1;
     }

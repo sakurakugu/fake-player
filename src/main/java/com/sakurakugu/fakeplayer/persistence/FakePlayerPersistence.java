@@ -102,6 +102,15 @@ public final class FakePlayerPersistence {
         return player.server().getPlayerList().loadPlayerData(player.nameAndId());
     }
 
+    /** 读取原版玩家存档中的游戏模式，供重新生成时沿用旧状态。 */
+    public static GameType readSavedGameType(MinecraftServer server, CompoundTag playerData) {
+        try (ProblemReporter.ScopedCollector collector =
+                 new ProblemReporter.ScopedCollector(FakePlayerMod.LOGGER)) {
+            ValueInput input = TagValueInput.create(collector, server.registryAccess(), playerData);
+            return input.read("playerGameType", GameType.LEGACY_ID_CODEC).orElse(GameType.SURVIVAL);
+        }
+    }
+
     /** 检查目标 UUID 是否已有原版统计或进度数据，避免改名时覆盖其他玩家。 */
     public static boolean hasPlayerProgressData(MinecraftServer server, UUID uuid) {
         return Files.exists(playerDataFile(server.getWorldPath(LevelResource.PLAYER_STATS_DIR), uuid))

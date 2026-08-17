@@ -90,6 +90,11 @@ public final class FakePlayerManager {
         Optional<CompoundTag> playerData = suppliedPlayerData.isPresent()
             ? suppliedPlayerData
             : FakePlayerPersistence.readPlayerData(fake);
+        if (overrideSavedSpawnState && playerData.isPresent()) {
+            // 重新生成时沿用旧游戏模式；旁观模式已不适合作为可操作假人，改为创造模式。
+            GameType savedGameType = FakePlayerPersistence.readSavedGameType(server, playerData.get());
+            gameType = savedGameType == GameType.SPECTATOR ? GameType.CREATIVE : savedGameType;
+        }
         playerData.ifPresent(data -> FakePlayerPersistence.applyPlayerData(fake, data));
         fake.snapTo(position.x, position.y, position.z, rotation.y, rotation.x);
 

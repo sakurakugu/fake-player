@@ -13,6 +13,7 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.vehicle.boat.AbstractBoat;
+import net.minecraft.world.food.FoodData;
 import net.minecraft.world.level.portal.TeleportTransition;
 import net.minecraft.world.phys.Vec3;
 
@@ -167,6 +168,9 @@ public final class FakeServerPlayer extends ServerPlayer {
     public void die(DamageSource source) {
         shakeOffPlayers();
         super.die(source);
+        // 假连接不会发送重生请求；退出前恢复生存状态，避免原版把死亡数据写入 playerdata。
+        setHealth(getMaxHealth());
+        foodData = new FoodData();
         // 延迟到服务器任务队列移除，避免在死亡处理过程中直接修改玩家列表。
         server.execute(() -> FakePlayerManager.remove(this));
     }
