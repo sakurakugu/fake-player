@@ -1,7 +1,6 @@
 package com.sakurakugu.fakeplayer.network;
 
 import com.sakurakugu.fakeplayer.FakePlayerMod;
-import com.sakurakugu.fakeplayer.chunkloading.ManualLoadMode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -53,11 +52,11 @@ public record ApplyChunkLoadEditsPayload(long expectedRevision, String dimension
     public Type<? extends CustomPacketPayload> type() { return TYPE; }
 
     public enum Action {
-        CREATE_REGION, ADD_CHUNKS, REMOVE_CHUNKS, SET_MODE, SET_ENABLED, DELETE_REGION, SET_FAKE_POLICY
+        CREATE_REGION, ADD_CHUNKS, REMOVE_CHUNKS, SET_ENABLED, DELETE_REGION, SET_FAKE_POLICY
     }
 
     /** 不同动作只读取自己需要的字段，其余字段使用稳定占位值。 */
-    public record Edit(Action action, UUID targetId, String name, ManualLoadMode mode, boolean enabled,
+    public record Edit(Action action, UUID targetId, String name, boolean enabled,
                        int simulationDistance, List<Long> chunks) {
         public Edit {
             chunks = List.copyOf(chunks);
@@ -65,13 +64,13 @@ public record ApplyChunkLoadEditsPayload(long expectedRevision, String dimension
 
         private Edit(RegistryFriendlyByteBuf buffer) {
             this(buffer.readEnum(Action.class), buffer.readUUID(), buffer.readUtf(32),
-                buffer.readEnum(ManualLoadMode.class), buffer.readBoolean(), buffer.readVarInt(), readChunks(buffer));
+                buffer.readBoolean(), buffer.readVarInt(), readChunks(buffer));
             if (simulationDistance < 0 || simulationDistance > 32) throw new IllegalArgumentException("模拟距离非法");
         }
 
         private void write(RegistryFriendlyByteBuf buffer) {
             buffer.writeEnum(action); buffer.writeUUID(targetId); buffer.writeUtf(name, 32);
-            buffer.writeEnum(mode); buffer.writeBoolean(enabled); buffer.writeVarInt(simulationDistance);
+            buffer.writeBoolean(enabled); buffer.writeVarInt(simulationDistance);
             buffer.writeVarInt(chunks.size()); chunks.forEach(buffer::writeLong);
         }
 

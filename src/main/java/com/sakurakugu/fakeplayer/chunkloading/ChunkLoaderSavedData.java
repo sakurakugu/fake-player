@@ -31,8 +31,6 @@ public final class ChunkLoaderSavedData extends SavedData {
         Codec.STRING.validate(ChunkLoaderSavedData::validateName).fieldOf("name").forGetter(ManualLoadRegion::name),
         Identifier.CODEC.fieldOf("dimension").forGetter(ManualLoadRegion::dimension),
         CHUNKS_CODEC.fieldOf("chunks").forGetter(ManualLoadRegion::chunks),
-        Codec.STRING.comapFlatMap(ChunkLoaderSavedData::decodeMode, ManualLoadMode::name)
-            .fieldOf("mode").forGetter(ManualLoadRegion::mode),
         Codec.BOOL.optionalFieldOf("enabled", true).forGetter(ManualLoadRegion::enabled)
     ).apply(instance, ManualLoadRegion::new));
     public static final Codec<FakePlayerLoadPolicy> POLICY_CODEC = RecordCodecBuilder.create(instance -> instance.group(
@@ -166,14 +164,6 @@ public final class ChunkLoaderSavedData extends SavedData {
         return name.matches("[A-Za-z0-9_-]{1,32}")
             ? DataResult.success(name)
             : DataResult.error(() -> "非法区域名称");
-    }
-
-    private static DataResult<ManualLoadMode> decodeMode(String value) {
-        try {
-            return DataResult.success(ManualLoadMode.valueOf(value));
-        } catch (IllegalArgumentException exception) {
-            return DataResult.error(() -> "未知手动加载模式: " + value);
-        }
     }
 
     private static DataResult<Set<Long>> uniqueChunks(List<Long> chunks) {

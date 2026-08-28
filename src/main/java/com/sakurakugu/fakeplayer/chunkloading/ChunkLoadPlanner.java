@@ -2,12 +2,9 @@ package com.sakurakugu.fakeplayer.chunkloading;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
@@ -25,23 +22,10 @@ public final class ChunkLoadPlanner {
             }
             ResourceKey<Level> dimension = ResourceKey.create(Registries.DIMENSION, region.dimension());
             for (long chunk : region.chunks()) {
-                claims.add(new ChunkLoadClaim(LoadOwner.manualRegion(region.id()), dimension, chunk,
-                    region.mode().strength()));
+                claims.add(new ChunkLoadClaim(LoadOwner.manualRegion(region.id()), dimension, chunk));
             }
         }
         return List.copyOf(claims);
-    }
-
-    public static Map<DimensionChunk, LoadStrength> effectiveManualStrength(Collection<ChunkLoadClaim> claims) {
-        Map<DimensionChunk, LoadStrength> result = new HashMap<>();
-        for (ChunkLoadClaim claim : claims) {
-            if (claim.owner().type() != LoadOwner.Type.MANUAL_REGION) {
-                continue;
-            }
-            DimensionChunk key = new DimensionChunk(claim.dimension(), claim.chunk());
-            result.merge(key, claim.strength(), LoadStrength::strongest);
-        }
-        return Map.copyOf(result);
     }
 
     public static ClaimDiff diff(Collection<ChunkLoadClaim> previous, Collection<ChunkLoadClaim> next) {
@@ -68,19 +52,10 @@ public final class ChunkLoadPlanner {
 
     public static BudgetUsage budget(Collection<ManualLoadRegion> regions,
                                      Collection<FakePlayerLoadPolicy> policies) {
-        long loaded = 0;
-        long ticking = 0;
-        long full = 0;
+        long manual = 0;
         long player = 0;
         for (ManualLoadRegion region : regions) {
-            if (!region.enabled()) {
-                continue;
-            }
-            switch (region.mode()) {
-                case LOADED -> loaded = Math.addExact(loaded, region.chunks().size());
-                case TICKING -> ticking = Math.addExact(ticking, region.chunks().size());
-                case FULL -> full = Math.addExact(full, region.chunks().size());
-            }
+            if (region.enabled()) manual = Math.addExact(manual, region.chunks().size());
         }
         for (FakePlayerLoadPolicy policy : policies) {
             if (policy.enabled()) {
@@ -88,18 +63,15 @@ public final class ChunkLoadPlanner {
                 player = Math.addExact(player, Math.multiplyExact(diameter, diameter));
             }
         }
-        return new BudgetUsage(loaded, ticking, full, player);
-    }
-
-    public record DimensionChunk(ResourceKey<Level> dimension, long chunk) {
+        return new BudgetUsage(manual, player);
     }
 
     public record ClaimDiff(Set<ChunkLoadClaim> added, Set<ChunkLoadClaim> removed) {
     }
 
-    public record BudgetUsage(long loaded, long ticking, long full, long player) {
+    public record BudgetUsage(long manualTotal, long player) {
         public long manualTotal() {
-            return Math.addExact(Math.addExact(loaded, ticking), full);
+            return manualTotal;
         }
     }
 }

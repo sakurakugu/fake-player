@@ -7,7 +7,6 @@ import net.minecraft.world.level.Level;
 public record ChunkLoadClaim(
     LoadOwner owner,
     ResourceKey<Level> dimension,
-    long chunk,
-    LoadStrength strength
+    long chunk
 ) {
 }

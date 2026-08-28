@@ -50,7 +50,7 @@ public final class FakePlayerConfig {
             .comment("所有启用加载点允许强加载的区块总数，防止批量同步加载拖垮服务器。")
             .defineInRange("maxForcedChunks", 2048, 1, 65536);
         MAX_TICKING_CHUNKS = builder
-            .comment("所有 ticking 加载点允许完整刻处理的区块总数。")
+            .comment("所有手动强加载点允许完整模拟的区块总数。")
             .defineInRange("maxTickingChunks", 512, 1, 16384);
         MAX_FAKE_PLAYER_SIMULATION_DISTANCE = builder
             .comment("单个假人允许的最大模拟加载距离，单位为区块，范围 0-32。")

@@ -41,7 +41,6 @@ public final class ChunkLoadApplicationService {
             case CREATE_REGION -> create(server, data, dimension, edit);
             case ADD_CHUNKS -> changeChunks(server, data, edit.targetId(), edit.chunks(), true);
             case REMOVE_CHUNKS -> changeChunks(server, data, edit.targetId(), edit.chunks(), false);
-            case SET_MODE -> update(server, data, edit.targetId(), region -> region.withMode(edit.mode()));
             case SET_ENABLED -> update(server, data, edit.targetId(), region -> region.withEnabled(edit.enabled()));
             case DELETE_REGION -> data.region(edit.targetId()).map(region -> ChunkLoaderManager.remove(server, region.name()))
                 .orElseGet(() -> ChunkLoaderManager.Result.failure("区域不存在"));
@@ -55,7 +54,7 @@ public final class ChunkLoadApplicationService {
                                                      ApplyChunkLoadEditsPayload.Edit edit) {
         if (edit.chunks().isEmpty()) return ChunkLoaderManager.Result.failure("新区域不能为空");
         ManualLoadRegion region = new ManualLoadRegion(edit.targetId(), edit.name(), dimension,
-            Set.copyOf(edit.chunks()), edit.mode(), edit.enabled());
+            Set.copyOf(edit.chunks()), edit.enabled());
         return ChunkLoaderManager.createRegion(server, region);
     }
 

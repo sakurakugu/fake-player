@@ -2,7 +2,6 @@ package com.sakurakugu.fakeplayer.client.chunkloading;
 
 import com.mojang.authlib.GameProfile;
 import com.sakurakugu.fakeplayer.chunkloading.ChunkKey;
-import com.sakurakugu.fakeplayer.chunkloading.ManualLoadMode;
 import com.sakurakugu.fakeplayer.client.ui.SolidButton;
 import com.sakurakugu.fakeplayer.client.ui.PixelGlyph;
 import com.sakurakugu.fakeplayer.client.ui.SolidSliderButton;
@@ -12,8 +11,8 @@ import com.sakurakugu.fakeplayer.network.ChunkMapSnapshotPayload;
 import com.sakurakugu.fakeplayer.network.RequestChunkMapPayload;
 import com.sakurakugu.fakeplayer.network.OpenFakePlayerPagePayload;
 import com.sakurakugu.fakeplayer.network.ToggleGlobalSettingPayload;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -55,7 +54,7 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
 
     private final ChunkLoadMapController controller;
     private final ChunkTerrainTileCache terrainTiles;
-    private final Map<Long, ManualLoadMode> authoritativeModes = new HashMap<>();
+    private Map<Long, ChunkMapLoadLevel> authoritativeLevels = Map.of();
     private double centerBlockX;
     private double centerBlockZ;
     private double pixelsPerBlock = 0.75D;
@@ -67,8 +66,6 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
     private final Button[] globalSettingButtons = new Button[GLOBAL_SETTING_KEYS.length];
     private int page;
     private int selectedIndex = -1;
-    private boolean configureTicking;
-    private boolean addTicking;
     private Action confirmation;
 
     public ChunkMapScreen(ChunkMapSnapshotPayload snapshot, boolean managementOpen, boolean settingsOpen) {
@@ -79,7 +76,7 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
         this.settingsOpen = settingsOpen;
         centerBlockX = snapshot.playerChunkX() * 16.0D + 8.0D;
         centerBlockZ = snapshot.playerChunkZ() * 16.0D + 8.0D;
-        rebuildAuthoritativeModes();
+        rebuildAuthoritativeLevels();
     }
 
     public void update(ChunkMapSnapshotPayload value) { acceptSnapshot(value); }
@@ -209,18 +206,18 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
         int maxChunkX = Mth.floor(screenToWorldX(width - 1)) >> 4;
         int minChunkZ = Mth.floor(screenToWorldZ(0)) >> 4;
         int maxChunkZ = Mth.floor(screenToWorldZ(height - 1)) >> 4;
-        Map<Long, ManualLoadMode> painted = controller.painted();
+        Set<Long> painted = controller.painted();
         var erased = controller.erased();
         for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
             for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
                 long key = ChunkKey.pack(chunkX, chunkZ);
-                ManualLoadMode mode = painted.get(key);
-                if (mode == null && !erased.contains(key)) mode = authoritativeModes.get(key);
+                ChunkMapLoadLevel level = painted.contains(key) ? ChunkMapLoadLevel.STRONG : null;
+                if (level == null && !erased.contains(key)) level = authoritativeLevels.get(key);
                 int left = worldToScreenX(chunkX * 16.0D);
                 int top = worldToScreenZ(chunkZ * 16.0D);
                 int right = worldToScreenX((chunkX + 1) * 16.0D);
                 int tileBottom = worldToScreenZ((chunkZ + 1) * 16.0D);
-                if (mode != null) graphics.fill(left, top, right, tileBottom, modeColor(mode));
+                if (level != null) graphics.fill(left, top, right, tileBottom, loadLevelColor(level));
                 if (pixelsPerBlock >= 0.65D) graphics.outline(left, top,
                     Math.max(1, right - left), Math.max(1, tileBottom - top), 0x283A4449);
             }
@@ -419,7 +416,7 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
             Component.translatable("gui.back"), button -> showManagement(false)));
         addRenderableWidget(new SolidButton(left + 280, top + 9, 64, 20,
             Component.translatable("gui.fakeplayer.chunkloader.backup"),
-            button -> sendManagementAction(Action.BACKUP, "", 0, false)));
+            button -> sendManagementAction(Action.BACKUP, "", 0)));
         addRenderableWidget(new SolidButton(left + 348, top + 9, 66, 20,
             Component.translatable(confirmation == Action.RESTORE
                 ? "gui.fakeplayer.chunkloader.confirm_restore" : "gui.fakeplayer.chunkloader.restore"),
@@ -449,19 +446,14 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
         radius.setMaxLength(2);
         radius.setValue(Integer.toString(selected.radius()));
         radius.setFilter(value -> value.isEmpty() || value.chars().allMatch(Character::isDigit));
-        addRenderableWidget(new SolidButton(left + 236, top + 138, 95, 20,
-            modeLabel(configureTicking), button -> {
-            configureTicking = !configureTicking;
-            button.setMessage(modeLabel(configureTicking));
-        }));
-        addRenderableWidget(new SolidButton(left + 335, top + 138, 69, 20,
+        addRenderableWidget(new SolidButton(left + 236, top + 138, 168, 20,
             Component.translatable("gui.fakeplayer.chunkloader.apply"), button ->
-                sendManagementAction(Action.CONFIGURE, selected.name(), parseRadius(radius), configureTicking)));
+                sendManagementAction(Action.CONFIGURE, selected.name(), parseRadius(radius))));
         addRenderableWidget(new SolidButton(left + 180, top + 166, 105, 20,
             Component.translatable(selected.enabled()
                 ? "gui.fakeplayer.chunkloader.disable" : "gui.fakeplayer.chunkloader.enable"), button ->
             sendManagementAction(selected.enabled() ? Action.DISABLE : Action.ENABLE,
-                selected.name(), 0, false)));
+                selected.name(), 0)));
         addRenderableWidget(new SolidButton(left + 289, top + 166, 115, 20,
             Component.translatable(confirmation == Action.REMOVE
                 ? "gui.fakeplayer.chunkloader.confirm_remove" : "gui.fakeplayer.chunkloader.remove"),
@@ -478,14 +470,9 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
         radius.setMaxLength(2);
         radius.setValue("0");
         radius.setFilter(value -> value.isEmpty() || value.chars().allMatch(Character::isDigit));
-        addRenderableWidget(new SolidButton(left + 197, top + 251, 118, 20,
-            modeLabel(addTicking), button -> {
-            addTicking = !addTicking;
-            button.setMessage(modeLabel(addTicking));
-        }));
-        addRenderableWidget(new SolidButton(left + 319, top + 251, 95, 20,
+        addRenderableWidget(new SolidButton(left + 197, top + 251, 217, 20,
             Component.translatable("gui.fakeplayer.chunkloader.add"), button ->
-                sendManagementAction(Action.ADD, name.getValue(), parseRadius(radius), addTicking)));
+                sendManagementAction(Action.ADD, name.getValue(), parseRadius(radius))));
     }
 
     private void addManagementPageButtons(int left, int top) {
@@ -532,7 +519,6 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
 
     private void selectRegion(int index) {
         selectedIndex = index;
-        configureTicking = regions().get(index).ticking();
         confirmation = null;
         rebuildWidgets();
     }
@@ -550,11 +536,11 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
             rebuildWidgets();
             return;
         }
-        sendManagementAction(action, name, 0, false);
+        sendManagementAction(action, name, 0);
     }
 
-    private void sendManagementAction(Action action, String name, int radius, boolean ticking) {
-        ClientPacketDistributor.sendToServer(new ChunkLoaderActionPayload(action, name, radius, ticking));
+    private void sendManagementAction(Action action, String name, int radius) {
+        ClientPacketDistributor.sendToServer(new ChunkLoaderActionPayload(action, name, radius));
     }
 
     private int parseRadius(EditBox box) {
@@ -575,12 +561,6 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
 
     private ChunkMapSnapshotPayload.RegionSummary selectedRegion() {
         return selectedIndex >= 0 && selectedIndex < regions().size() ? regions().get(selectedIndex) : null;
-    }
-
-    private static Component modeLabel(boolean ticking) {
-        return Component.translatable(ticking
-            ? "gui.fakeplayer.chunkloader.mode_ticking"
-            : "gui.fakeplayer.chunkloader.mode_loading");
     }
 
     @Override
@@ -608,16 +588,18 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
         var regionNames = controller.snapshot().regions().stream()
             .filter(region -> region.dimension().equals(controller.snapshot().dimension()))
             .filter(region -> region.contains(chunk[0], chunk[1]))
-            .map(region -> region.name() + ":" + modeLabel(region.mode()).getString())
+            .map(region -> region.name() + ":" + loadLevelLabel(ChunkMapLoadLevel.STRONG).getString())
             .reduce((a, b) -> a + ", " + b);
         Component chunkLine = Component.translatable("gui.fakeplayer.chunkloader.map_hover.chunk", chunk[0], chunk[1]);
         Component blockLine = Component.translatable("gui.fakeplayer.chunkloader.map_hover.block", blockX, blockZ);
         boolean loadedByFakePlayer = controller.snapshot().fakePlayers().stream()
             .anyMatch(fake -> fake.loadsChunk(controller.snapshot().dimension(), chunk[0], chunk[1]));
-        Component names = regionNames.<Component>map(Component::literal)
-            .orElseGet(() -> Component.translatable(loadedByFakePlayer
+        ChunkMapLoadLevel loadLevel = authoritativeLevels.get(ChunkKey.pack(chunk[0], chunk[1]));
+        Component names = regionNames.<Component>map(Component::literal).orElseGet(() -> loadLevel == null
+            ? Component.translatable(loadedByFakePlayer
                 ? "fakeplayer.chunkloader.fake_label"
-                : "gui.fakeplayer.chunkloader.map_hover.none"));
+                : "gui.fakeplayer.chunkloader.map_hover.none")
+            : loadLevelLabel(loadLevel));
         if (loadedByFakePlayer && regionNames.isPresent()) {
             names = names.copy().append(" | ").append(Component.translatable("fakeplayer.chunkloader.fake_label"));
         }
@@ -722,39 +704,34 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
         return centerBlockZ + (screenY - height / 2.0D) / pixelsPerBlock;
     }
 
-    private void rebuildAuthoritativeModes() {
-        authoritativeModes.clear();
-        for (var region : controller.snapshot().regions()) {
-            if (!region.dimension().equals(controller.snapshot().dimension())) continue;
-            if (!region.enabled()) continue;
-            for (long chunk : region.chunks()) {
-                authoritativeModes.merge(chunk, region.mode(), (left, right) ->
-                    left.ordinal() >= right.ordinal() ? left : right);
-            }
-        }
+    private void rebuildAuthoritativeLevels() {
+        authoritativeLevels = ChunkLoadMapController.propagatedLevels(
+            controller.snapshot().regions(), controller.snapshot().dimension());
     }
 
-    private static int modeColor(ManualLoadMode mode) { return switch (mode) {
-        case LOADED -> 0x66287E8E; case TICKING -> 0x66D18B35; case FULL -> 0x66C94D55;
+    private static int loadLevelColor(ChunkMapLoadLevel level) { return switch (level) {
+        case WEAK -> 0x66287E8E;
+        case BLOCK_TICKING -> 0x66C7A13A;
+        case STRONG -> 0x66D18B35;
     }; }
 
-    private static Component modeLabel(ManualLoadMode mode) {
-        return Component.translatable(switch (mode) {
-            case LOADED -> "gui.fakeplayer.chunkloader.mode_loading";
-            case TICKING -> "gui.fakeplayer.chunkloader.mode_ticking";
-            case FULL -> "gui.fakeplayer.chunkloader.mode_full";
+    private static Component loadLevelLabel(ChunkMapLoadLevel level) {
+        return Component.translatable(switch (level) {
+            case WEAK -> "gui.fakeplayer.chunkloader.level_weak";
+            case BLOCK_TICKING -> "gui.fakeplayer.chunkloader.level_block_ticking";
+            case STRONG -> "gui.fakeplayer.chunkloader.level_strong";
         });
     }
 
     private static String label(ChunkMapEditMode mode) { return switch (mode) {
-        case BROWSE -> "浏览"; case LOADED -> "弱"; case TICKING -> "强"; case FULL -> "完整"; case ERASE -> "擦除";
+        case BROWSE -> "浏览"; case STRONG -> "强"; case ERASE -> "擦除";
     }; }
 
     @Override
     public void acceptSnapshot(ChunkMapSnapshotPayload snapshot) {
         var previous = controller.snapshot();
         controller.accept(snapshot);
-        rebuildAuthoritativeModes();
+        rebuildAuthoritativeLevels();
         if (settingsOpen && snapshot.globalSettingsMask() != previous.globalSettingsMask()) {
             rebuildWidgets();
         }

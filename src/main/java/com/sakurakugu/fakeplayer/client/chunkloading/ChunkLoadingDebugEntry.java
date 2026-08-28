@@ -49,8 +49,7 @@ public final class ChunkLoadingDebugEntry implements DebugScreenEntry {
 
     private static String describe(AnchorView anchor) {
         return Component.translatable("f3.fakeplayer.chunkloader.entry", anchor.name(),
-            anchor.chunks().size(), Component.translatable(anchor.ticking()
-                ? "commands.fakeplayer.chunkloader.mode_ticking"
-                : "commands.fakeplayer.chunkloader.mode_loading")).getString();
+            anchor.chunks().size(), Component.translatable(
+                "gui.fakeplayer.chunkloader.level_strong")).getString();
     }
 }

@@ -7,6 +7,4 @@ public interface ChunkTicketService {
     void add(ServerLevel level, ChunkLoadClaim claim);
 
     void remove(ServerLevel level, ChunkLoadClaim claim);
-
-    boolean supports(LoadStrength strength);
 }

@@ -7,7 +7,7 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 
 /** 提交区块加载点管理界面的操作。 */
-public record ChunkLoaderActionPayload(Action action, String name, int radius, boolean ticking)
+public record ChunkLoaderActionPayload(Action action, String name, int radius)
     implements CustomPacketPayload {
     public static final Type<ChunkLoaderActionPayload> TYPE = new Type<>(
         Identifier.fromNamespaceAndPath(FakePlayerMod.MOD_ID, "chunk_loader_action")
@@ -16,14 +16,13 @@ public record ChunkLoaderActionPayload(Action action, String name, int radius, b
         CustomPacketPayload.codec(ChunkLoaderActionPayload::write, ChunkLoaderActionPayload::new);
 
     private ChunkLoaderActionPayload(RegistryFriendlyByteBuf buffer) {
-        this(buffer.readEnum(Action.class), buffer.readUtf(32), buffer.readVarInt(), buffer.readBoolean());
+        this(buffer.readEnum(Action.class), buffer.readUtf(32), buffer.readVarInt());
     }
 
     private void write(RegistryFriendlyByteBuf buffer) {
         buffer.writeEnum(action);
         buffer.writeUtf(name, 32);
         buffer.writeVarInt(radius);
-        buffer.writeBoolean(ticking);
     }
 
     @Override

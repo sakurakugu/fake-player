@@ -54,7 +54,7 @@ public final class ChunkLoaderManager {
 
     /** 兼容现有命令：以命令位置为中心创建方形区域。 */
     public static Result add(MinecraftServer server, String name, ServerLevel level, BlockPos position,
-                             int radius, ManualLoadMode mode) {
+                             int radius) {
         if (!name.matches("[A-Za-z0-9_-]{1,32}")) {
             return Result.failure("名称只能包含 1-32 个字母、数字、下划线或连字符");
         }
@@ -62,7 +62,7 @@ public final class ChunkLoaderManager {
             return Result.failure("半径必须在 0-" + FakePlayerConfig.maxChunkLoadingRadius() + " 之间");
         }
         ManualLoadRegion region = new ManualLoadRegion(UUID.randomUUID(), name, level.dimension().identifier(),
-            ChunkLoadPlanner.square(position.getX() >> 4, position.getZ() >> 4, radius), mode, true);
+            ChunkLoadPlanner.square(position.getX() >> 4, position.getZ() >> 4, radius), true);
         return createRegion(server, region);
     }
 
@@ -109,7 +109,7 @@ public final class ChunkLoaderManager {
         }
     }
 
-    public static Result configure(MinecraftServer server, String name, int radius, ManualLoadMode mode) {
+    public static Result configure(MinecraftServer server, String name, int radius) {
         ManualLoadRegion region = data(server).region(name).orElse(null);
         if (region == null) return Result.failure("找不到加载区域");
         if (radius < 0 || radius > FakePlayerConfig.maxChunkLoadingRadius()) return Result.failure("半径超出限制");
@@ -121,7 +121,7 @@ public final class ChunkLoaderManager {
         int centerZ = Math.toIntExact(Math.floorDiv((long) minZ + maxZ, 2L));
         ManualLoadRegion changed = new ManualLoadRegion(region.id(), region.name(), region.dimension(),
             ChunkLoadPlanner.square(centerX, centerZ, radius),
-            mode, region.enabled());
+            region.enabled());
         return replace(server, region, changed);
     }
 
@@ -185,7 +185,7 @@ public final class ChunkLoaderManager {
         current.restore(state);
         for (ManualLoadRegion region : state.regions()) {
             ServerLevel level = level(server, region);
-            if (region.enabled() && level != null && TICKETS.supports(region.mode().strength())) {
+            if (region.enabled() && level != null) {
                 rollback(level, claims(region), true);
             }
         }
@@ -197,18 +197,12 @@ public final class ChunkLoaderManager {
         if (replacement.chunks().isEmpty() || replacement.chunks().size() > ChunkLoaderSavedData.MAX_REGION_CHUNKS) return "区域区块数量非法";
         if (!replacement.name().matches("[A-Za-z0-9_-]{1,32}")) return "区域名称非法";
         if (level(server, replacement) == null) return "目标维度不存在";
-        if (replacement.enabled() && !TICKETS.supports(replacement.mode().strength())) return "当前 NeoForge 版本不支持弱加载票据";
-        if (replacement.mode() == ManualLoadMode.FULL && current.regions().stream()
-            .anyMatch(region -> !region.id().equals(replacement.id()) && region.mode() == ManualLoadMode.FULL
-                && NeoForgeChunkTicketService.sameBlockOwner(region.id(), replacement.id()))) {
-            return "完整加载区域的票据所有者发生碰撞";
-        }
         Collection<ManualLoadRegion> candidates = new ArrayList<>(current.regions());
         candidates.removeIf(region -> region.id().equals(replacement.id()));
         candidates.add(replacement);
         var usage = ChunkLoadPlanner.budget(candidates, current.policies());
         if (usage.manualTotal() > FakePlayerConfig.maxForcedChunks()) return "手动加载总预算超限";
-        if (usage.ticking() + usage.full() > FakePlayerConfig.maxTickingChunks()) return "模拟区块预算超限";
+        if (usage.manualTotal() > FakePlayerConfig.maxTickingChunks()) return "模拟区块预算超限";
         return null;
     }
 

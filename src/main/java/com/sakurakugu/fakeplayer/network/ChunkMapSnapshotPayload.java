@@ -4,7 +4,6 @@ import com.sakurakugu.fakeplayer.FakePlayerMod;
 import com.sakurakugu.fakeplayer.chunkloading.ChunkLoaderSavedData;
 import com.sakurakugu.fakeplayer.chunkloading.FakePlayerLoadPolicy;
 import com.sakurakugu.fakeplayer.chunkloading.FakePlayerSimulationService;
-import com.sakurakugu.fakeplayer.chunkloading.ManualLoadMode;
 import com.sakurakugu.fakeplayer.chunkloading.ManualLoadRegion;
 import com.sakurakugu.fakeplayer.entity.FakePlayerManager;
 import java.util.ArrayList;
@@ -150,18 +149,16 @@ public record ChunkMapSnapshotPayload(
         return regions;
     }
 
-    public record AnchorView(UUID id, String name, String dimension, ManualLoadMode mode,
-                             boolean enabled, Set<Long> chunks) {
+    public record AnchorView(UUID id, String name, String dimension, boolean enabled, Set<Long> chunks) {
         private AnchorView(RegistryFriendlyByteBuf buffer) {
             this(buffer.readUUID(), buffer.readUtf(32), buffer.readUtf(256),
-                buffer.readEnum(ManualLoadMode.class), buffer.readBoolean(), readChunks(buffer));
+                buffer.readBoolean(), readChunks(buffer));
         }
 
         private void write(RegistryFriendlyByteBuf buffer) {
             buffer.writeUUID(id);
             buffer.writeUtf(name, 32);
             buffer.writeUtf(dimension, 256);
-            buffer.writeEnum(mode);
             buffer.writeBoolean(enabled);
             buffer.writeVarInt(chunks.size());
             chunks.forEach(buffer::writeLong);
@@ -169,7 +166,7 @@ public record ChunkMapSnapshotPayload(
 
         private static AnchorView from(ManualLoadRegion region) {
             return new AnchorView(region.id(), region.name(), region.dimension().toString(),
-                region.mode(), region.enabled(), region.chunks());
+                region.enabled(), region.chunks());
         }
 
         private static Set<Long> readChunks(RegistryFriendlyByteBuf buffer) {
@@ -187,14 +184,13 @@ public record ChunkMapSnapshotPayload(
 
         public int chunkX() { return chunks.stream().mapToInt(ChunkPos::getX).min().orElse(0); }
         public int chunkZ() { return chunks.stream().mapToInt(ChunkPos::getZ).min().orElse(0); }
-        public boolean ticking() { return mode != ManualLoadMode.LOADED; }
     }
 
     public record RegionSummary(String name, String dimension, int chunkX, int chunkZ, int radius,
-                                int chunkCount, ManualLoadMode mode, boolean enabled) {
+                                int chunkCount, boolean enabled) {
         private RegionSummary(RegistryFriendlyByteBuf buffer) {
             this(buffer.readUtf(32), buffer.readUtf(256), buffer.readInt(), buffer.readInt(),
-                buffer.readVarInt(), buffer.readVarInt(), buffer.readEnum(ManualLoadMode.class), buffer.readBoolean());
+                buffer.readVarInt(), buffer.readVarInt(), buffer.readBoolean());
             if (radius < 0 || radius > 32 || chunkCount < 1 || chunkCount > ChunkLoaderSavedData.MAX_REGION_CHUNKS) {
                 throw new IllegalArgumentException("区域摘要非法");
             }
@@ -207,7 +203,6 @@ public record ChunkMapSnapshotPayload(
             buffer.writeInt(chunkZ);
             buffer.writeVarInt(radius);
             buffer.writeVarInt(chunkCount);
-            buffer.writeEnum(mode);
             buffer.writeBoolean(enabled);
         }
 
@@ -217,10 +212,8 @@ public record ChunkMapSnapshotPayload(
             int minZ = region.chunks().stream().mapToInt(ChunkPos::getZ).min().orElse(0);
             int maxZ = region.chunks().stream().mapToInt(ChunkPos::getZ).max().orElse(0);
             return new RegionSummary(region.name(), region.dimension().toString(), minX, minZ,
-                Math.max(maxX - minX, maxZ - minZ) / 2, region.chunks().size(), region.mode(), region.enabled());
+                Math.max(maxX - minX, maxZ - minZ) / 2, region.chunks().size(), region.enabled());
         }
-
-        public boolean ticking() { return mode != ManualLoadMode.LOADED; }
     }
 
     public record FakePlayerView(UUID id, String name, String dimension, int x, int y, int z, float yaw,

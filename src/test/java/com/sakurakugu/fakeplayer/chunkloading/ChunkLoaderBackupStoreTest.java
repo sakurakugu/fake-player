@@ -45,7 +45,7 @@ class ChunkLoaderBackupStoreTest {
         ChunkLoaderSavedData data = new ChunkLoaderSavedData();
         data.addRegion(new ManualLoadRegion(UUID.nameUUIDFromBytes(name.getBytes(StandardCharsets.UTF_8)),
             name, Identifier.withDefaultNamespace("overworld"), Set.of(ChunkKey.pack(0, 0)),
-            ManualLoadMode.TICKING, true));
+            true));
         return data;
     }
 }
