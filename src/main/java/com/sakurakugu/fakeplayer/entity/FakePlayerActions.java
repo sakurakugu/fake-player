@@ -33,6 +33,7 @@ public final class FakePlayerActions {
     private static final int ALL_SLOTS = -1;
     private static final int ARMOR_SLOTS = -2;
     private static final float MAX_HEAD_YAW_OFFSET = 50.0F;
+    public static final int DEFAULT_REPEAT_INTERVAL = 100;
 
     public enum RepeatMode {
         ONCE,
@@ -484,7 +485,7 @@ public final class FakePlayerActions {
         Schedule schedule = schedules.get(action);
         return schedule != null && schedule.mode == RepeatMode.INTERVAL
             ? schedule.interval
-            : repeatIntervals.getOrDefault(action, 1);
+            : repeatIntervals.getOrDefault(action, DEFAULT_REPEAT_INTERVAL);
     }
 
     public void startAttack() {
