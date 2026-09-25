@@ -8,15 +8,15 @@ import com.sakurakugu.fakeplayer.client.ui.SolidSliderButton;
 import com.sakurakugu.fakeplayer.network.ChunkLoaderActionPayload;
 import com.sakurakugu.fakeplayer.network.ChunkLoaderActionPayload.Action;
 import com.sakurakugu.fakeplayer.network.ChunkMapSnapshotPayload;
-import com.sakurakugu.fakeplayer.network.RequestChunkMapPayload;
 import com.sakurakugu.fakeplayer.network.OpenFakePlayerPagePayload;
 import com.sakurakugu.fakeplayer.network.ToggleGlobalSettingPayload;
+import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.PlayerFaceExtractor;
+import net.minecraft.client.gui.render.TextureSetup;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.resources.DefaultPlayerSkin;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -42,8 +42,11 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
     };
     private static final double MIN_SCALE = 0.35D;
     private static final double MAX_SCALE = 2.5D;
-    private static final int UNLOADED_A = 0xFF20262A;
-    private static final int UNLOADED_B = 0xFF252C30;
+    /** 整屏底色，未加载区域与地形透明处都露出它。 */
+    private static final int BACKGROUND_COLOR = 0xFF22282C;
+    /** 区块网格线的颜色，间距小于 {@value #MIN_GRID_PIXELS} 像素时干脆不画。 */
+    private static final int GRID_COLOR = 0x283A4449;
+    private static final double MIN_GRID_PIXELS = 8.0D;
     private static final Identifier PLAYER_MARKER = Identifier.withDefaultNamespace(
         "textures/map/decorations/player.png"
     );
@@ -53,8 +56,21 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
     };
 
     private final ChunkLoadMapController controller;
-    private final ChunkTerrainTileCache terrainTiles;
+    /** 三类绘制各自合并成一个元素，见 {@link MapQuadBatch}。 */
+    private final MapQuadBatch backgroundBatch = new MapQuadBatch();
+    private final MapQuadBatch terrainBatch = new MapQuadBatch();
+    private final MapQuadBatch overlayBatch = new MapQuadBatch();
+    /** 加载区域色块的缓存（世界坐标，与视图无关）。 */
+    private int[] overlayChunkX = new int[256];
+    private int[] overlayChunkZ = new int[256];
+    private int[] overlayColor = new int[256];
+    private int overlayCount;
+    private int overlayDraftVersion = -1;
+    /** 上次展开传播用的区域列表，靠对象身份判断"区域数据是否变过"。 */
+    private List<ChunkMapSnapshotPayload.AnchorView> levelsRegions;
     private Map<Long, ChunkMapLoadLevel> authoritativeLevels = Map.of();
+    /** 上次生成色块列表时用的权威等级表，同样靠对象身份判断。 */
+    private Map<Long, ChunkMapLoadLevel> overlayLevelCache = Map.of();
     private double centerBlockX;
     private double centerBlockZ;
     private double pixelsPerBlock = 0.75D;
@@ -71,7 +87,6 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
     public ChunkMapScreen(ChunkMapSnapshotPayload snapshot, boolean managementOpen, boolean settingsOpen) {
         super(Component.translatable("gui.fakeplayer.chunkloader.map_title"));
         controller = new ChunkLoadMapController(snapshot);
-        terrainTiles = ClientChunkLoadingState.terrainTiles();
         this.managementOpen = managementOpen;
         this.settingsOpen = settingsOpen;
         centerBlockX = snapshot.playerChunkX() * 16.0D + 8.0D;
@@ -86,7 +101,7 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
         super.tick();
         if (saveButton != null) saveButton.active = controller.dirty();
         if (minecraft.player != null && minecraft.getConnection() != null && snapshotRefreshTicks-- <= 0) {
-            ClientPacketDistributor.sendToServer(new RequestChunkMapPayload(false, false, false));
+            ClientPacketDistributor.sendToServer(ClientChunkLoadingState.request(false, false, false));
             snapshotRefreshTicks = 10;
         }
     }
@@ -161,10 +176,20 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
     }
 
     private void drawMapContents(GuiGraphicsExtractor graphics) {
-        graphics.fill(0, 0, width, height, 0xFF111518);
         graphics.enableScissor(0, 0, width, height);
-        drawTerrain(graphics);
-        drawChunkOverlays(graphics);
+        backgroundBatch.begin(false, RenderPipelines.GUI, TextureSetup.noTexture(), graphics, width, height);
+        backgroundBatch.addRect(0, 0, width, height, BACKGROUND_COLOR);
+        graphics.submitGuiElementRenderState(backgroundBatch);
+
+        int sampleY = minecraft.player == null ? 64 : minecraft.player.getBlockY();
+        drawTerrain(graphics, sampleY);
+
+        overlayBatch.begin(false, RenderPipelines.GUI, TextureSetup.noTexture(), graphics, width, height);
+        drawChunkGrid();
+        drawChunkOverlays();
+        if (!overlayBatch.isEmpty()) graphics.submitGuiElementRenderState(overlayBatch);
+
+        // 假人标记数量有限，直接走原版元素即可
         drawFakePlayers(graphics);
         drawPlayer(graphics);
         graphics.disableScissor();
@@ -177,51 +202,106 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
         graphics.centeredText(font, text, centerX, y, color);
     }
 
-    private void drawTerrain(GuiGraphicsExtractor graphics) {
+    /**
+     * 绘制地形底图：只遍历客户端已加载的那一片区块，缩小时一个格覆盖多个区块。
+     * 每格对应图集里的一个 slot，屏幕上的位置由格坐标换算而来。
+     */
+    private void drawTerrain(GuiGraphicsExtractor graphics, int sampleY) {
+        // 每帧现取：切换维度时状态里会重建图集，缓存字段会留下已关闭的那个
+        ChunkTerrainAtlas terrainAtlas = ClientChunkLoadingState.terrainAtlas();
+        if (terrainAtlas.isClosed()) return;
+        terrainAtlas.beginFrame(pixelsPerBlock, sampleY);
+        terrainBatch.begin(true, RenderPipelines.GUI_TEXTURED, terrainAtlas.textureSetup(), graphics,
+            width, height);
+        int span = terrainAtlas.cellSpanBlocks();
+        float atlasWidth = ChunkTerrainAtlas.atlasWidth();
+        float atlasHeight = ChunkTerrainAtlas.atlasHeight();
+        for (int cellZ = terrainAtlas.minCellZ(); cellZ <= terrainAtlas.maxCellZ(); cellZ++) {
+            int top = worldToScreenZ((double) cellZ * span);
+            int bottom = worldToScreenZ((double) (cellZ + 1) * span);
+            if (bottom <= 0 || top >= height) continue;
+            float v0 = (float) ChunkTerrainAtlas.slotV(cellZ) / atlasHeight;
+            float v1 = v0 + (float) ChunkTerrainAtlas.SLOT_SIZE / atlasHeight;
+            for (int cellX = terrainAtlas.minCellX(); cellX <= terrainAtlas.maxCellX(); cellX++) {
+                int left = worldToScreenX((double) cellX * span);
+                int right = worldToScreenX((double) (cellX + 1) * span);
+                if (right <= 0 || left >= width) continue;
+                // 没命中已加载区块的格不画，露出底色
+                if (!terrainAtlas.prepare(cellX, cellZ)) continue;
+                float u0 = (float) ChunkTerrainAtlas.slotU(cellX) / atlasWidth;
+                terrainBatch.addTexturedRect(left, top, Math.max(left + 1, right),
+                    Math.max(top + 1, bottom), u0, v0,
+                    u0 + (float) ChunkTerrainAtlas.SLOT_SIZE / atlasWidth, v1, 0xFFFFFFFF);
+            }
+        }
+        terrainAtlas.endFrame();
+        if (!terrainBatch.isEmpty()) graphics.submitGuiElementRenderState(terrainBatch);
+    }
+
+    /** 区块网格线：间距够大时才画，跨越整个视口，条数与屏幕尺寸而非区块数成正比。 */
+    private void drawChunkGrid() {
+        if (16.0D * pixelsPerBlock < MIN_GRID_PIXELS) return;
         int minChunkX = Mth.floor(screenToWorldX(0)) >> 4;
         int maxChunkX = Mth.floor(screenToWorldX(width - 1)) >> 4;
         int minChunkZ = Mth.floor(screenToWorldZ(0)) >> 4;
         int maxChunkZ = Mth.floor(screenToWorldZ(height - 1)) >> 4;
-        int sampleY = minecraft.player == null ? 64 : minecraft.player.getBlockY();
-        terrainTiles.beginFrame();
-        for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
-            for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
-                int left = worldToScreenX(chunkX * 16.0D);
-                int top = worldToScreenZ(chunkZ * 16.0D);
-                int right = worldToScreenX((chunkX + 1) * 16.0D);
-                int tileBottom = worldToScreenZ((chunkZ + 1) * 16.0D);
-                int color = ((chunkX + chunkZ) & 1) == 0 ? UNLOADED_A : UNLOADED_B;
-                graphics.fill(left, top, right, tileBottom, color);
-                Identifier texture = terrainTiles.texture(chunkX, chunkZ, sampleY);
-                if (texture != null) {
-                    graphics.blit(RenderPipelines.GUI_TEXTURED, texture, left, top, 0.0F, 0.0F,
-                        Math.max(1, right - left), Math.max(1, tileBottom - top), 16, 16, 16, 16);
-                }
-            }
+        for (int chunkX = minChunkX; chunkX <= maxChunkX + 1; chunkX++) {
+            int x = worldToScreenX(chunkX * 16.0D);
+            if (x >= 0 && x < width) overlayBatch.addRect(x, 0, x + 1, height, GRID_COLOR);
+        }
+        for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ + 1; chunkZ++) {
+            int y = worldToScreenZ(chunkZ * 16.0D);
+            if (y >= 0 && y < height) overlayBatch.addRect(0, y, width, y + 1, GRID_COLOR);
         }
     }
 
-    private void drawChunkOverlays(GuiGraphicsExtractor graphics) {
-        int minChunkX = Mth.floor(screenToWorldX(0)) >> 4;
-        int maxChunkX = Mth.floor(screenToWorldX(width - 1)) >> 4;
-        int minChunkZ = Mth.floor(screenToWorldZ(0)) >> 4;
-        int maxChunkZ = Mth.floor(screenToWorldZ(height - 1)) >> 4;
-        Set<Long> painted = controller.painted();
-        var erased = controller.erased();
-        for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
-            for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
-                long key = ChunkKey.pack(chunkX, chunkZ);
-                ChunkMapLoadLevel level = painted.contains(key) ? ChunkMapLoadLevel.STRONG : null;
-                if (level == null && !erased.contains(key)) level = authoritativeLevels.get(key);
-                int left = worldToScreenX(chunkX * 16.0D);
-                int top = worldToScreenZ(chunkZ * 16.0D);
-                int right = worldToScreenX((chunkX + 1) * 16.0D);
-                int tileBottom = worldToScreenZ((chunkZ + 1) * 16.0D);
-                if (level != null) graphics.fill(left, top, right, tileBottom, loadLevelColor(level));
-                if (pixelsPerBlock >= 0.65D) graphics.outline(left, top,
-                    Math.max(1, right - left), Math.max(1, tileBottom - top), 0x283A4449);
-            }
+    /**
+     * 绘制加载等级色块：遍历的是数据（草稿 + 权威等级），不是屏幕上的区块，
+     * 因此缩得很小时也不会因为可见区块变多而变慢。
+     */
+    private void drawChunkOverlays() {
+        refreshOverlayCells();
+        for (int index = 0; index < overlayCount; index++) {
+            int chunkX = overlayChunkX[index];
+            int chunkZ = overlayChunkZ[index];
+            int left = worldToScreenX(chunkX * 16.0D);
+            int top = worldToScreenZ(chunkZ * 16.0D);
+            int right = worldToScreenX((chunkX + 1) * 16.0D);
+            int bottom = worldToScreenZ((chunkZ + 1) * 16.0D);
+            if (right <= 0 || left >= width || bottom <= 0 || top >= height) continue;
+            overlayBatch.addRect(left, top, Math.max(left + 1, right), Math.max(top + 1, bottom),
+                overlayColor[index]);
         }
+    }
+
+    /** 快照或草稿变化时重建色块列表；视图平移缩放不触发重建。 */
+    private void refreshOverlayCells() {
+        int draftVersion = controller.draftVersion();
+        // 权威等级表被重建过、或草稿动过才需要重算；比 revision 可靠，
+        // 因为增量快照可能只刷新了假人坐标而区域数据没变（那时 revision 也不变）
+        if (authoritativeLevels == overlayLevelCache && draftVersion == overlayDraftVersion) return;
+        overlayLevelCache = authoritativeLevels;
+        overlayDraftVersion = draftVersion;
+        var levels = ChunkLoadMapController.overlayLevels(
+            controller.painted(), controller.erased(), authoritativeLevels);
+        int count = 0;
+        for (var entry : levels.entrySet()) {
+            count = appendOverlayCell(count, entry.getKey(), entry.getValue());
+        }
+        overlayCount = count;
+    }
+
+    private int appendOverlayCell(int count, long chunk, ChunkMapLoadLevel level) {
+        if (count == overlayChunkX.length) {
+            int size = count * 2;
+            overlayChunkX = java.util.Arrays.copyOf(overlayChunkX, size);
+            overlayChunkZ = java.util.Arrays.copyOf(overlayChunkZ, size);
+            overlayColor = java.util.Arrays.copyOf(overlayColor, size);
+        }
+        overlayChunkX[count] = ChunkKey.x(chunk);
+        overlayChunkZ[count] = ChunkKey.z(chunk);
+        overlayColor[count] = loadLevelColor(level);
+        return count + 1;
     }
 
     private void drawFakePlayers(GuiGraphicsExtractor graphics) {
@@ -704,9 +784,16 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
         return centerBlockZ + (screenY - height / 2.0D) / pixelsPerBlock;
     }
 
+    /**
+     * 重建权威加载等级。快照每 10 tick 就会来一次，而区域内容绝大多数时候没变，
+     * 所以按区域列表的对象身份判断——增量快照会原样复用上一次的列表对象。
+     */
     private void rebuildAuthoritativeLevels() {
-        authoritativeLevels = ChunkLoadMapController.propagatedLevels(
-            controller.snapshot().regions(), controller.snapshot().dimension());
+        ChunkMapSnapshotPayload snapshot = controller.snapshot();
+        List<ChunkMapSnapshotPayload.AnchorView> regions = snapshot.regions();
+        if (regions == levelsRegions) return;
+        levelsRegions = regions;
+        authoritativeLevels = ChunkLoadMapController.propagatedLevels(regions, snapshot.dimension());
     }
 
     private static int loadLevelColor(ChunkMapLoadLevel level) { return switch (level) {

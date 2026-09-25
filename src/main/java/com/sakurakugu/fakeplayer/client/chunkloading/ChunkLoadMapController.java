@@ -23,6 +23,10 @@ public final class ChunkLoadMapController {
     private final Set<Long> painted = new HashSet<>();
     private final Set<Long> erased = new HashSet<>();
     private final Deque<DraftState> undo = new ArrayDeque<>();
+    /** 不可变视图，随草稿一起更新；绘制端每帧都要读，不能每次现拷。 */
+    private Set<Long> paintedView = Set.of();
+    private Set<Long> erasedView = Set.of();
+    private int draftVersion;
     private boolean awaitingApply;
 
     public ChunkLoadMapController(ChunkMapSnapshotPayload snapshot) { this.snapshot = snapshot; }
@@ -30,9 +34,11 @@ public final class ChunkLoadMapController {
     public ChunkMapSnapshotPayload snapshot() { return snapshot; }
     public ChunkMapEditMode mode() { return mode; }
     public void setMode(ChunkMapEditMode value) { mode = value; }
-    public Set<Long> painted() { return Set.copyOf(painted); }
-    public Set<Long> erased() { return Set.copyOf(erased); }
-    public boolean dirty() { return !painted.isEmpty() || !erased.isEmpty(); }
+    public Set<Long> painted() { return paintedView; }
+    public Set<Long> erased() { return erasedView; }
+    /** 草稿版本号，只在草稿真的变化时自增，供绘制端做缓存失效。 */
+    public int draftVersion() { return draftVersion; }
+    public boolean dirty() { return !paintedView.isEmpty() || !erasedView.isEmpty(); }
 
     public void accept(ChunkMapSnapshotPayload value) {
         boolean acknowledged = awaitingApply && value.revision() != snapshot.revision();
@@ -44,15 +50,18 @@ public final class ChunkLoadMapController {
     public void edit(int chunkX, int chunkZ) {
         if (mode == ChunkMapEditMode.BROWSE) return;
         long chunk = ChunkKey.pack(chunkX, chunkZ);
-        DraftState before = state();
+        // 视图本身就是上一版快照，省掉一次 Set 拷贝
+        DraftState before = new DraftState(paintedView, erasedView);
+        boolean changed;
         if (mode == ChunkMapEditMode.ERASE) {
-            painted.remove(chunk);
-            erased.add(chunk);
+            changed = painted.remove(chunk) | erased.add(chunk);
         } else {
-            painted.add(chunk);
-            erased.remove(chunk);
+            changed = painted.add(chunk) | erased.remove(chunk);
         }
-        if (!before.equals(state())) undo.push(before);
+        if (changed) {
+            markDraftChanged();
+            undo.push(before);
+        }
     }
 
     public void undo() {
@@ -60,6 +69,7 @@ public final class ChunkLoadMapController {
         DraftState state = undo.pop();
         painted.clear(); painted.addAll(state.painted());
         erased.clear(); erased.addAll(state.erased());
+        markDraftChanged();
     }
 
     public void apply() {
@@ -90,8 +100,19 @@ public final class ChunkLoadMapController {
         }
     }
 
-    private DraftState state() { return new DraftState(Set.copyOf(painted), Set.copyOf(erased)); }
-    private void clearDraft() { painted.clear(); erased.clear(); undo.clear(); }
+    private void markDraftChanged() {
+        draftVersion++;
+        paintedView = Set.copyOf(painted);
+        erasedView = Set.copyOf(erased);
+    }
+
+    private void clearDraft() {
+        boolean changed = dirty();
+        painted.clear();
+        erased.clear();
+        undo.clear();
+        if (changed) markDraftChanged();
+    }
 
     static String nextRegionName(Collection<String> existingNames) {
         Set<String> normalized = new HashSet<>();
@@ -101,6 +122,21 @@ public final class ChunkLoadMapController {
             if (!normalized.contains(candidate)) return candidate;
         }
         throw new IllegalStateException("无法生成加载区域名称");
+    }
+
+    /**
+     * 决定地图上每个区块画成什么颜色：草稿优先于权威数据，草稿里擦除的区块不再回落到权威等级。
+     * 只返回有颜色的区块，绘制端遍历它而不是遍历屏幕上的区块。
+     */
+    static Map<Long, ChunkMapLoadLevel> overlayLevels(Set<Long> painted, Set<Long> erased,
+                                                      Map<Long, ChunkMapLoadLevel> authoritative) {
+        Map<Long, ChunkMapLoadLevel> result = new HashMap<>(painted.size() + authoritative.size());
+        for (long chunk : painted) result.put(chunk, ChunkMapLoadLevel.STRONG);
+        for (var entry : authoritative.entrySet()) {
+            if (erased.contains(entry.getKey()) || painted.contains(entry.getKey())) continue;
+            result.put(entry.getKey(), entry.getValue());
+        }
+        return result;
     }
 
     /** 等级 31 的强加载票据向外传播为一圈方块刻和一圈仅加载。 */

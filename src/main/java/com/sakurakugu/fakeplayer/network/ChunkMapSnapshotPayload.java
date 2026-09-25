@@ -17,7 +17,12 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
 
-/** 当前维度的权威加载快照，同时供内置地图和第三方地图前端使用。 */
+/**
+ * 当前维度的权威加载快照，同时供内置地图和第三方地图前端使用。
+ *
+ * <p>{@code regionsUnchanged} 为 true 时 {@code regions} 是空的：客户端已知的区域数据仍然有效，
+ * 应当保留原样（见 {@code ClientChunkLoadingState}）。假人位置与区域摘要始终是最新的。
+ */
 public record ChunkMapSnapshotPayload(
     boolean openScreen,
     boolean openManagement,
@@ -25,6 +30,7 @@ public record ChunkMapSnapshotPayload(
     int globalSettingsMask,
     int maximumRadius,
     long revision,
+    boolean regionsUnchanged,
     String dimension,
     int playerChunkX,
     int playerChunkZ,
@@ -50,7 +56,7 @@ public record ChunkMapSnapshotPayload(
 
     private ChunkMapSnapshotPayload(RegistryFriendlyByteBuf buffer) {
         this(buffer.readBoolean(), buffer.readBoolean(), buffer.readBoolean(), buffer.readVarInt(),
-            buffer.readVarInt(), buffer.readVarLong(),
+            buffer.readVarInt(), buffer.readVarLong(), buffer.readBoolean(),
             buffer.readUtf(256), buffer.readInt(), buffer.readInt(),
             readRegions(buffer), readRegionSummaries(buffer), readFakePlayers(buffer));
     }
@@ -62,6 +68,7 @@ public record ChunkMapSnapshotPayload(
         buffer.writeVarInt(globalSettingsMask);
         buffer.writeVarInt(maximumRadius);
         buffer.writeVarLong(revision);
+        buffer.writeBoolean(regionsUnchanged);
         buffer.writeUtf(dimension, 256);
         buffer.writeInt(playerChunkX);
         buffer.writeInt(playerChunkZ);
@@ -81,8 +88,21 @@ public record ChunkMapSnapshotPayload(
     public static ChunkMapSnapshotPayload create(ServerPlayer player, ChunkLoaderSavedData data,
                                                  boolean openScreen, boolean openManagement,
                                                  boolean openSettings) {
+        return create(player, data, openScreen, openManagement, openSettings,
+            RequestChunkMapPayload.NO_REVISION, null);
+    }
+
+    /**
+     * @param knownRevision  客户端手上区域数据的 revision，见 {@link RequestChunkMapPayload}
+     * @param knownDimension 该数据对应的维度，为 null 表示按"客户端可能有别的维度"处理
+     */
+    public static ChunkMapSnapshotPayload create(ServerPlayer player, ChunkLoaderSavedData data,
+                                                 boolean openScreen, boolean openManagement,
+                                                 boolean openSettings, long knownRevision,
+                                                 String knownDimension) {
         String dimension = player.level().dimension().identifier().toString();
-        List<AnchorView> regionViews = data.regions().stream()
+        boolean regionsUnchanged = canSkipRegions(knownRevision, knownDimension, data.revision(), dimension);
+        List<AnchorView> regionViews = regionsUnchanged ? List.of() : data.regions().stream()
             .filter(region -> region.dimension().toString().equals(dimension))
             .limit(MAX_REGIONS)
             .map(AnchorView::from)
@@ -106,8 +126,25 @@ public record ChunkMapSnapshotPayload(
             }).toList();
         return new ChunkMapSnapshotPayload(openScreen, openManagement, openSettings,
             com.sakurakugu.fakeplayer.config.FakePlayerConfig.globalSettingsMask(),
-            com.sakurakugu.fakeplayer.config.FakePlayerConfig.maxChunkLoadingRadius(), data.revision(), dimension,
+            com.sakurakugu.fakeplayer.config.FakePlayerConfig.maxChunkLoadingRadius(), data.revision(),
+            regionsUnchanged, dimension,
             player.chunkPosition().x(), player.chunkPosition().z(), regionViews, summaries, fakeViews);
+    }
+
+    /**
+     * 客户端手上的区域数据能否原样复用。
+     * 维度必须一起判断：同一份 revision 下换维度，区域列表是按维度过滤的，不能沿用。
+     */
+    public static boolean canSkipRegions(long knownRevision, String knownDimension,
+                                         long revision, String dimension) {
+        return knownRevision == revision && dimension.equals(knownDimension);
+    }
+
+    /** 把上一份快照的区域列表套到这份增量快照上，其余字段保持最新。 */
+    public ChunkMapSnapshotPayload withPreviousRegions(ChunkMapSnapshotPayload previous) {
+        return new ChunkMapSnapshotPayload(openScreen, openManagement, openSettings, globalSettingsMask,
+            maximumRadius, revision, false, dimension, playerChunkX, playerChunkZ, previous.regions,
+            managementRegions, fakePlayers);
     }
 
     private static List<AnchorView> readRegions(RegistryFriendlyByteBuf buffer) {

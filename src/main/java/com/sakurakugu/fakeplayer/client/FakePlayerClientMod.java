@@ -3,7 +3,6 @@ package com.sakurakugu.fakeplayer.client;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.sakurakugu.fakeplayer.FakePlayerMod;
 import com.sakurakugu.fakeplayer.network.PossessionStatePayload;
-import com.sakurakugu.fakeplayer.network.RequestChunkMapPayload;
 import com.sakurakugu.fakeplayer.network.StopPossessionPayload;
 import com.sakurakugu.fakeplayer.network.ChunkMapSnapshotPayload;
 import com.sakurakugu.fakeplayer.network.BodyRotationPayload;
@@ -47,7 +46,7 @@ public final class FakePlayerClientMod {
         "key.fakeplayer.open_chunk_map", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_C, CATEGORY
     );
     private static final KeyMapping STOP_POSSESSION = new KeyMapping(
-        "key.fakeplayer.stop_possession", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_P, CATEGORY
+        "key.fakeplayer.stop_possession", InputConstants.Type.KEYSYM, InputConstants.UNKNOWN.getValue(), CATEGORY
     );
     private static int refreshTicks;
     private static CreativeModeInventoryScreen creativeInventoryScreen;
@@ -97,7 +96,7 @@ public final class FakePlayerClientMod {
         }
         while (OPEN_CHUNK_MAP.consumeClick()) {
             if (minecraft.player != null && minecraft.screen == null) {
-                ClientPacketDistributor.sendToServer(new RequestChunkMapPayload(true, false, false));
+                ClientPacketDistributor.sendToServer(ClientChunkLoadingState.request(true, false, false));
             }
         }
         if (minecraft.player == null) {
@@ -106,7 +105,7 @@ public final class FakePlayerClientMod {
         } else if (!minecraft.debugEntries.isOverlayVisible()) {
             refreshTicks = 0;
         } else if (refreshTicks-- <= 0) {
-            ClientPacketDistributor.sendToServer(new RequestChunkMapPayload(false, false, false));
+            ClientPacketDistributor.sendToServer(ClientChunkLoadingState.request(false, false, false));
             refreshTicks = 40;
         }
     }

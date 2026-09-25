@@ -147,7 +147,8 @@ public final class ModNetworking {
                     var data = ChunkLoaderManager.data(player.level().getServer());
                     PacketDistributor.sendToPlayer(player,
                         ChunkMapSnapshotPayload.create(player, data,
-                            payload.openScreen(), payload.openManagement(), payload.openSettings()));
+                            payload.openScreen(), payload.openManagement(), payload.openSettings(),
+                            payload.knownRevision(), payload.knownDimension()));
                 }
             }
         );

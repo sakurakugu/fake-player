@@ -4,7 +4,7 @@ import com.sakurakugu.fakeplayer.menu.BotManagementMenu;
 import com.sakurakugu.fakeplayer.menu.BotManagementMenu.GroupSummary;
 import com.sakurakugu.fakeplayer.menu.BotManagementMenu.PresetSummary;
 import com.sakurakugu.fakeplayer.network.BotActionPayload;
-import com.sakurakugu.fakeplayer.network.RequestChunkMapPayload;
+import com.sakurakugu.fakeplayer.client.chunkloading.ClientChunkLoadingState;
 import com.sakurakugu.fakeplayer.client.ui.SolidButton;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
@@ -47,7 +47,7 @@ public final class BotManagementScreen extends AbstractContainerScreen<BotManage
             Component.translatable("gui.fakeplayer.bot.groups"), button -> setTab(true)));
         addRenderableWidget(new SolidButton(leftPos + 298, topPos + 43, 66, 20,
             Component.translatable("gui.fakeplayer.bot.back"), button ->
-                ClientPacketDistributor.sendToServer(new RequestChunkMapPayload(true, false, true))));
+                ClientPacketDistributor.sendToServer(ClientChunkLoadingState.request(true, false, true))));
 
         if (showingGroups) {
             addGroupWidgets();

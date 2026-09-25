@@ -2,7 +2,7 @@ package com.sakurakugu.fakeplayer.client;
 
 import com.sakurakugu.fakeplayer.menu.GlobalFakePlayerMenu;
 import com.sakurakugu.fakeplayer.network.SpawnFakePlayerPayload;
-import com.sakurakugu.fakeplayer.network.RequestChunkMapPayload;
+import com.sakurakugu.fakeplayer.client.chunkloading.ClientChunkLoadingState;
 import com.sakurakugu.fakeplayer.client.ui.SolidButton;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
@@ -96,7 +96,7 @@ public final class GlobalFakePlayerScreen extends AbstractContainerScreen<Global
     }
 
     private void returnToMap() {
-        ClientPacketDistributor.sendToServer(new RequestChunkMapPayload(true, false, false));
+        ClientPacketDistributor.sendToServer(ClientChunkLoadingState.request(true, false, false));
     }
 
     private void updateSpawnButton() {
