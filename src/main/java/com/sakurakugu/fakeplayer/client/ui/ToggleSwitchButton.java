@@ -15,13 +15,23 @@ public final class ToggleSwitchButton extends Button {
     static final int HANDLE_WIDTH = 8;
 
     private final BooleanSupplier enabled;
+    /** 面板上是浅色背景，地图上是深色背景，标签颜色得分开传。 */
+    private final int labelColor;
 
     public ToggleSwitchButton(
         int x, int y, int width, int height, Component message,
         BooleanSupplier enabled, OnPress onPress
     ) {
+        this(x, y, width, height, message, 0xFF404040, enabled, onPress);
+    }
+
+    public ToggleSwitchButton(
+        int x, int y, int width, int height, Component message, int labelColor,
+        BooleanSupplier enabled, OnPress onPress
+    ) {
         super(x, y, width, height, message, onPress, DEFAULT_NARRATION);
         this.enabled = enabled;
+        this.labelColor = labelColor;
         setTooltip(Tooltip.create(message));
     }
 
@@ -32,10 +42,10 @@ public final class ToggleSwitchButton extends Button {
         int switchY = getY() + (getHeight() - SWITCH_HEIGHT) / 2;
         int labelRight = switchX - 4;
         if (font.width(getMessage()) <= labelRight - getX()) {
-            graphics.text(font, getMessage(), getX(), getY() + (getHeight() - 8) / 2, 0xFF404040, false);
+            graphics.text(font, getMessage(), getX(), getY() + (getHeight() - 8) / 2, labelColor, false);
         } else {
             PixelGui.drawScrollingText(graphics, font, getMessage(),
-                getX(), labelRight, getY(), getHeight(), 0xFF404040);
+                getX(), labelRight, getY(), getHeight(), labelColor);
         }
         PixelGui.drawToggle(graphics, switchX, switchY, enabled.getAsBoolean(), isMouseOver(mouseX, mouseY));
     }

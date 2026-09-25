@@ -5,17 +5,18 @@ import com.sakurakugu.fakeplayer.chunkloading.ChunkKey;
 import com.sakurakugu.fakeplayer.client.ui.SolidButton;
 import com.sakurakugu.fakeplayer.client.ui.PixelGlyph;
 import com.sakurakugu.fakeplayer.client.ui.SolidSliderButton;
+import com.sakurakugu.fakeplayer.client.ui.ToggleSwitchButton;
 import com.sakurakugu.fakeplayer.network.ChunkLoaderActionPayload;
 import com.sakurakugu.fakeplayer.network.ChunkLoaderActionPayload.Action;
 import com.sakurakugu.fakeplayer.network.ChunkMapSnapshotPayload;
 import com.sakurakugu.fakeplayer.network.OpenFakePlayerPagePayload;
 import com.sakurakugu.fakeplayer.network.ToggleGlobalSettingPayload;
-import java.util.List;
 import java.util.Map;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.PlayerFaceExtractor;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.render.TextureSetup;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.resources.DefaultPlayerSkin;
@@ -65,16 +66,14 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
     private int[] overlayChunkZ = new int[256];
     private int[] overlayColor = new int[256];
     private int overlayCount;
-    private int overlayDraftVersion = -1;
-    /** 上次展开传播用的区域列表，靠对象身份判断"区域数据是否变过"。 */
-    private List<ChunkMapSnapshotPayload.AnchorView> levelsRegions;
-    private Map<Long, ChunkMapLoadLevel> authoritativeLevels = Map.of();
-    /** 上次生成色块列表时用的权威等级表，同样靠对象身份判断。 */
+    /** 上次生成色块列表时用的等级表，靠对象身份判断"等级是否变过"。 */
     private Map<Long, ChunkMapLoadLevel> overlayLevelCache = Map.of();
     private double centerBlockX;
     private double centerBlockZ;
     private double pixelsPerBlock = 0.75D;
     private boolean dragging;
+    /** 按下时用的是哪个键，拖动过程中按这个键决定是涂、擦还是平移。 */
+    private int draggingButton = -1;
     private boolean settingsOpen;
     private boolean managementOpen;
     private int snapshotRefreshTicks;
@@ -87,11 +86,11 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
     public ChunkMapScreen(ChunkMapSnapshotPayload snapshot, boolean managementOpen, boolean settingsOpen) {
         super(Component.translatable("gui.fakeplayer.chunkloader.map_title"));
         controller = new ChunkLoadMapController(snapshot);
+        controller.setShowWeakLoading(ChunkMapClientConfig.weakLoadingVisible());
         this.managementOpen = managementOpen;
         this.settingsOpen = settingsOpen;
         centerBlockX = snapshot.playerChunkX() * 16.0D + 8.0D;
         centerBlockZ = snapshot.playerChunkZ() * 16.0D + 8.0D;
-        rebuildAuthoritativeLevels();
     }
 
     public void update(ChunkMapSnapshotPayload value) { acceptSnapshot(value); }
@@ -134,12 +133,16 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
         int buttonWidth = Mth.clamp((width - 118) / modeCount, 32, 44);
         int x = 6;
         for (ChunkMapEditMode mode : ChunkMapEditMode.values()) {
-            addRenderableWidget(new SolidButton(x, 6, buttonWidth, 20,
-                Component.literal(label(mode)), button -> setEditMode(mode)));
+            SolidButton button = addRenderableWidget(new SolidButton(x, 6, buttonWidth, 20,
+                Component.literal(label(mode)), ignored -> setEditMode(mode)));
+            if (mode == ChunkMapEditMode.EDIT) {
+                button.setTooltip(Tooltip.create(Component.literal("左键强加载，右键擦除，中键平移")));
+            }
             x += buttonWidth;
         }
         addRenderableWidget(new SolidButton(x + 6, 6, 48, 20,
             Component.translatable("gui.fakeplayer.chunkloader.map_undo"), button -> controller.undo()));
+        addWeakLoadingSwitch(x + 60);
 
         saveButton = addRenderableWidget(new SolidButton(width - 42, 7, 18, 18, PixelGlyph.SAVE,
             Component.translatable("gui.fakeplayer.chunkloader.map_save"), button -> controller.apply()));
@@ -165,7 +168,8 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
         PlayerMarker hoveredPlayer = playerMarkerAt(mouseX, mouseY);
         drawHoveredChunk(graphics, mouseX, mouseY, hoveredPlayer);
 
-        Component heading = Component.literal(title.getString() + "  [" + label(controller.mode()) + "]");
+        Component heading = Component.literal(title.getString() + "  [" + label(controller.mode())
+            + (controller.mode() == ChunkMapEditMode.EDIT ? " 左键涂 右键擦 中键平移" : "") + "]");
         drawFloatingText(graphics, heading, width / 2, 32, 0xFFFFFFFF);
         int centerChunkX = Mth.floor(centerBlockX) >> 4;
         int centerChunkZ = Mth.floor(centerBlockZ) >> 4;
@@ -276,14 +280,10 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
 
     /** 快照或草稿变化时重建色块列表；视图平移缩放不触发重建。 */
     private void refreshOverlayCells() {
-        int draftVersion = controller.draftVersion();
-        // 权威等级表被重建过、或草稿动过才需要重算；比 revision 可靠，
-        // 因为增量快照可能只刷新了假人坐标而区域数据没变（那时 revision 也不变）
-        if (authoritativeLevels == overlayLevelCache && draftVersion == overlayDraftVersion) return;
-        overlayLevelCache = authoritativeLevels;
-        overlayDraftVersion = draftVersion;
-        var levels = ChunkLoadMapController.overlayLevels(
-            controller.painted(), controller.erased(), authoritativeLevels);
+        // 等级表由控制器按（强加载集合，草稿版本）缓存，这里比对对象身份即可
+        Map<Long, ChunkMapLoadLevel> levels = controller.levels();
+        if (levels == overlayLevelCache) return;
+        overlayLevelCache = levels;
         int count = 0;
         for (var entry : levels.entrySet()) {
             count = appendOverlayCell(count, entry.getKey(), entry.getValue());
@@ -473,6 +473,21 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
         graphics.pose().scale(scale, scale);
         graphics.text(font, text, 0, 0, 0xFFFFFFFF, false);
         graphics.pose().popMatrix();
+    }
+
+    /** 顶部开关：是否画出强加载区块外围的弱加载范围。窗口很窄时只留开关本身，标签自己滚动。 */
+    private void addWeakLoadingSwitch(int x) {
+        int switchWidth = Math.max(24, Math.min(96, width - 48 - x));
+        addRenderableWidget(new ToggleSwitchButton(x, 6, switchWidth, 20,
+            Component.translatable("gui.fakeplayer.chunkloader.map_weak_range"), 0xFFFFFFFF,
+            ChunkMapClientConfig::weakLoadingVisible, button -> toggleWeakLoading()));
+    }
+
+    private void toggleWeakLoading() {
+        boolean visible = !ChunkMapClientConfig.weakLoadingVisible();
+        ChunkMapClientConfig.setWeakLoadingVisible(visible);
+        ChunkMapClientConfig.save();
+        controller.setShowWeakLoading(visible);
     }
 
     private void showSettings(boolean value) {
@@ -674,7 +689,7 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
         Component blockLine = Component.translatable("gui.fakeplayer.chunkloader.map_hover.block", blockX, blockZ);
         boolean loadedByFakePlayer = controller.snapshot().fakePlayers().stream()
             .anyMatch(fake -> fake.loadsChunk(controller.snapshot().dimension(), chunk[0], chunk[1]));
-        ChunkMapLoadLevel loadLevel = authoritativeLevels.get(ChunkKey.pack(chunk[0], chunk[1]));
+        ChunkMapLoadLevel loadLevel = controller.levels().get(ChunkKey.pack(chunk[0], chunk[1]));
         Component names = regionNames.<Component>map(Component::literal).orElseGet(() -> loadLevel == null
             ? Component.translatable(loadedByFakePlayer
                 ? "fakeplayer.chunkloader.fake_label"
@@ -715,8 +730,9 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
         int[] chunk = chunkAt(event.x(), event.y());
         if (chunk == null) return false;
         dragging = true;
-        if (event.button() == 0 && controller.mode() != ChunkMapEditMode.BROWSE) {
-            controller.edit(chunk[0], chunk[1]);
+        draggingButton = event.button();
+        if (controller.mode() != ChunkMapEditMode.BROWSE && isEditButton(event.button())) {
+            controller.edit(chunk[0], chunk[1], event.button() == 1);
         }
         return true;
     }
@@ -725,20 +741,29 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
     public boolean mouseDragged(MouseButtonEvent event, double deltaX, double deltaY) {
         if (settingsOpen || managementOpen) return super.mouseDragged(event, deltaX, deltaY);
         if (!dragging) return super.mouseDragged(event, deltaX, deltaY);
-        if (controller.mode() == ChunkMapEditMode.BROWSE || event.button() == 1) {
+        // 浏览模式还是拖哪都能平移；编辑模式左右键被涂/擦占了，平移留给中键
+        if (draggingButton == 2 || controller.mode() == ChunkMapEditMode.BROWSE) {
             centerBlockX -= deltaX / pixelsPerBlock;
             centerBlockZ -= deltaY / pixelsPerBlock;
         } else {
             int[] chunk = chunkAt(event.x(), event.y());
-            if (chunk != null) controller.edit(chunk[0], chunk[1]);
+            if (chunk != null && isEditButton(draggingButton)) {
+                controller.edit(chunk[0], chunk[1], draggingButton == 1);
+            }
         }
         return true;
+    }
+
+    /** 编辑模式里认的按键：左键强加载，右键擦除。 */
+    private static boolean isEditButton(int button) {
+        return button == 0 || button == 1;
     }
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
         boolean wasDragging = dragging;
         dragging = false;
+        draggingButton = -1;
         return wasDragging || super.mouseReleased(event);
     }
 
@@ -784,41 +809,27 @@ public final class ChunkMapScreen extends Screen implements ChunkLoadMapFrontend
         return centerBlockZ + (screenY - height / 2.0D) / pixelsPerBlock;
     }
 
-    /**
-     * 重建权威加载等级。快照每 10 tick 就会来一次，而区域内容绝大多数时候没变，
-     * 所以按区域列表的对象身份判断——增量快照会原样复用上一次的列表对象。
-     */
-    private void rebuildAuthoritativeLevels() {
-        ChunkMapSnapshotPayload snapshot = controller.snapshot();
-        List<ChunkMapSnapshotPayload.AnchorView> regions = snapshot.regions();
-        if (regions == levelsRegions) return;
-        levelsRegions = regions;
-        authoritativeLevels = ChunkLoadMapController.propagatedLevels(regions, snapshot.dimension());
-    }
-
     private static int loadLevelColor(ChunkMapLoadLevel level) { return switch (level) {
-        case WEAK -> 0x66287E8E;
-        case BLOCK_TICKING -> 0x66C7A13A;
+        case WEAK -> 0x66C7A13A;
         case STRONG -> 0x66D18B35;
     }; }
 
     private static Component loadLevelLabel(ChunkMapLoadLevel level) {
         return Component.translatable(switch (level) {
             case WEAK -> "gui.fakeplayer.chunkloader.level_weak";
-            case BLOCK_TICKING -> "gui.fakeplayer.chunkloader.level_block_ticking";
             case STRONG -> "gui.fakeplayer.chunkloader.level_strong";
         });
     }
 
+    /** 按钮和标题都用这套短标签，和界面其它地方一样直接写中文。 */
     private static String label(ChunkMapEditMode mode) { return switch (mode) {
-        case BROWSE -> "浏览"; case STRONG -> "强"; case ERASE -> "擦除";
+        case BROWSE -> "浏览"; case EDIT -> "强/擦除";
     }; }
 
     @Override
     public void acceptSnapshot(ChunkMapSnapshotPayload snapshot) {
         var previous = controller.snapshot();
         controller.accept(snapshot);
-        rebuildAuthoritativeLevels();
         if (settingsOpen && snapshot.globalSettingsMask() != previous.globalSettingsMask()) {
             rebuildWidgets();
         }

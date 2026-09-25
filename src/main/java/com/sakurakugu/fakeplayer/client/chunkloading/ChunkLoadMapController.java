@@ -28,6 +28,16 @@ public final class ChunkLoadMapController {
     private Set<Long> erasedView = Set.of();
     private int draftVersion;
     private boolean awaitingApply;
+    /** 当前维度里属于已启用手动区域的区块（强加载）；按区域列表的对象身份缓存。 */
+    private List<ChunkMapSnapshotPayload.AnchorView> strongSource;
+    private Set<Long> strongChunks = Set.of();
+    /** 显示用等级表，同样按对象身份缓存，见 {@link #levels()}。 */
+    private Set<Long> levelsSource;
+    private int levelsDraftVersion = -1;
+    private boolean levelsShowWeak;
+    private Map<Long, ChunkMapLoadLevel> levels = Map.of();
+    /** 是否画出强加载区块外围的弱加载范围。 */
+    private boolean showWeakLoading = true;
 
     public ChunkLoadMapController(ChunkMapSnapshotPayload snapshot) { this.snapshot = snapshot; }
 
@@ -36,25 +46,39 @@ public final class ChunkLoadMapController {
     public void setMode(ChunkMapEditMode value) { mode = value; }
     public Set<Long> painted() { return paintedView; }
     public Set<Long> erased() { return erasedView; }
-    /** 草稿版本号，只在草稿真的变化时自增，供绘制端做缓存失效。 */
+    /** 草稿版本号，只在草稿真的变化时自增。 */
     public int draftVersion() { return draftVersion; }
     public boolean dirty() { return !paintedView.isEmpty() || !erasedView.isEmpty(); }
 
     public void accept(ChunkMapSnapshotPayload value) {
         boolean acknowledged = awaitingApply && value.revision() != snapshot.revision();
+        // 区域列表是按维度过滤后发过来的，换维度就必须重算强加载集合
+        if (!value.dimension().equals(snapshot.dimension())) strongSource = null;
         snapshot = value;
         if (acknowledged) clearDraft();
         awaitingApply = false;
     }
 
-    public void edit(int chunkX, int chunkZ) {
+    /**
+     * 改一格草稿。
+     *
+     * @param erase 这一笔是擦除而不是强加载；由鼠标按键决定，左键涂、右键擦
+     */
+    public void edit(int chunkX, int chunkZ, boolean erase) {
         if (mode == ChunkMapEditMode.BROWSE) return;
         long chunk = ChunkKey.pack(chunkX, chunkZ);
         // 视图本身就是上一版快照，省掉一次 Set 拷贝
         DraftState before = new DraftState(paintedView, erasedView);
         boolean changed;
-        if (mode == ChunkMapEditMode.ERASE) {
-            changed = painted.remove(chunk) | erased.add(chunk);
+        if (erase) {
+            // 擦除只认手动强加载区块：弱加载是票据自动传播出来的，
+            // 服务端没有对应的区域区块，点上去不该留痕
+            if (strongChunks().contains(chunk)) {
+                changed = erased.add(chunk) | painted.remove(chunk);
+            } else {
+                // 只是撤掉草稿里自己画的那一笔，不必变成一条"删除区块"的意图
+                changed = painted.remove(chunk);
+            }
         } else {
             changed = painted.add(chunk) | erased.remove(chunk);
         }
@@ -97,7 +121,41 @@ public final class ChunkLoadMapController {
             awaitingApply = true;
             ClientPacketDistributor.sendToServer(
                 new ApplyChunkLoadEditsPayload(snapshot.revision(), snapshot.dimension(), edits));
+        } else {
+            // 目标区域在别处被删掉或改过了，草稿已经没有可以提交的内容
+            clearDraft();
         }
+    }
+
+    /** 地图显示用的加载等级表；草稿或区域数据变了才重算，绘制端按返回值的对象身份做缓存失效。 */
+    public Map<Long, ChunkMapLoadLevel> levels() {
+        Set<Long> strong = strongChunks();
+        if (levelsSource == strong && levelsDraftVersion == draftVersion
+            && levelsShowWeak == showWeakLoading) {
+            return levels;
+        }
+        levelsSource = strong;
+        levelsDraftVersion = draftVersion;
+        levelsShowWeak = showWeakLoading;
+        levels = Map.copyOf(overlayLevels(painted, erased, strong, showWeakLoading));
+        return levels;
+    }
+
+    public void setShowWeakLoading(boolean value) {
+        showWeakLoading = value;
+    }
+
+    /** 已启用手动区域包含的区块。区域数据每 10 tick 同步一次但内容极少变，所以按列表对象身份判断。 */
+    private Set<Long> strongChunks() {
+        List<ChunkMapSnapshotPayload.AnchorView> regions = snapshot.regions();
+        if (regions == strongSource) return strongChunks;
+        strongSource = regions;
+        Set<Long> values = new HashSet<>();
+        for (ChunkMapSnapshotPayload.AnchorView region : regions) {
+            if (region.enabled() && region.dimension().equals(snapshot.dimension())) values.addAll(region.chunks());
+        }
+        strongChunks = Set.copyOf(values);
+        return strongChunks;
     }
 
     private void markDraftChanged() {
@@ -125,44 +183,37 @@ public final class ChunkLoadMapController {
     }
 
     /**
-     * 决定地图上每个区块画成什么颜色：草稿优先于权威数据，草稿里擦除的区块不再回落到权威等级。
-     * 只返回有颜色的区块，绘制端遍历它而不是遍历屏幕上的区块。
+     * 决定地图上每个区块画成什么颜色：强加载区块来自手动区域和草稿画出的区块，
+     * 草稿擦除的区块连它带出来的那一圈一起消失。只返回有颜色的区块，
+     * 绘制端遍历它而不是遍历屏幕上的区块。
+     *
+     * @param showWeak 是否画出强加载区块外围的弱加载范围（等级 32 的那一圈）
      */
     static Map<Long, ChunkMapLoadLevel> overlayLevels(Set<Long> painted, Set<Long> erased,
-                                                      Map<Long, ChunkMapLoadLevel> authoritative) {
-        Map<Long, ChunkMapLoadLevel> result = new HashMap<>(painted.size() + authoritative.size());
-        for (long chunk : painted) result.put(chunk, ChunkMapLoadLevel.STRONG);
-        for (var entry : authoritative.entrySet()) {
-            if (erased.contains(entry.getKey()) || painted.contains(entry.getKey())) continue;
-            result.put(entry.getKey(), entry.getValue());
+                                                      Set<Long> strongChunks, boolean showWeak) {
+        Set<Long> strong = new HashSet<>(strongChunks);
+        strong.removeAll(erased);
+        strong.addAll(painted);
+        Map<Long, ChunkMapLoadLevel> result = new HashMap<>(showWeak ? strong.size() * 9 : strong.size());
+        for (long chunk : strong) {
+            result.merge(chunk, ChunkMapLoadLevel.STRONG, ChunkLoadMapController::stronger);
+            if (!showWeak) continue;
+            int centerX = ChunkKey.x(chunk);
+            int centerZ = ChunkKey.z(chunk);
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    if (dx == 0 && dz == 0) continue;
+                    result.merge(ChunkKey.pack(centerX + dx, centerZ + dz), ChunkMapLoadLevel.WEAK,
+                        ChunkLoadMapController::stronger);
+                }
+            }
         }
         return result;
     }
 
-    /** 等级 31 的强加载票据向外传播为一圈方块刻和一圈仅加载。 */
-    static Map<Long, ChunkMapLoadLevel> propagatedLevels(
-        Collection<ChunkMapSnapshotPayload.AnchorView> regions, String dimension) {
-        Map<Long, ChunkMapLoadLevel> result = new HashMap<>();
-        for (var region : regions) {
-            if (!region.enabled() || !region.dimension().equals(dimension)) continue;
-            for (long chunk : region.chunks()) {
-                int centerX = ChunkKey.x(chunk);
-                int centerZ = ChunkKey.z(chunk);
-                for (int dx = -2; dx <= 2; dx++) {
-                    for (int dz = -2; dz <= 2; dz++) {
-                        int distance = Math.max(Math.abs(dx), Math.abs(dz));
-                        ChunkMapLoadLevel level = switch (distance) {
-                            case 0 -> ChunkMapLoadLevel.STRONG;
-                            case 1 -> ChunkMapLoadLevel.BLOCK_TICKING;
-                            default -> ChunkMapLoadLevel.WEAK;
-                        };
-                        result.merge(ChunkKey.pack(centerX + dx, centerZ + dz), level,
-                            (left, right) -> left.ordinal() >= right.ordinal() ? left : right);
-                    }
-                }
-            }
-        }
-        return Map.copyOf(result);
+    /** 同一个区块被多个强加载源覆盖时取更强的那个等级。 */
+    private static ChunkMapLoadLevel stronger(ChunkMapLoadLevel left, ChunkMapLoadLevel right) {
+        return left.ordinal() >= right.ordinal() ? left : right;
     }
 
     private record DraftState(Set<Long> painted, Set<Long> erased) { }
